@@ -1,0 +1,5 @@
+move the mausoleums back slightly so the stairs are not on the path
+
+Greymere Yard — by Headstone r1 c1
+7.09, 1.65, -1.38
+E  yaw -84°  pitch -10°

@@ -1,0 +1,5 @@
+remove broken bench remove random items, replace circle with a real well with circular stones and a roof on top with a bucket thats attached to a rope and goes up and down with a crank. Then put an old man next to the well.
+
+Greymere Yard — by Bench
+1.75, 1.65, 3.25
+N  yaw 16°  pitch -23°

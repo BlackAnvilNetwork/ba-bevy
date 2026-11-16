@@ -1,0 +1,21 @@
+{
+  "message": "these trees look too unnatural",
+  "location": "Greymere Yard — near Warden",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "W",
+    "yaw_degrees": 100.61336,
+    "pitch_degrees": 0.45870888,
+    "forward": [
+      -0.98286104,
+      0.008005895,
+      0.18417455
+    ]
+  },
+  "coordinates": {
+    "x": -3.797233,
+    "y": 1.65,
+    "z": 5.8837233
+  },
+  "screenshot": "frame.png"
+}

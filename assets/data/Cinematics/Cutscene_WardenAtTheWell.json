@@ -1,0 +1,96 @@
+{
+  "cutsceneId": "cutscene_warden_at_the_basin",
+  "displayName": "Edda at the Basin",
+  "zoneId": "zone_greymere_yard",
+  "beats": [
+    {
+      "id": "beat_1_king",
+      "tone": "weary",
+      "speaker": "Edda",
+      "line": "No one saw it. No blade found, no poison named, no enemy at the gates. They found him in his chamber, our king."
+    },
+    {
+      "id": "beat_2_wrong",
+      "tone": "weary",
+      "speaker": "Edda",
+      "line": "I thought that was the worst of it. I was wrong."
+    },
+    {
+      "id": "beat_3_vanish",
+      "tone": "dread",
+      "speaker": "Edda",
+      "line": "Within a season, people began to vanish. Not dead, not fled. Gone. And here's the part that keeps me up at night..."
+    },
+    {
+      "id": "beat_4_forget",
+      "tone": "dread",
+      "speaker": "Edda",
+      "line": "Nobody remembered them."
+    },
+    {
+      "id": "beat_5_mad",
+      "tone": "bitter",
+      "speaker": "Edda",
+      "stage": "laugh",
+      "line": "They call me mad, you know."
+    },
+    {
+      "id": "beat_6_few",
+      "tone": "charge",
+      "speaker": "Edda",
+      "line": "I'm not the only one. There are a few of us. We find each other, quietly."
+    },
+    {
+      "id": "beat_7_souls",
+      "tone": "charge",
+      "speaker": "Edda",
+      "stage": "lean",
+      "line": "Those who lost someone dear, and remember. Some say they feel them still. A warmth in an empty chair. A voice in the wind through the rafters. A light in the eyes of a stranger that was never theirs. As if the soul refuses to be forgotten, even when the world has agreed to forget."
+    },
+    {
+      "id": "beat_8_pity",
+      "tone": "soft",
+      "speaker": "Edda",
+      "stage": "pour",
+      "line": "Don't pity me, traveler. If I'm the last to remember them, then they're not truly gone. That's something. That's... Hm. Strange. My hands feel so light."
+    },
+    {
+      "id": "beat_9_turn",
+      "tone": "resign",
+      "speaker": "Edda",
+      "line": "Ah. So it's my turn. If anyone asks... tell them Edda was real..."
+    }
+  ],
+  "bookBeats": [
+    {
+      "id": "book_1_cover",
+      "tone": "record",
+      "speaker": "Yard Ledger",
+      "line": "Edda's hand. Names the chalk line still knows, even when mouths forget."
+    },
+    {
+      "id": "book_2_king",
+      "tone": "record",
+      "speaker": "Yard Ledger",
+      "line": "The king died in his chamber. No blade. No poison named. No enemy at the gates."
+    },
+    {
+      "id": "book_3_gone",
+      "tone": "record",
+      "speaker": "Yard Ledger",
+      "line": "Within a season, people vanished. Not dead. Not fled. Gone — and the yard forgot their faces."
+    },
+    {
+      "id": "book_4_remember",
+      "tone": "record",
+      "speaker": "Yard Ledger",
+      "line": "A few of us remember. We find each other quietly. If you carry this book, you carry their marks."
+    },
+    {
+      "id": "book_5_charge",
+      "tone": "record",
+      "speaker": "Yard Ledger",
+      "line": "Cinder Gate is shut beyond the chalk. Do not let the yard go blank again."
+    }
+  ]
+}

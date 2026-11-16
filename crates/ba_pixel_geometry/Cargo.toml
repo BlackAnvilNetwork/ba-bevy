@@ -1,0 +1,8 @@
+[package]
+name = "ba_pixel_geometry"
+version = "0.1.0"
+edition = "2021"
+description = "SDF evaluation and procedural meshes for the pixel world"
+
+[dependencies]
+ba_pixel_core = { path = "../ba_pixel_core" }

@@ -1,0 +1,21 @@
+{
+  "message": "",
+  "location": "Greymere Yard — near Warden",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "W",
+    "yaw_degrees": 100.613,
+    "pitch_degrees": 0.459,
+    "forward": [
+      -0.98286206,
+      0.008010975,
+      0.18416832
+    ]
+  },
+  "coordinates": {
+    "x": -3.797,
+    "y": 1.65,
+    "z": 5.884
+  },
+  "screenshot": "frame.png"
+}

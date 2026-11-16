@@ -1,0 +1,9 @@
+[package]
+name = "ba_pixel_sim"
+version = "0.1.0"
+edition = "2021"
+description = "Pixel-field simulation — destruction eats an SDF and emits fragments"
+
+[dependencies]
+ba_pixel_core = { path = "../ba_pixel_core" }
+ba_pixel_geometry = { path = "../ba_pixel_geometry" }

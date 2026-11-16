@@ -1,0 +1,21 @@
+{
+  "message": "remove broken bench remove random items, replace circle with a real well with circular stones and a roof on top with a bucket thats attached to a rope and goes up and down with a crank. Then put an old man next to the well.",
+  "location": "Greymere Yard — by Bench",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "N",
+    "yaw_degrees": 15.907014,
+    "pitch_degrees": -23.490654,
+    "forward": [
+      -0.25136286,
+      -0.39859945,
+      -0.8820064
+    ]
+  },
+  "coordinates": {
+    "x": 1.7485319,
+    "y": 1.65,
+    "z": 3.2521715
+  },
+  "screenshot": "frame.png"
+}

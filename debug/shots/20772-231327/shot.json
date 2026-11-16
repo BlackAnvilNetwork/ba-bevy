@@ -1,0 +1,21 @@
+{
+  "message": "",
+  "location": "Greymere Yard — by Headstone r1 c1",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "E",
+    "yaw_degrees": -83.559,
+    "pitch_degrees": -10.428,
+    "forward": [
+      0.9772753,
+      -0.18099979,
+      -0.11032725
+    ]
+  },
+  "coordinates": {
+    "x": 7.093,
+    "y": 1.65,
+    "z": -1.384
+  },
+  "screenshot": "frame.png"
+}

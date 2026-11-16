@@ -1,0 +1,21 @@
+{
+  "message": "the roofs need to be on top of the structure",
+  "location": "Greymere Yard — by Headstone r3 c8",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "N",
+    "yaw_degrees": 11.094398,
+    "pitch_degrees": -7.907069,
+    "forward": [
+      -0.19059652,
+      -0.13756676,
+      -0.97198164
+    ]
+  },
+  "coordinates": {
+    "x": 19.80195,
+    "y": 1.65,
+    "z": 4.040381
+  },
+  "screenshot": "frame.png"
+}

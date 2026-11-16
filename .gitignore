@@ -1,0 +1,8 @@
+/target
+Cargo.lock
+*.pdb
+.DS_Store
+
+# Character Studio (cloned locally; see scripts/install-character-studio.ps1)
+/character-studio/
+/assets/character/exports/

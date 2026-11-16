@@ -1,0 +1,1753 @@
+{
+    "slots":  {
+                  "female":  {
+                                 "Neck":  [
+                                              {
+                                                  "id":  "amulet",
+                                                  "name":  "amulet",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Neck/amulet.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Neck"
+                                              },
+                                              {
+                                                  "id":  "necklace",
+                                                  "name":  "necklace",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Neck/necklace.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Neck"
+                                              },
+                                              {
+                                                  "id":  "pendant",
+                                                  "name":  "pendant",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Neck/pendant.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Neck"
+                                              }
+                                          ],
+                                 "Shoes":  [
+                                               {
+                                                   "id":  "chain_boots",
+                                                   "name":  "chain boots",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/chain_boots.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "demonhide_boots",
+                                                   "name":  "demonhide boots",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/demonhide_boots.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "divine_slippers",
+                                                   "name":  "divine slippers",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/divine_slippers.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "dragonskin_boots",
+                                                   "name":  "dragonskin boots",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/dragonskin_boots.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "greaves",
+                                                   "name":  "greaves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/greaves.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "hard_leather_boots",
+                                                   "name":  "hard leather boots",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/hard_leather_boots.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "heavy_boots",
+                                                   "name":  "heavy boots",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/heavy_boots.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "leather_boots",
+                                                   "name":  "leather boots",
+                                                   "starter":  true,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/leather_boots.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "linen_shoes",
+                                                   "name":  "linen shoes",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/linen_shoes.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "ornate_greaves",
+                                                   "name":  "ornate greaves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/ornate_greaves.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "shoes",
+                                                   "name":  "shoes",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/shoes.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "silk_slippers",
+                                                   "name":  "silk slippers",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/silk_slippers.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "studded_leather_boots",
+                                                   "name":  "studded leather boots",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/studded_leather_boots.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Shoes"
+                                               },
+                                               {
+                                                   "id":  "wool_shoes",
+                                                   "name":  "wool shoes",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Shoes/wool_shoes.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Shoes"
+                                               }
+                                           ],
+                                 "Waist":  [
+                                               {
+                                                   "id":  "brightsilk_sash",
+                                                   "name":  "brightsilk sash",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/brightsilk_sash.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "demonhide_belt",
+                                                   "name":  "demonhide belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/demonhide_belt.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "dragonskin_belt",
+                                                   "name":  "dragonskin belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/dragonskin_belt.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "hard_leather_belt",
+                                                   "name":  "hard leather belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/hard_leather_belt.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "heavy_belt",
+                                                   "name":  "heavy belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/heavy_belt.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "leather_belt",
+                                                   "name":  "leather belt",
+                                                   "starter":  true,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/leather_belt.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "linen_sash",
+                                                   "name":  "linen sash",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/linen_sash.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "mesh_belt",
+                                                   "name":  "mesh belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/mesh_belt.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "ornate_belt",
+                                                   "name":  "ornate belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/ornate_belt.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "plated_blet",
+                                                   "name":  "plated blet",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/plated_blet.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "sash",
+                                                   "name":  "sash",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/sash.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "silk_sash",
+                                                   "name":  "silk sash",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/silk_sash.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "studded_leather_belt",
+                                                   "name":  "studded leather belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/studded_leather_belt.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "war_belt",
+                                                   "name":  "war belt",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/war_belt.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Waist"
+                                               },
+                                               {
+                                                   "id":  "wool_sash",
+                                                   "name":  "wool sash",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Waist/wool_sash.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Waist"
+                                               }
+                                           ],
+                                 "Chest":  [
+                                               {
+                                                   "id":  "chain_mail",
+                                                   "name":  "chain mail",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/chain_mail.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "demon_husk",
+                                                   "name":  "demon husk",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/demon_husk.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "divine_robe",
+                                                   "name":  "divine robe",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/divine_robe.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "dragonskin_armor",
+                                                   "name":  "dragonskin armor",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/dragonskin_armor.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "hard_leather_armor",
+                                                   "name":  "hard leather armor",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/hard_leather_armor.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "holy_chestplate",
+                                                   "name":  "holy chestplate",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/holy_chestplate.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "leather_armor",
+                                                   "name":  "leather armor",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/leather_armor.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "linen_robe",
+                                                   "name":  "linen robe",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/linen_robe.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "ornate_chestplate",
+                                                   "name":  "ornate chestplate",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/ornate_chestplate.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "plate_mail",
+                                                   "name":  "plate mail",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/plate_mail.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "ring_mail",
+                                                   "name":  "ring mail",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/ring_mail.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "robe",
+                                                   "name":  "robe",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/robe.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "shirt",
+                                                   "name":  "shirt",
+                                                   "starter":  true,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/shirt.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "silk_robe",
+                                                   "name":  "silk robe",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/silk_robe.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Chest"
+                                               },
+                                               {
+                                                   "id":  "studded_leather_armor",
+                                                   "name":  "studded leather armor",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Chest/studded_leather_armor.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Chest"
+                                               }
+                                           ],
+                                 "Weapon":  [
+                                                {
+                                                    "id":  "bone_wand",
+                                                    "name":  "bone wand",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/bone_wand.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "book",
+                                                    "name":  "book",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/book.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "chronicle",
+                                                    "name":  "chronicle",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/chronicle.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "club",
+                                                    "name":  "club",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/club.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "falchion",
+                                                    "name":  "falchion",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/falchion.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "ghost_wand",
+                                                    "name":  "ghost wand",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/ghost_wand.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "grave_wand",
+                                                    "name":  "grave wand",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/grave_wand.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "grimoire",
+                                                    "name":  "grimoire",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/grimoire.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "katana",
+                                                    "name":  "katana",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/katana.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "long_sword",
+                                                    "name":  "long sword",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/long_sword.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "mace",
+                                                    "name":  "mace",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/mace.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "maul",
+                                                    "name":  "maul",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/maul.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "quarterstaff",
+                                                    "name":  "quarterstaff",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/quarterstaff.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "scimitar",
+                                                    "name":  "scimitar",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/scimitar.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "short_sword",
+                                                    "name":  "short sword",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/short_sword.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "tome",
+                                                    "name":  "tome",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/tome.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "wand",
+                                                    "name":  "wand",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/wand.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                },
+                                                {
+                                                    "id":  "warhammer",
+                                                    "name":  "warhammer",
+                                                    "starter":  false,
+                                                    "gender":  "female",
+                                                    "vrm":  "anata/female/Weapon/warhammer.vrm",
+                                                    "craft_level":  2,
+                                                    "slot":  "Weapon"
+                                                }
+                                            ],
+                                 "Body":  [
+                                              {
+                                                  "id":  "female",
+                                                  "name":  "female",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Body/female.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Body"
+                                              }
+                                          ],
+                                 "Hands":  [
+                                               {
+                                                   "id":  "chain_gloves",
+                                                   "name":  "chain gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/chain_gloves.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "demon_hands",
+                                                   "name":  "demon hands",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/demon_hands.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "divine_gloves",
+                                                   "name":  "divine gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/divine_gloves.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "dragonscale_gloves",
+                                                   "name":  "dragonscale gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/dragonscale_gloves.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "gauntlets",
+                                                   "name":  "gauntlets",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/gauntlets.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "gloves",
+                                                   "name":  "gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/gloves.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "hard_leather_glove",
+                                                   "name":  "hard leather glove",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/hard_leather_glove.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "heavy_gloves",
+                                                   "name":  "heavy gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/heavy_gloves.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "holy_gauntlets",
+                                                   "name":  "holy gauntlets",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/holy_gauntlets.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "leather_gloves",
+                                                   "name":  "leather gloves",
+                                                   "starter":  true,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/leather_gloves.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "linen_gloves",
+                                                   "name":  "linen gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/linen_gloves.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "ornate_gloves",
+                                                   "name":  "ornate gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/ornate_gloves.vrm",
+                                                   "craft_level":  3,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "silk_gloves",
+                                                   "name":  "silk gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/silk_gloves.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "studded_leather_gloves",
+                                                   "name":  "studded leather gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/studded_leather_gloves.vrm",
+                                                   "craft_level":  2,
+                                                   "slot":  "Hands"
+                                               },
+                                               {
+                                                   "id":  "wool_gloves",
+                                                   "name":  "wool gloves",
+                                                   "starter":  false,
+                                                   "gender":  "female",
+                                                   "vrm":  "anata/female/Hands/wool_gloves.vrm",
+                                                   "craft_level":  1,
+                                                   "slot":  "Hands"
+                                               }
+                                           ],
+                                 "Head":  [
+                                              {
+                                                  "id":  "ancient_helm",
+                                                  "name":  "ancient helm",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/ancient_helm.vrm",
+                                                  "craft_level":  3,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "cap",
+                                                  "name":  "cap",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/cap.vrm",
+                                                  "craft_level":  1,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "crown",
+                                                  "name":  "crown",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/crown.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "demon_crown",
+                                                  "name":  "demon crown",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/demon_crown.vrm",
+                                                  "craft_level":  3,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "divine_hood",
+                                                  "name":  "divine hood",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/divine_hood.vrm",
+                                                  "craft_level":  3,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "dragons_crown",
+                                                  "name":  "dragons crown",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/dragons_crown.vrm",
+                                                  "craft_level":  3,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "full_helm",
+                                                  "name":  "full helm",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/full_helm.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "great_helm",
+                                                  "name":  "great helm",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/great_helm.vrm",
+                                                  "craft_level":  3,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "helm",
+                                                  "name":  "helm",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/helm.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "hood",
+                                                  "name":  "hood",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/hood.vrm",
+                                                  "craft_level":  1,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "leather_cap",
+                                                  "name":  "leather cap",
+                                                  "starter":  true,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/leather_cap.vrm",
+                                                  "craft_level":  1,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "linen_hood",
+                                                  "name":  "linen hood",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/linen_hood.vrm",
+                                                  "craft_level":  1,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "ornate_helm",
+                                                  "name":  "ornate helm",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/ornate_helm.vrm",
+                                                  "craft_level":  3,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "silk_hood",
+                                                  "name":  "silk hood",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/silk_hood.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Head"
+                                              },
+                                              {
+                                                  "id":  "war_cap",
+                                                  "name":  "war cap",
+                                                  "starter":  false,
+                                                  "gender":  "female",
+                                                  "vrm":  "anata/female/Head/war_cap.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Head"
+                                              }
+                                          ]
+                             },
+                  "male":  {
+                               "Neck":  [
+                                            {
+                                                "id":  "amulet",
+                                                "name":  "amulet",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Neck/amulet.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Neck"
+                                            },
+                                            {
+                                                "id":  "necklace",
+                                                "name":  "necklace",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Neck/necklace.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Neck"
+                                            },
+                                            {
+                                                "id":  "pendant",
+                                                "name":  "pendant",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Neck/pendant.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Neck"
+                                            }
+                                        ],
+                               "Shoes":  [
+                                             {
+                                                 "id":  "chain_boots",
+                                                 "name":  "chain boots",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/chain_boots.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "demonhide_boots",
+                                                 "name":  "demonhide boots",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/demonhide_boots.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "divine_slippers",
+                                                 "name":  "divine slippers",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/divine_slippers.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "dragonskin_boots",
+                                                 "name":  "dragonskin boots",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/dragonskin_boots.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "greaves",
+                                                 "name":  "greaves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/greaves.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "hard_leather_boots",
+                                                 "name":  "hard leather boots",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/hard_leather_boots.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "heavy_boots",
+                                                 "name":  "heavy boots",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/heavy_boots.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "holy_greaves",
+                                                 "name":  "holy greaves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/holy_greaves.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "leather_boots",
+                                                 "name":  "leather boots",
+                                                 "starter":  true,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/leather_boots.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "linen_shoes",
+                                                 "name":  "linen shoes",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/linen_shoes.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "ornate_greaves",
+                                                 "name":  "ornate greaves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/ornate_greaves.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "shoes",
+                                                 "name":  "shoes",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/shoes.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "silk_slippers",
+                                                 "name":  "silk slippers",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/silk_slippers.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "studded_leather_boots",
+                                                 "name":  "studded leather boots",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/studded_leather_boots.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Shoes"
+                                             },
+                                             {
+                                                 "id":  "wool_shoes",
+                                                 "name":  "wool shoes",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Shoes/wool_shoes.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Shoes"
+                                             }
+                                         ],
+                               "Waist":  [
+                                             {
+                                                 "id":  "demonhide_belt",
+                                                 "name":  "demonhide belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/demonhide_belt.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "dragonskin_belt",
+                                                 "name":  "dragonskin belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/dragonskin_belt.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "hard_leather_belt",
+                                                 "name":  "hard leather belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/hard_leather_belt.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "heavy_belt",
+                                                 "name":  "heavy belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/heavy_belt.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "leather_belt",
+                                                 "name":  "leather belt",
+                                                 "starter":  true,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/leather_belt.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "linen_sash",
+                                                 "name":  "linen sash",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/linen_sash.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "mesh_belt",
+                                                 "name":  "mesh belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/mesh_belt.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "ornate_belt",
+                                                 "name":  "ornate belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/ornate_belt.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "plated_blet",
+                                                 "name":  "plated blet",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/plated_blet.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "sash",
+                                                 "name":  "sash",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/sash.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "silk_sash",
+                                                 "name":  "silk sash",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/silk_sash.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "studded_leather_belt",
+                                                 "name":  "studded leather belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/studded_leather_belt.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "war_belt",
+                                                 "name":  "war belt",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/war_belt.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "wool_sash",
+                                                 "name":  "wool sash",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/wool_sash.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Waist"
+                                             },
+                                             {
+                                                 "id":  "wool_shoes",
+                                                 "name":  "wool shoes",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Waist/wool_shoes.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Waist"
+                                             }
+                                         ],
+                               "Chest":  [
+                                             {
+                                                 "id":  "chain_mail",
+                                                 "name":  "chain mail",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/chain_mail.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "demon_husk",
+                                                 "name":  "demon husk",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/demon_husk.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "divine_robe",
+                                                 "name":  "divine robe",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/divine_robe.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "dragonskin_armor",
+                                                 "name":  "dragonskin armor",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/dragonskin_armor.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "hard_leather_armor",
+                                                 "name":  "hard leather armor",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/hard_leather_armor.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "holy_chestplate",
+                                                 "name":  "holy chestplate",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/holy_chestplate.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "linen_robe",
+                                                 "name":  "linen robe",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/linen_robe.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "ornate_chestplate",
+                                                 "name":  "ornate chestplate",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/ornate_chestplate.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "plate_mail",
+                                                 "name":  "plate mail",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/plate_mail.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "ring_mail",
+                                                 "name":  "ring mail",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/ring_mail.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "robe",
+                                                 "name":  "robe",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/robe.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "shirt",
+                                                 "name":  "shirt",
+                                                 "starter":  true,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/shirt.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "silk_robe",
+                                                 "name":  "silk robe",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/silk_robe.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Chest"
+                                             },
+                                             {
+                                                 "id":  "studded_leather_armor",
+                                                 "name":  "studded leather armor",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Chest/studded_leather_armor.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Chest"
+                                             }
+                                         ],
+                               "Weapon":  [
+                                              {
+                                                  "id":  "bone_wand",
+                                                  "name":  "bone wand",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/bone_wand.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "book",
+                                                  "name":  "book",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/book.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "chronicle",
+                                                  "name":  "chronicle",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/chronicle.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "club",
+                                                  "name":  "club",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/club.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "falchion",
+                                                  "name":  "falchion",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/falchion.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "ghost_wand",
+                                                  "name":  "ghost wand",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/ghost_wand.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "grave_wand",
+                                                  "name":  "grave wand",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/grave_wand.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "grimoire",
+                                                  "name":  "grimoire",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/grimoire.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "katana",
+                                                  "name":  "katana",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/katana.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "long_sword",
+                                                  "name":  "long sword",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/long_sword.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "mace",
+                                                  "name":  "mace",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/mace.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "maul",
+                                                  "name":  "maul",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/maul.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "quarterstaff",
+                                                  "name":  "quarterstaff",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/quarterstaff.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "scimitar",
+                                                  "name":  "scimitar",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/scimitar.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "short_sword",
+                                                  "name":  "short sword",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/short_sword.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "tome",
+                                                  "name":  "tome",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/tome.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "wand",
+                                                  "name":  "wand",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/wand.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              },
+                                              {
+                                                  "id":  "warhammer",
+                                                  "name":  "warhammer",
+                                                  "starter":  false,
+                                                  "gender":  "male",
+                                                  "vrm":  "anata/male/Weapon/warhammer.vrm",
+                                                  "craft_level":  2,
+                                                  "slot":  "Weapon"
+                                              }
+                                          ],
+                               "Body":  [
+                                            {
+                                                "id":  "male",
+                                                "name":  "male",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Body/male.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Body"
+                                            }
+                                        ],
+                               "Hands":  [
+                                             {
+                                                 "id":  "divine_gloves",
+                                                 "name":  "divine gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/divine_gloves.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "dragonscale_gloves",
+                                                 "name":  "dragonscale gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/dragonscale_gloves.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "gauntlets",
+                                                 "name":  "gauntlets",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/gauntlets.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "gloves",
+                                                 "name":  "gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/gloves.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "heavy_gloves",
+                                                 "name":  "heavy gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/heavy_gloves.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "holy_gauntlets",
+                                                 "name":  "holy gauntlets",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/holy_gauntlets.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "leather_gloves",
+                                                 "name":  "leather gloves",
+                                                 "starter":  true,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/leather_gloves.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "ornate_gloves",
+                                                 "name":  "ornate gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/ornate_gloves.vrm",
+                                                 "craft_level":  3,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "silk_gloves",
+                                                 "name":  "silk gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/silk_gloves.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "studded_leather_gloves",
+                                                 "name":  "studded leather gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/studded_leather_gloves.vrm",
+                                                 "craft_level":  2,
+                                                 "slot":  "Hands"
+                                             },
+                                             {
+                                                 "id":  "wool_gloves",
+                                                 "name":  "wool gloves",
+                                                 "starter":  false,
+                                                 "gender":  "male",
+                                                 "vrm":  "anata/male/Hands/wool_gloves.vrm",
+                                                 "craft_level":  1,
+                                                 "slot":  "Hands"
+                                             }
+                                         ],
+                               "Head":  [
+                                            {
+                                                "id":  "ancient_helm",
+                                                "name":  "ancient helm",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/ancient_helm.vrm",
+                                                "craft_level":  3,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "cap",
+                                                "name":  "cap",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/cap.vrm",
+                                                "craft_level":  1,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "crown",
+                                                "name":  "crown",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/crown.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "demon_crown",
+                                                "name":  "demon crown",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/demon_crown.vrm",
+                                                "craft_level":  3,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "divine_hood",
+                                                "name":  "divine hood",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/divine_hood.vrm",
+                                                "craft_level":  3,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "dragons_crown",
+                                                "name":  "dragons crown",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/dragons_crown.vrm",
+                                                "craft_level":  3,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "full_helm",
+                                                "name":  "full helm",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/full_helm.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "great_helm",
+                                                "name":  "great helm",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/great_helm.vrm",
+                                                "craft_level":  3,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "helm",
+                                                "name":  "helm",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/helm.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "hood",
+                                                "name":  "hood",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/hood.vrm",
+                                                "craft_level":  1,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "leather_cap",
+                                                "name":  "leather cap",
+                                                "starter":  true,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/leather_cap.vrm",
+                                                "craft_level":  1,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "linen_hood",
+                                                "name":  "linen hood",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/linen_hood.vrm",
+                                                "craft_level":  1,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "ornate_helm",
+                                                "name":  "ornate helm",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/ornate_helm.vrm",
+                                                "craft_level":  3,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "silk_hood",
+                                                "name":  "silk hood",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/silk_hood.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "war_cap",
+                                                "name":  "war cap",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/war_cap.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Head"
+                                            },
+                                            {
+                                                "id":  "wool_sash",
+                                                "name":  "wool sash",
+                                                "starter":  false,
+                                                "gender":  "male",
+                                                "vrm":  "anata/male/Head/wool_sash.vrm",
+                                                "craft_level":  2,
+                                                "slot":  "Head"
+                                            }
+                                        ]
+                           }
+              },
+    "version":  1,
+    "starter":  {
+                    "traits":  {
+                                   "Shoes":  "leather_boots",
+                                   "Hands":  "leather_gloves",
+                                   "Chest":  "shirt",
+                                   "Head":  "leather_cap",
+                                   "Waist":  "leather_belt"
+                               },
+                    "level":  1
+                },
+    "note":  "Loot-style Anata gear. Starter kit uses base pieces; rest unlock via crafting."
+}

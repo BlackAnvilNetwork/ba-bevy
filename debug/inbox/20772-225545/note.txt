@@ -1,0 +1,5 @@
+rotate the mausoleums so they face the path and add roofs to them
+
+Greymere Yard — by Headstone r4 c7
+18.35, 1.65, 4.42
+N  yaw 2°  pitch -3°

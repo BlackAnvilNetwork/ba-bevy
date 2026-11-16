@@ -1,0 +1,7 @@
+[package]
+name = "ba_pixel_core"
+version = "0.1.0"
+edition = "2021"
+description = "BA Pixel Field types — materials, palettes, particle records"
+
+[dependencies]

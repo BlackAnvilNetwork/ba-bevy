@@ -1,0 +1,5 @@
+one more pass for making these mausoleums look complete.
+
+Greymere Yard — by Headstone r4 c8
+20.49, 1.65, 5.18
+N  yaw 6°  pitch -6°

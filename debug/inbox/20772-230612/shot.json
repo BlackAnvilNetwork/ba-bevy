@@ -1,0 +1,21 @@
+{
+  "message": "one more pass for making these mausoleums look complete.",
+  "location": "Greymere Yard — by Headstone r4 c8",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "N",
+    "yaw_degrees": 6.2811484,
+    "pitch_degrees": -5.6151614,
+    "forward": [
+      -0.10888228,
+      -0.09784625,
+      -0.9892274
+    ]
+  },
+  "coordinates": {
+    "x": 20.491865,
+    "y": 1.65,
+    "z": 5.1845546
+  },
+  "screenshot": "frame.png"
+}

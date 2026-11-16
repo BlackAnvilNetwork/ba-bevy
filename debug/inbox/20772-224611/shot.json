@@ -1,0 +1,21 @@
+{
+  "message": "this mausoleum should have multiple buildings that have altars to kings in them and also neatly organized rows of headstones for the cemetary. Make it all bigger",
+  "location": "Greymere Yard — by GraveD",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "E",
+    "yaw_degrees": -92.54217,
+    "pitch_degrees": -16.042583,
+    "forward": [
+      0.9601107,
+      -0.2763517,
+      0.0426272
+    ]
+  },
+  "coordinates": {
+    "x": 5.097493,
+    "y": 1.65,
+    "z": -1.2537278
+  },
+  "screenshot": "frame.png"
+}

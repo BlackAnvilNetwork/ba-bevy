@@ -1,0 +1,5 @@
+this mausoleum should have multiple buildings that have altars to kings in them and also neatly organized rows of headstones for the cemetary. Make it all bigger
+
+Greymere Yard — by GraveD
+5.10, 1.65, -1.25
+E  yaw -93°  pitch -16°

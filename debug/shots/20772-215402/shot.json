@@ -1,0 +1,20 @@
+{
+  "location": "Greymere Yard — by PathSouth_6",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "N",
+    "yaw_degrees": 1.4688004,
+    "pitch_degrees": -3.6665857,
+    "forward": [
+      -0.025580127,
+      -0.06395032,
+      -0.997625
+    ]
+  },
+  "coordinates": {
+    "x": 0.2,
+    "y": 1.65,
+    "z": 6.4
+  },
+  "screenshot": "frame.png"
+}

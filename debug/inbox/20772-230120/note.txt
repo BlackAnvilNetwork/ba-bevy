@@ -1,0 +1,5 @@
+the roofs need to be on top of the structure
+
+Greymere Yard — by Headstone r3 c8
+19.80, 1.65, 4.04
+N  yaw 11°  pitch -8°

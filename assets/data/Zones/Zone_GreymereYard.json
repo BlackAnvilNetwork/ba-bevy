@@ -1,0 +1,1619 @@
+{
+    "zoneId":  "zone_greymere_yard",
+    "displayName":  "Greymere Yard",
+    "role":  "opening",
+    "notes":  "Playable footprint mirrors the stick camp: about 28m wide, rear mass to the north, open south, exit on the east. Props are Kenney CC0 (graveyard, fantasy town, castle, mini dungeon). Cinder Gate is the next road and is not built.",
+    "bounds":  {
+                   "minX":  -13,
+                   "maxX":  30,
+                   "minZ":  -6.6,
+                   "maxZ":  9
+               },
+    "spawn":  {
+                  "at":  [
+                             0.2,
+                             1.65,
+                             6.4
+                         ],
+                  "lookAt":  [
+                                 0,
+                                 1.15,
+                                 -1.4
+                             ]
+              },
+    "exits":  [
+                  {
+                      "id":  "chalk_east",
+                      "toZoneId":  "zone_cinder_gate",
+                      "hint":  "The chalk line is the edge of Greymere. Cinder Gate is shut beyond it.",
+                      "min":  [
+                                  27.6,
+                                  -2.2
+                              ],
+                      "max":  [
+                                  29.6,
+                                  -0.8
+                              ]
+                  }
+              ],
+    "props":  [
+                  {
+                      "model":  "primitive:well",
+                      "name":  "Basin",
+                      "at":  [
+                                 0,
+                                 0,
+                                 -1.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fire-basket.glb",
+                      "name":  "FireBasket",
+                      "at":  [
+                                 -2.05,
+                                 0,
+                                 0.35
+                             ],
+                      "rotY":  0.4,
+                      "scale":  1.7
+                  },
+                  {
+                      "model":  "models/hooded_figure.glb",
+                      "name":  "Warden",
+                      "at":  [
+                                 1.45,
+                                 0,
+                                 0.15
+                             ],
+                      "rotY":  0.2,
+                      "scale":  1.0,
+                      "role":  "warden"
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_-8",
+                      "at":  [
+                                 -8,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_-7",
+                      "at":  [
+                                 -7,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall-damaged.glb",
+                      "name":  "Cloister_-6",
+                      "at":  [
+                                 -6,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_-5",
+                      "at":  [
+                                 -5,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_-4",
+                      "at":  [
+                                 -4,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_-2",
+                      "at":  [
+                                 -2,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_-1",
+                      "at":  [
+                                 -1,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall-damaged.glb",
+                      "name":  "Cloister_0",
+                      "at":  [
+                                 0,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_1",
+                      "at":  [
+                                 1,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_2",
+                      "at":  [
+                                 2,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_3",
+                      "at":  [
+                                 3,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall-damaged.glb",
+                      "name":  "Cloister_5",
+                      "at":  [
+                                 5,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_6",
+                      "at":  [
+                                 6,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_7",
+                      "at":  [
+                                 7,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "Cloister_8",
+                      "at":  [
+                                 8,
+                                 0,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "CloisterHigh_-7",
+                      "at":  [
+                                 -7,
+                                 0.72,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "CloisterHigh_-5",
+                      "at":  [
+                                 -5,
+                                 0.72,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "CloisterHigh_-1",
+                      "at":  [
+                                 -1,
+                                 0.72,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "CloisterHigh_1",
+                      "at":  [
+                                 1,
+                                 0.72,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "CloisterHigh_3",
+                      "at":  [
+                                 3,
+                                 0.72,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/stone-wall.glb",
+                      "name":  "CloisterHigh_6",
+                      "at":  [
+                                 6,
+                                 0.72,
+                                 -7.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/mini-dungeon/Models/GLB format/wall.glb",
+                      "name":  "FallenWallWest",
+                      "at":  [
+                                 -4.4,
+                                 0,
+                                 -7.15
+                             ],
+                      "rotY":  0.5,
+                      "scale":  1.35
+                  },
+                  {
+                      "model":  "kits/mini-dungeon/Models/GLB format/wall-half.glb",
+                      "name":  "FallenWallEast",
+                      "at":  [
+                                 3.4,
+                                 0,
+                                 -7.05
+                             ],
+                      "rotY":  -0.4,
+                      "scale":  1.4
+                  },
+                  {
+                      "model":  "kits/castle-kit/Models/GLB format/tower-square-base.glb",
+                      "name":  "StubTowerWest",
+                      "at":  [
+                                 -9.5,
+                                 0,
+                                 -8.35
+                             ],
+                      "rotY":  0.2,
+                      "scale":  2.5
+                  },
+                  {
+                      "model":  "kits/castle-kit/Models/GLB format/tower-square-base.glb",
+                      "name":  "StubTowerEast",
+                      "at":  [
+                                 9.1,
+                                 0,
+                                 -8.2
+                             ],
+                      "rotY":  -0.3,
+                      "scale":  2.4
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/rocks-tall.glb",
+                      "name":  "RearRockA",
+                      "at":  [
+                                 -2.1,
+                                 0,
+                                 -8.15
+                             ],
+                      "rotY":  0.4,
+                      "scale":  1.9
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/rocks.glb",
+                      "name":  "RearRockB",
+                      "at":  [
+                                 2.6,
+                                 0,
+                                 -8.25
+                             ],
+                      "rotY":  1.1,
+                      "scale":  1.7
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/rock-large.glb",
+                      "name":  "RearRockC",
+                      "at":  [
+                                 -9.2,
+                                 0,
+                                 -6.7
+                             ],
+                      "rotY":  0.8,
+                      "scale":  1.5
+                  },
+                  {
+                      "model":  "kits/castle-kit/Models/GLB format/rocks-large.glb",
+                      "name":  "RearRockD",
+                      "at":  [
+                                 8.6,
+                                 0,
+                                 -6.55
+                             ],
+                      "rotY":  0.2,
+                      "scale":  1.6
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pine.glb",
+                      "name":  "PineA",
+                      "at":  [
+                                 -11.0,
+                                 0,
+                                 -2.4
+                             ],
+                      "rotY":  0.4,
+                      "scale":  2.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pine.glb",
+                      "name":  "PineB",
+                      "at":  [
+                                 -10.4,
+                                 0,
+                                 2.6
+                             ],
+                      "rotY":  1.2,
+                      "scale":  2.05
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pine.glb",
+                      "name":  "PineC",
+                      "at":  [
+                                 -8.1,
+                                 0,
+                                 6.9
+                             ],
+                      "rotY":  0.2,
+                      "scale":  1.55
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pine-crooked.glb",
+                      "name":  "PineD",
+                      "at":  [
+                                 5.6,
+                                 0,
+                                 7.15
+                             ],
+                      "rotY":  0.8,
+                      "scale":  2.1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pine.glb",
+                      "name":  "PineE",
+                      "at":  [
+                                 11.6,
+                                 0,
+                                 6.8
+                             ],
+                      "rotY":  1.5,
+                      "scale":  2.25
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pine-fall.glb",
+                      "name":  "PineF",
+                      "at":  [
+                                 -3.8,
+                                 0,
+                                 -5.7
+                             ],
+                      "rotY":  0.6,
+                      "scale":  1.8
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/tree.glb",
+                      "name":  "TreeA",
+                      "at":  [
+                                 8.7,
+                                 0,
+                                 -5.15
+                             ],
+                      "rotY":  0.3,
+                      "scale":  1.75
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/tree-crooked.glb",
+                      "name":  "TreeB",
+                      "at":  [
+                                 -8.3,
+                                 0,
+                                 -4.9
+                             ],
+                      "rotY":  1.1,
+                      "scale":  1.7
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_6",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 6
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_5",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 5
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_4",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 4
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_3",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 3
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_2",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 2
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_1",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 1
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_0",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 0
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathSouth_-1",
+                      "at":  [
+                                 0,
+                                 0.02,
+                                 -1
+                             ],
+                      "rotY":  0,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_1",
+                      "at":  [
+                                 1.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_2",
+                      "at":  [
+                                 2.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_3",
+                      "at":  [
+                                 3.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_4",
+                      "at":  [
+                                 4.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_5",
+                      "at":  [
+                                 5.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_6",
+                      "at":  [
+                                 6.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_7",
+                      "at":  [
+                                 7.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_8",
+                      "at":  [
+                                 8.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_9",
+                      "at":  [
+                                 9.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_10",
+                      "at":  [
+                                 10.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_11",
+                      "at":  [
+                                 11.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence.glb",
+                      "name":  "LineFence_-3.7",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 -3.7
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence.glb",
+                      "name":  "LineFence_-2.7",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 -2.7
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence.glb",
+                      "name":  "LineFence_-0.3",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 -0.3
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence.glb",
+                      "name":  "LineFence_0.7",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 0.7
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence.glb",
+                      "name":  "LineFence_1.7",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 1.7
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence.glb",
+                      "name":  "LineFence_2.7",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 2.7
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence.glb",
+                      "name":  "LineFence_3.7",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 3.7
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/fence-gate.glb",
+                      "name":  "LineGate",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pillar-square.glb",
+                      "name":  "LinePostNorth",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 -2.15
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/pillar-square.glb",
+                      "name":  "LinePostSouth",
+                      "at":  [
+                                 28.35,
+                                 0,
+                                 -0.85
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/lantern-candle.glb",
+                      "name":  "LineLantern",
+                      "at":  [
+                                 28.15,
+                                 0,
+                                 -2.45
+                             ],
+                      "rotY":  0,
+                      "scale":  1.5
+                  },
+                  {
+                      "model":  "primitive:chalk",
+                      "name":  "ChalkNorth",
+                      "at":  [
+                                 27.9,
+                                 0.025,
+                                 -3.15
+                             ],
+                      "rotY":  0,
+                      "scale":  1,
+                      "size":  [
+                                   0.08,
+                                   0.03,
+                                   1.5
+                               ]
+                  },
+                  {
+                      "model":  "primitive:chalk",
+                      "name":  "ChalkSouth",
+                      "at":  [
+                                 27.9,
+                                 0.025,
+                                 1.7
+                             ],
+                      "rotY":  0,
+                      "scale":  1,
+                      "size":  [
+                                   0.08,
+                                   0.03,
+                                   4.2
+                               ]
+                  },
+                  {
+                      "model":  "primitive:chalk",
+                      "name":  "ChalkGate",
+                      "at":  [
+                                 27.9,
+                                 0.025,
+                                 -1.5
+                             ],
+                      "rotY":  0,
+                      "scale":  1,
+                      "size":  [
+                                   0.12,
+                                   0.035,
+                                   1.15
+                               ]
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/crypt-large.glb",
+                      "name":  "House of King Halden",
+                      "at":  [
+                                 14,
+                                 0,
+                                 -5.9
+                             ],
+                      "rotY":  0,
+                      "scale":  2.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/altar-stone.glb",
+                      "name":  "Altar of King Halden",
+                      "at":  [
+                                 14,
+                                 0,
+                                 -5.2
+                             ],
+                      "rotY":  0,
+                      "scale":  1.35
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/candle-multiple.glb",
+                      "name":  "Candles of King Halden",
+                      "at":  [
+                                 14,
+                                 0.55,
+                                 -5.2
+                             ],
+                      "rotY":  0,
+                      "scale":  1.35
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/crypt-large.glb",
+                      "name":  "House of King Merrow",
+                      "at":  [
+                                 20.6,
+                                 0,
+                                 -5.9
+                             ],
+                      "rotY":  0,
+                      "scale":  2.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/altar-stone.glb",
+                      "name":  "Altar of King Merrow",
+                      "at":  [
+                                 20.6,
+                                 0,
+                                 -5.2
+                             ],
+                      "rotY":  0,
+                      "scale":  1.35
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/candle-multiple.glb",
+                      "name":  "Candles of King Merrow",
+                      "at":  [
+                                 20.6,
+                                 0.55,
+                                 -5.2
+                             ],
+                      "rotY":  0,
+                      "scale":  1.35
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/crypt-large.glb",
+                      "name":  "House of King Osric",
+                      "at":  [
+                                 27.2,
+                                 0,
+                                 -5.9
+                             ],
+                      "rotY":  0,
+                      "scale":  2.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/altar-stone.glb",
+                      "name":  "Altar of King Osric",
+                      "at":  [
+                                 27.2,
+                                 0,
+                                 -5.2
+                             ],
+                      "rotY":  0,
+                      "scale":  1.35
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/candle-multiple.glb",
+                      "name":  "Candles of King Osric",
+                      "at":  [
+                                 27.2,
+                                 0.55,
+                                 -5.2
+                             ],
+                      "rotY":  0,
+                      "scale":  1.35
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/grave.glb",
+                      "name":  "Headstone r1 c1",
+                      "at":  [
+                                 8.4,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-round.glb",
+                      "name":  "Headstone r1 c2",
+                      "at":  [
+                                 10.05,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-bevel.glb",
+                      "name":  "Headstone r1 c3",
+                      "at":  [
+                                 11.7,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r1 c4",
+                      "at":  [
+                                 13.35,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r1 c5",
+                      "at":  [
+                                 15,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-decorative.glb",
+                      "name":  "Headstone r1 c6",
+                      "at":  [
+                                 16.65,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/grave.glb",
+                      "name":  "Headstone r1 c7",
+                      "at":  [
+                                 18.299999999999997,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-round.glb",
+                      "name":  "Headstone r1 c8",
+                      "at":  [
+                                 19.95,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-bevel.glb",
+                      "name":  "Headstone r1 c9",
+                      "at":  [
+                                 21.6,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r1 c10",
+                      "at":  [
+                                 23.25,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r1 c11",
+                      "at":  [
+                                 24.9,
+                                 0,
+                                 0.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-round.glb",
+                      "name":  "Headstone r2 c1",
+                      "at":  [
+                                 8.4,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-bevel.glb",
+                      "name":  "Headstone r2 c2",
+                      "at":  [
+                                 10.05,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r2 c3",
+                      "at":  [
+                                 11.7,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r2 c4",
+                      "at":  [
+                                 13.35,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-decorative.glb",
+                      "name":  "Headstone r2 c5",
+                      "at":  [
+                                 15,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/grave.glb",
+                      "name":  "Headstone r2 c6",
+                      "at":  [
+                                 16.65,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-round.glb",
+                      "name":  "Headstone r2 c7",
+                      "at":  [
+                                 18.299999999999997,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-bevel.glb",
+                      "name":  "Headstone r2 c8",
+                      "at":  [
+                                 19.95,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r2 c9",
+                      "at":  [
+                                 21.6,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r2 c10",
+                      "at":  [
+                                 23.25,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-decorative.glb",
+                      "name":  "Headstone r2 c11",
+                      "at":  [
+                                 24.9,
+                                 0,
+                                 2.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-bevel.glb",
+                      "name":  "Headstone r3 c1",
+                      "at":  [
+                                 8.4,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r3 c2",
+                      "at":  [
+                                 10.05,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r3 c3",
+                      "at":  [
+                                 11.7,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-decorative.glb",
+                      "name":  "Headstone r3 c4",
+                      "at":  [
+                                 13.35,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/grave.glb",
+                      "name":  "Headstone r3 c5",
+                      "at":  [
+                                 15,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-round.glb",
+                      "name":  "Headstone r3 c6",
+                      "at":  [
+                                 16.65,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-bevel.glb",
+                      "name":  "Headstone r3 c7",
+                      "at":  [
+                                 18.299999999999997,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r3 c8",
+                      "at":  [
+                                 19.95,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r3 c9",
+                      "at":  [
+                                 21.6,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-decorative.glb",
+                      "name":  "Headstone r3 c10",
+                      "at":  [
+                                 23.25,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/grave.glb",
+                      "name":  "Headstone r3 c11",
+                      "at":  [
+                                 24.9,
+                                 0,
+                                 3.55
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r4 c1",
+                      "at":  [
+                                 8.4,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r4 c2",
+                      "at":  [
+                                 10.05,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-decorative.glb",
+                      "name":  "Headstone r4 c3",
+                      "at":  [
+                                 11.7,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/grave.glb",
+                      "name":  "Headstone r4 c4",
+                      "at":  [
+                                 13.35,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-round.glb",
+                      "name":  "Headstone r4 c5",
+                      "at":  [
+                                 15,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-bevel.glb",
+                      "name":  "Headstone r4 c6",
+                      "at":  [
+                                 16.65,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-cross.glb",
+                      "name":  "Headstone r4 c7",
+                      "at":  [
+                                 18.299999999999997,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-wide.glb",
+                      "name":  "Headstone r4 c8",
+                      "at":  [
+                                 19.95,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-decorative.glb",
+                      "name":  "Headstone r4 c9",
+                      "at":  [
+                                 21.6,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/grave.glb",
+                      "name":  "Headstone r4 c10",
+                      "at":  [
+                                 23.25,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/graveyard-kit/Models/GLB format/gravestone-round.glb",
+                      "name":  "Headstone r4 c11",
+                      "at":  [
+                                 24.9,
+                                 0,
+                                 5.05
+                             ],
+                      "rotY":  0,
+                      "scale":  1.15
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_12",
+                      "at":  [
+                                 12.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_13",
+                      "at":  [
+                                 13.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_14",
+                      "at":  [
+                                 14.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_15",
+                      "at":  [
+                                 15.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_16",
+                      "at":  [
+                                 16.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_17",
+                      "at":  [
+                                 17.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_18",
+                      "at":  [
+                                 18.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_19",
+                      "at":  [
+                                 19.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_20",
+                      "at":  [
+                                 20.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_21",
+                      "at":  [
+                                 21.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_22",
+                      "at":  [
+                                 22.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_23",
+                      "at":  [
+                                 23.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_24",
+                      "at":  [
+                                 24.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_25",
+                      "at":  [
+                                 25.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_26",
+                      "at":  [
+                                 26.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  },
+                  {
+                      "model":  "kits/fantasy-town-kit/Models/GLB format/road.glb",
+                      "name":  "PathEast_27",
+                      "at":  [
+                                 27.15,
+                                 0.02,
+                                 -1.5
+                             ],
+                      "rotY":  1.5707963267948966,
+                      "scale":  1
+                  }
+              ]
+}

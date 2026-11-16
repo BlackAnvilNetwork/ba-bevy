@@ -1,0 +1,8 @@
+{
+  "sceneId": "greymere_yard",
+  "displayName": "Greymere Yard",
+  "zoneId": "zone_greymere_yard",
+  "mood": "dark_fantasy_dusk",
+  "landmarks": ["basin", "broken_cloister", "grave_row", "chalk_line"],
+  "notes": "First playable yard. Spacing follows the stick camp footprint: rear wall north, open south, exit east. Names and fiction are new."
+}

@@ -1,0 +1,14 @@
+{
+  "pack": "neurohacker",
+  "lockedOutfit": {
+    "chest": "simpleshirt",
+    "legs": "streetpants",
+    "feet": "boots"
+  },
+  "customizable": [
+    "body",
+    "eyes",
+    "head"
+  ],
+  "note": "Height/weight/mouth morph sliders are not in this VRM pack; hair styles+colors, skin, and eye colors are."
+}

@@ -1,0 +1,21 @@
+{
+  "message": "move the mausoleums back slightly so the stairs are not on the path",
+  "location": "Greymere Yard — by Headstone r1 c1",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "E",
+    "yaw_degrees": -83.55853,
+    "pitch_degrees": -10.427945,
+    "forward": [
+      0.9772744,
+      -0.18099885,
+      -0.11033505
+    ]
+  },
+  "coordinates": {
+    "x": 7.092514,
+    "y": 1.65,
+    "z": -1.383772
+  },
+  "screenshot": "frame.png"
+}

@@ -1,0 +1,21 @@
+{
+  "message": "rotate the mausoleums so they face the path and add roofs to them",
+  "location": "Greymere Yard — by Headstone r4 c7",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "N",
+    "yaw_degrees": 1.9502304,
+    "pitch_degrees": -3.437941,
+    "forward": [
+      -0.03397012,
+      -0.059967395,
+      -0.99762213
+    ]
+  },
+  "coordinates": {
+    "x": 18.347157,
+    "y": 1.65,
+    "z": 4.4166226
+  },
+  "screenshot": "frame.png"
+}

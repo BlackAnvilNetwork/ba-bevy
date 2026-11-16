@@ -1,0 +1,5 @@
+yard channel check
+
+Greymere Yard — on the path
+0.20, 1.65, 6.40
+N  yaw 1°  pitch -4°

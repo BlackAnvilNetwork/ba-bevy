@@ -1,0 +1,20 @@
+{
+  "location": "Greymere Yard — by Bench",
+  "zone_id": "zone_greymere_yard",
+  "direction": {
+    "compass": "E",
+    "yaw_degrees": -107.141045,
+    "pitch_degrees": -26.355724,
+    "forward": [
+      0.8562542,
+      -0.44394287,
+      0.26408985
+    ]
+  },
+  "coordinates": {
+    "x": 0.2,
+    "y": 1.65,
+    "z": 6.4
+  },
+  "screenshot": "frame.png"
+}
