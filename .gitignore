@@ -3,6 +3,11 @@ Cargo.lock
 *.pdb
 .DS_Store
 
-# Character Studio (cloned locally; see scripts/install-character-studio.ps1)
-/character-studio/
+# Character Studio local/runtime (source + public assets are tracked)
+/character-studio/node_modules/
+/character-studio/.env
+/character-studio/.env.local
+/character-studio/cert.pem
+/character-studio/key.pem
+/character-studio/public/character-assets/
 /assets/character/exports/

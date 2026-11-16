@@ -2,16 +2,18 @@ $ErrorActionPreference = "Stop"
 $root = "C:\Users\raxac\OneDrive\Desktop\apps\black-anvil"
 Set-Location $root
 
-if (-not (Test-Path "character-studio\.git")) {
+# Vendored in-repo by default. Only clone if the tree is missing entirely.
+if (-not (Test-Path "character-studio\package.json")) {
   if (Test-Path "character-studio") { Remove-Item -Recurse -Force "character-studio" }
   git clone --depth 1 https://github.com/M3-org/CharacterStudio.git character-studio
   Write-Host "CharacterStudio cloned"
 } else {
-  Write-Host "CharacterStudio already present"
+  Write-Host "CharacterStudio already present (vendored)"
 }
 
 $loot = Join-Path $root "character-studio\public\loot-assets"
-if (-not (Test-Path "$loot\.git")) {
+$lootManifest = Join-Path $loot "manifest.json"
+if (-not (Test-Path $lootManifest)) {
   if (Test-Path $loot) { Remove-Item -Recurse -Force $loot }
   New-Item -ItemType Directory -Force -Path $loot | Out-Null
   Set-Location $loot
@@ -29,7 +31,7 @@ if (-not (Test-Path "$loot\.git")) {
   git pull --depth 1 origin main
   Write-Host "loot-assets sparse pulled"
 } else {
-  Write-Host "loot-assets already present"
+  Write-Host "loot-assets already present (vendored)"
 }
 
 Set-Location $root

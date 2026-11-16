@@ -1,0 +1,37 @@
+{
+  "characters": [
+    {
+      "name": "Male",
+      "description": "Neurohacker \u2014 hair/skin/eyes + medieval Anata gear (runtime-rebound).",
+      "portrait": "./character-assets/neurohacker/neurohacker_icon.png",
+      "manifest": "./character-assets/neurohacker/manifest.json",
+      "format": "vrm",
+      "baGender": "male"
+    },
+    {
+      "name": "Female",
+      "description": "Drophunter \u2014 hair/skin/eyes + medieval Anata gear (runtime-rebound).",
+      "portrait": "./character-assets/drophunter/drophunter_icon.png",
+      "manifest": "./character-assets/drophunter/manifest.json",
+      "format": "vrm",
+      "baGender": "female"
+    }
+  ],
+  "loras": [],
+  "sprites": [],
+  "thumbnails": [],
+  "defaultAnimations": [
+    {
+      "name": "Idle",
+      "description": "Idle",
+      "location": "./loot-assets/animations/2_Idle.fbx",
+      "icon": "|"
+    },
+    {
+      "name": "Walking",
+      "description": "Walk",
+      "location": "./loot-assets/animations/3_Walking.fbx",
+      "icon": "|"
+    }
+  ]
+}

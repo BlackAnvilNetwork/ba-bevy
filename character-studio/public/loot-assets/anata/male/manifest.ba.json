@@ -1,0 +1,631 @@
+{
+  "assetsLocation": "./loot-assets/",
+  "format": "vrm",
+  "traitsDirectory": "anata/male/",
+  "thumbnailsDirectory": "anata/male/",
+  "exportScale": 1,
+  "animationPath": [
+    "./loot-assets/animations/2_Idle.fbx",
+    "./loot-assets/animations/3_Walking.fbx",
+    "./loot-assets/animations/4_Waving.fbx",
+    "./loot-assets/animations/1_T-Pose.fbx"
+  ],
+  "traitIconsDirectorySvg": "loot/icons/",
+  "defaultCullingLayer": -1,
+  "defaultCullingDistance": [
+    0.1,
+    0.01
+  ],
+  "requiredTraits": [
+    "Body",
+    "Chest"
+  ],
+  "initialTraits": [
+    "Body",
+    "Chest",
+    "Head",
+    "Shoes"
+  ],
+  "randomTraits": [
+    "Head"
+  ],
+  "colliderTraits": [
+    "Body"
+  ],
+  "offset": [
+    0.0,
+    0.48,
+    0.0
+  ],
+  "traits": [
+    {
+      "trait": "Body",
+      "name": "Body",
+      "icon": "",
+      "type": "mesh",
+      "iconGradient": "",
+      "iconSvg": "BODY.svg",
+      "cullingLayer": 0,
+      "cameraTarget": {
+        "distance": 3.0,
+        "height": 0.8
+      },
+      "cullingDistance": [
+        0.1,
+        0.01
+      ],
+      "collection": [
+        {
+          "id": "male",
+          "name": "male",
+          "directory": "Body/male.vrm",
+          "thumbnail": "Body/male.png",
+          "blendshapeTraits": [
+            {
+              "trait": "nose",
+              "name": "Nose",
+              "cameraTarget": {
+                "distance": 0.75,
+                "height": 1.5
+              },
+              "collection": [
+                {
+                  "id": "Nose_LONG",
+                  "name": "Long Nose"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "trait": "Head",
+      "name": "hair",
+      "icon": "",
+      "type": "mesh",
+      "iconGradient": "",
+      "iconSvg": "HEAD.svg",
+      "cullingLayer": -1,
+      "cameraTarget": {
+        "distance": 3.0,
+        "height": 0.8
+      },
+      "cullingDistance": [
+        0.1,
+        0.01
+      ],
+      "collection": [
+        {
+          "id": "braided",
+          "name": "Braided",
+          "directory": "Head/braided.vrm",
+          "thumbnail": "Head/braided.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "hair1",
+          "name": "Hair1",
+          "directory": "Head/hair1.vrm",
+          "thumbnail": "Head/hair1.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "hair2",
+          "name": "Hair2",
+          "directory": "Head/hair2.vrm",
+          "thumbnail": "Head/hair2.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "hair3",
+          "name": "Hair3",
+          "directory": "Head/hair3.vrm",
+          "thumbnail": "Head/hair3.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "hair4",
+          "name": "Hair4",
+          "directory": "Head/hair4.vrm",
+          "thumbnail": "Head/hair4.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "hair5",
+          "name": "Hair5",
+          "directory": "Head/hair5.vrm",
+          "thumbnail": "Head/hair5.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "hairshort",
+          "name": "Hairshort",
+          "directory": "Head/hairshort.vrm",
+          "thumbnail": "Head/hairshort.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "short",
+          "name": "Short",
+          "directory": "Head/short.vrm",
+          "thumbnail": "Head/short.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "straight",
+          "name": "Straight",
+          "directory": "Head/straight.vrm",
+          "thumbnail": "Head/straight.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        },
+        {
+          "id": "straightdown",
+          "name": "Straightdown",
+          "directory": "Head/straightdown.vrm",
+          "thumbnail": "Head/straightdown.png",
+          "cullingLayer": 1,
+          "colorCollection": "Basic Colors"
+        }
+      ]
+    },
+    {
+      "trait": "Shoes",
+      "name": "Shoes",
+      "icon": "",
+      "type": "mesh",
+      "iconGradient": "",
+      "iconSvg": "SHOES.svg",
+      "cullingLayer": -1,
+      "cameraTarget": {
+        "distance": 3.0,
+        "height": 0.8
+      },
+      "cullingDistance": [
+        0.1,
+        0.01
+      ],
+      "collection": [
+        {
+          "id": "linen_shoes",
+          "name": "linen shoes",
+          "directory": "Shoes/linen_shoes.vrm",
+          "thumbnail": "Shoes/linen_shoes.png"
+        }
+      ]
+    },
+    {
+      "trait": "Chest",
+      "name": "Chest",
+      "icon": "",
+      "type": "mesh",
+      "iconGradient": "",
+      "iconSvg": "CHEST.svg",
+      "cullingLayer": 0,
+      "cameraTarget": {
+        "distance": 3.0,
+        "height": 0.8
+      },
+      "cullingDistance": [
+        0.1,
+        0.01
+      ],
+      "collection": [
+        {
+          "id": "shirt",
+          "name": "shirt",
+          "directory": "Chest/shirt.vrm",
+          "thumbnail": "Chest/shirt.png"
+        }
+      ]
+    }
+  ],
+  "textureCollections": [],
+  "colorCollections": [
+    {
+      "trait": "Basic Colors",
+      "type": "texture",
+      "collection": [
+        {
+          "name": "Emerald",
+          "id": "emerald",
+          "value": [
+            "#7BFFBA"
+          ]
+        },
+        {
+          "name": "Sacramento",
+          "id": "sacramento",
+          "value": [
+            "#017136"
+          ]
+        },
+        {
+          "name": "Kelly",
+          "id": "kelly",
+          "value": [
+            "#75FF75"
+          ]
+        },
+        {
+          "name": "Lime",
+          "id": "lime",
+          "value": [
+            "#E6FF75"
+          ]
+        },
+        {
+          "name": "Clay",
+          "id": "clay",
+          "value": [
+            "#908557"
+          ]
+        },
+        {
+          "name": "Latte",
+          "id": "latte",
+          "value": [
+            "#5F5325"
+          ]
+        },
+        {
+          "name": "Copper",
+          "id": "copper",
+          "value": [
+            "#473B0E"
+          ]
+        },
+        {
+          "name": "Dark Grey",
+          "id": "darkgrey",
+          "value": [
+            "#313131"
+          ]
+        },
+        {
+          "name": "Pink",
+          "id": "pink",
+          "value": [
+            "#FFB4B6"
+          ]
+        },
+        {
+          "name": "Red",
+          "id": "red",
+          "value": [
+            "#FF5559"
+          ]
+        },
+        {
+          "name": "Scarlet",
+          "id": "scarlet",
+          "value": [
+            "#B20004"
+          ]
+        },
+        {
+          "name": "Maroon",
+          "id": "maroon",
+          "value": [
+            "#490002"
+          ]
+        },
+        {
+          "name": "Sangria",
+          "id": "sangria",
+          "value": [
+            "#5E2D2E"
+          ]
+        },
+        {
+          "name": "Lavender",
+          "id": "lavender",
+          "value": [
+            "#FFB3F3"
+          ]
+        },
+        {
+          "name": "Lilac",
+          "id": "lilac",
+          "value": [
+            "#FF49E1"
+          ]
+        },
+        {
+          "name": "Violet",
+          "id": "violet",
+          "value": [
+            "#C000A0"
+          ]
+        },
+        {
+          "name": "Dark Purple",
+          "id": "darkpurple",
+          "value": [
+            "#3C0032"
+          ]
+        },
+        {
+          "name": "Periwinkle",
+          "id": "periwinkle",
+          "value": [
+            "#ECCAFF"
+          ]
+        },
+        {
+          "name": "Purple",
+          "id": "purple",
+          "value": [
+            "#AF25FF"
+          ]
+        },
+        {
+          "name": "Mauve",
+          "id": "mauve",
+          "value": [
+            "#703094"
+          ]
+        },
+        {
+          "name": "Eggplant",
+          "id": "eggplant",
+          "value": [
+            "#290041"
+          ]
+        },
+        {
+          "name": "Amethyst",
+          "id": "amethyst",
+          "value": [
+            "#6F3AC0"
+          ]
+        },
+        {
+          "name": "Iris",
+          "id": "iris",
+          "value": [
+            "#D1B3FF"
+          ]
+        },
+        {
+          "name": "Heather",
+          "id": "heather",
+          "value": [
+            "#7B75E1"
+          ]
+        },
+        {
+          "name": "Blue",
+          "id": "blue",
+          "value": [
+            "#554AFF"
+          ]
+        },
+        {
+          "name": "Navy",
+          "id": "navy",
+          "value": [
+            "#08008E"
+          ]
+        },
+        {
+          "name": "Aegean",
+          "id": "aegean",
+          "value": [
+            "#2E2B64"
+          ]
+        },
+        {
+          "name": "Cerulean",
+          "id": "cerulean",
+          "value": [
+            "#5193FF"
+          ]
+        },
+        {
+          "name": "Berry",
+          "id": "berry",
+          "value": [
+            "#003D9F"
+          ]
+        },
+        {
+          "name": "Indigo",
+          "id": "indigo",
+          "value": [
+            "#001D4D"
+          ]
+        },
+        {
+          "name": "Light Cyan",
+          "id": "lightcyan",
+          "value": [
+            "#1FFFFE"
+          ]
+        },
+        {
+          "name": "Dark Cyan",
+          "id": "darkcyan",
+          "value": [
+            "#007D7C"
+          ]
+        },
+        {
+          "name": "Teal",
+          "id": "teal",
+          "value": [
+            "#66A9A9"
+          ]
+        },
+        {
+          "name": "Arctic",
+          "id": "arctic",
+          "value": [
+            "#89FFFE"
+          ]
+        },
+        {
+          "name": "Sky",
+          "id": "sky",
+          "value": [
+            "#CDFFFF"
+          ]
+        },
+        {
+          "name": "Peanut",
+          "id": "peanut",
+          "value": [
+            "#7C613D"
+          ]
+        },
+        {
+          "name": "Coffee",
+          "id": "coffee",
+          "value": [
+            "#634B2C"
+          ]
+        },
+        {
+          "name": "Mocha",
+          "id": "mocha",
+          "value": [
+            "#63432C"
+          ]
+        },
+        {
+          "name": "Syrup",
+          "id": "syrup",
+          "value": [
+            "#5A3114"
+          ]
+        },
+        {
+          "name": "Chocolate",
+          "id": "chocolate",
+          "value": [
+            "#341F0E"
+          ]
+        },
+        {
+          "name": "Dark Wood",
+          "id": "darkwood",
+          "value": [
+            "#352D0E"
+          ]
+        },
+        {
+          "name": "Hazelnut",
+          "id": "hazelnut",
+          "value": [
+            "#7D7760"
+          ]
+        },
+        {
+          "name": "Hazel Wood",
+          "id": "hazelwood",
+          "value": [
+            "#BCB189"
+          ]
+        },
+        {
+          "name": "Fawn",
+          "id": "fawn",
+          "value": [
+            "#A79657"
+          ]
+        },
+        {
+          "name": "Tan",
+          "id": "tan",
+          "value": [
+            "#D7D1B9"
+          ]
+        },
+        {
+          "name": "Sand",
+          "id": "sand",
+          "value": [
+            "#F2EDDA"
+          ]
+        },
+        {
+          "name": "Yellow",
+          "id": "yellow",
+          "value": [
+            "#E4B600"
+          ]
+        },
+        {
+          "name": "Amber",
+          "id": "amber",
+          "value": [
+            "#FFCB00"
+          ]
+        },
+        {
+          "name": "Orange",
+          "id": "orange",
+          "value": [
+            "#FF8500"
+          ]
+        },
+        {
+          "name": "Black",
+          "id": "black",
+          "value": [
+            "#161616"
+          ]
+        },
+        {
+          "name": "Leaf",
+          "id": "leaf",
+          "value": [
+            "#9FBB9F"
+          ]
+        },
+        {
+          "name": "Pale Blue",
+          "id": "paleblue",
+          "value": [
+            "#9FBB9F"
+          ]
+        },
+        {
+          "name": "Light Orange",
+          "id": "lightorange",
+          "value": [
+            "#FFC676"
+          ]
+        },
+        {
+          "name": "Fire",
+          "id": "fire",
+          "value": [
+            "#FF4600"
+          ]
+        }
+      ]
+    }
+  ],
+  "ba": {
+    "gender": "male",
+    "lockedOutfit": {
+      "Shoes": "linen_shoes",
+      "Chest": "shirt"
+    },
+    "customizableTraits": [
+      "Body",
+      "Head"
+    ],
+    "note": "Anata shirt.vrm + local hair copies. No pants/sash/gloves clutter."
+  }
+}

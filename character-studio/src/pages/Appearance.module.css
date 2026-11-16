@@ -1,0 +1,433 @@
+/* Default (upstream) layout kept for non-BA mode via .legacy* fallbacks below.
+   BA mode (.ba) is the Black Anvil forge creator UX. */
+
+.buttonContainer {
+  position: absolute;
+  bottom: 20px;
+  left: 32px;
+  width: calc(100% - 64px);
+  text-align: center;
+  z-index: 1200;
+  pointer-events: none;
+}
+.buttonContainer button {
+  pointer-events: auto;
+  min-width: 120px;
+}
+.buttonContainer .buttonLeft { float: left; }
+.buttonContainer .buttonRight { float: right; }
+.buttonContainer .buttonCenter { margin: 0 8px; }
+.buttonContainer::after {
+  content: " ";
+  display: block;
+  clear: both;
+}
+
+/* ---------- Black Anvil forge creator ---------- */
+
+.ba {
+  --ba-bronze: #c49a4a;
+  --ba-bronze-hi: #e0c070;
+  --ba-bronze-dim: #8a7030;
+  --ba-cream: #efe8dc;
+  --ba-sub: #c2a878;
+  --ba-void: #06040a;
+  --ba-panel: rgba(18, 14, 12, 0.92);
+  --ba-panel-edge: rgba(196, 154, 74, 0.45);
+  --ba-select: rgba(196, 154, 74, 0.28);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.ba * {
+  box-sizing: border-box;
+}
+
+.baTitle {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 30;
+}
+.baEyebrow {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ba-sub);
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.baHeading {
+  font-size: 22px;
+  letter-spacing: 0.04em;
+  color: var(--ba-cream);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+  margin: 0;
+  font-weight: 600;
+}
+.baHint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ba-sub);
+  opacity: 0.8;
+}
+
+/* Category rail — left, compact, doesn't eat the preview */
+.baCats {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 10px;
+  background: var(--ba-panel);
+  border: 1px solid var(--ba-panel-edge);
+  border-radius: 4px;
+  pointer-events: auto;
+  z-index: 40;
+  backdrop-filter: blur(12px);
+}
+.baCat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  min-height: 40px;
+  padding: 10px 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ba-cream);
+  transition: border-color 0.15s, background 0.15s;
+}
+.baCat:hover {
+  border-color: rgba(196, 154, 74, 0.35);
+  background: rgba(196, 154, 74, 0.08);
+}
+.baCatActive {
+  border-color: var(--ba-bronze-hi);
+  background: var(--ba-select);
+}
+.baCatLabel {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ba-sub);
+}
+.baCatActive .baCatLabel {
+  color: var(--ba-bronze-hi);
+}
+
+/* Options dock — compact, left-anchored (not full width) */
+.baDock {
+  position: absolute;
+  left: 120px;
+  right: auto;
+  bottom: 72px;
+  width: min(380px, calc(100vw - 160px));
+  max-height: 42vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: var(--ba-panel);
+  border: 1px solid var(--ba-panel-edge);
+  border-radius: 4px;
+  pointer-events: auto;
+  z-index: 40;
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+.baDockHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(196, 154, 74, 0.25);
+}
+.baDockTitle {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ba-bronze-hi);
+  margin: 0;
+}
+.baDockBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  max-height: 32vh;
+}
+.baStyleRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.baStyleChip {
+  appearance: none;
+  border: 1px solid rgba(196, 154, 74, 0.35);
+  background: rgba(8, 6, 5, 0.55);
+  color: var(--ba-cream);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: 7px 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1.2;
+}
+.baStyleChip:hover {
+  border-color: rgba(224, 192, 112, 0.65);
+  background: rgba(196, 154, 74, 0.12);
+}
+.baStyleChipActive {
+  border-color: var(--ba-bronze-hi);
+  background: var(--ba-select);
+  color: var(--ba-bronze-hi);
+}
+.baColorRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.baSwatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.baSwatch:hover {
+  border-color: rgba(224, 192, 112, 0.7);
+}
+.baSwatchActive {
+  border-color: var(--ba-bronze-hi);
+  box-shadow: 0 0 0 2px rgba(224, 192, 112, 0.35);
+}
+.baSwatchCustom {
+  background:
+    conic-gradient(
+      from 0deg,
+      #ff5559,
+      #ffb3f3,
+      #554aff,
+      #7bffba,
+      #f5d76e,
+      #ff5559
+    );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.baSwatchCustomMark {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ba-void);
+  border: 1.5px solid var(--ba-cream);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+.baColorPop {
+  position: absolute;
+  left: 120px;
+  bottom: calc(42vh + 84px);
+  z-index: 50;
+  pointer-events: auto;
+  border: 1px solid var(--ba-panel-edge);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+.baFooter {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 45;
+}
+.baFooter button {
+  pointer-events: auto;
+}
+
+/* ---------- Legacy upstream layout (non-BA) ---------- */
+
+.sideMenu {
+  position: fixed;
+  left: 32px;
+  top: 98px;
+  height: calc(100vh - 176px);
+  backdrop-filter: blur(22.5px);
+  background: rgba(5, 11, 14, 0.8);
+  z-index: 1000;
+  user-select: none;
+}
+.scrollContainer {
+  width: 90%;
+  overflow-y: scroll;
+  position: relative;
+  overflow-x: hidden !important;
+  margin: 16px;
+  height: calc(100% - 40px);
+}
+.scrollContainerOptions {
+  width: 80%;
+  overflow-y: scroll;
+  position: relative;
+  overflow-x: hidden !important;
+  margin: 16px;
+  height: calc(100% - 100px);
+}
+.bottomLine {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 149, 100, 0) 0%,
+    rgba(8, 234, 160, 1) 50%,
+    rgba(0, 149, 100, 0) 100%
+  );
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+}
+.editor-container {
+  user-select: none;
+  flex: 1;
+  width: 200px;
+  position: relative;
+  text-align: center;
+}
+.editorButton {
+  padding: 0.15em;
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.editorText {
+  color: rgb(255, 255, 255);
+  text-transform: capitalize;
+  max-width: 100px;
+  white-space: normal;
+  word-wrap: break-word;
+  text-align: left;
+}
+.selectorContainerPos {
+  position: absolute;
+  top: 98px;
+  left: 280px;
+  height: calc(100vh - 176px);
+  backdrop-filter: blur(22.5px);
+  background: rgba(5, 11, 14, 0.8);
+  z-index: 1000;
+}
+.selector-container {
+  user-select: none;
+  flex: 1;
+  width: 140px;
+  position: relative;
+}
+.selector-container-column {
+  user-select: none;
+  flex: 1;
+  flex-direction: column;
+  width: 140px;
+  position: relative;
+}
+.selectorButton {
+  padding: 0.25em;
+  display: block;
+  position: relative;
+  opacity: 1;
+  float: left;
+  width: 62px;
+  text-align: center;
+}
+.selectorColorPickerUI {
+  position: absolute;
+  right: -30px;
+  width: 30px;
+  top: 55px;
+}
+.selectorColorPickerButton {
+  backdrop-filter: blur(22.5px);
+  background: rgba(5, 11, 14, 0.8);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+}
+.selectorPickerTabs {
+  position: absolute;
+  right: -40px;
+  top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.selectorColorPickerImg {
+  width: 20px;
+  height: 20px;
+  position: relative;
+  margin: auto;
+}
+.uploadContainer {
+  text-align: center;
+  width: 80%;
+  position: relative;
+  margin: 16px;
+  margin-right: 10px;
+  padding-right: 6px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.uploadButton {
+  margin: auto;
+  text-align: center;
+  outline-color: #3b434f;
+  color: #d1d7df;
+  outline-width: 2px;
+  outline-style: solid;
+  background-color: #1e2530;
+  height: 30px;
+  width: 80%;
+  font-family: "TTSC-Bold";
+  text-transform: uppercase !important;
+  font-size: x-small;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  user-select: none;
+  cursor: pointer;
+}
+.relativeBox {
+  position: relative;
+}
+.blendshapeGroup {
+  flex-direction: column;
+  display: flex;
+  color: white;
+}
