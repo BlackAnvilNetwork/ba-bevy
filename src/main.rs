@@ -1,7 +1,9 @@
 mod atmosphere;
 mod boss;
 mod cel;
+mod character;
 mod data;
+mod net;
 mod debug_shot;
 mod dialogue;
 mod forge_menu;
@@ -15,6 +17,8 @@ mod tree;
 mod vfx;
 mod well;
 
+use std::path::PathBuf;
+
 use bevy::prelude::*;
 
 use atmosphere::{flicker_well_fire, tick_atmosphere, StickAtmosphere};
@@ -23,7 +27,11 @@ use boss::{
     WardenPossessRequest,
 };
 use cel::{cel_shade_figures, CelMaterial};
+use character::{attach_player_avatar, despawn_stale_avatars, load_character_profile};
 use data::load_game_data;
+use net::{
+    apply_zone_snapshots, connect_zone_on_enter, maybe_enable_zone_net, send_local_move, ZoneNet,
+};
 use debug_shot::{
     capture_debug_shot, spawn_debug_hud, toggle_debug_hud, type_note, update_debug_hud,
 };
@@ -50,16 +58,30 @@ use vfx::{
 use well::{tick_well, tick_well_splash, WellPour};
 
 fn main() {
+    let asset_root = {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+        if manifest.is_dir() {
+            manifest
+        } else {
+            PathBuf::from("assets")
+        }
+    };
+
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Black Anvil — Greymere Yard".into(),
-                    resolution: (1280, 720).into(),
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Black Anvil — Greymere Yard".into(),
+                        resolution: (1280, 720).into(),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    file_path: asset_root.to_string_lossy().into_owned(),
                     ..default()
                 }),
-                ..default()
-            }),
             MaterialPlugin::<StickSkyMaterial>::default(),
             MaterialPlugin::<CelMaterial>::default(),
         ))
@@ -69,6 +91,7 @@ fn main() {
         .init_resource::<PossessFx>()
         .init_resource::<GameFlow>()
         .init_resource::<CharacterDraft>()
+        .init_resource::<ZoneNet>()
         .insert_resource(ClearColor(atmosphere::hex_rgb(atmosphere::SKY_TOP)))
         .add_message::<DeathDissolveRequest>()
         .add_message::<WardenPossessRequest>()
@@ -79,6 +102,7 @@ fn main() {
             (
                 load_game_data,
                 load_combat_kits,
+                load_character_profile,
                 spawn_opening_scene.after(load_game_data),
                 spawn_player.after(load_game_data),
                 attach_pixel_camera.after(spawn_player),
@@ -88,7 +112,19 @@ fn main() {
                 setup_forge_vfx,
                 spawn_forge_menu
                     .after(attach_pixel_camera)
-                    .after(setup_forge_vfx),
+                    .after(setup_forge_vfx)
+                    .after(load_character_profile),
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                despawn_stale_avatars,
+                attach_player_avatar.after(despawn_stale_avatars),
+                maybe_enable_zone_net,
+                connect_zone_on_enter,
+                send_local_move.run_if(in_yard),
+                apply_zone_snapshots.run_if(in_yard),
             ),
         )
         .add_systems(

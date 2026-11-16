@@ -21,12 +21,16 @@ import Mint from "./pages/Mint"
 import Optimizer from "./pages/Optimizer"
 import Save from "./pages/Save"
 import Wallet from "./pages/Wallet"
+import { ingestBaForgeQuery } from "./library/ba-character"
 
 // dynamically import the manifest
 const assetImportPath = import.meta.env.VITE_ASSET_PATH + "/manifest.json"
 //const assetImportPath = "./manifest.json"
 
 const baMode = import.meta.env.VITE_BA_MODE === "1"
+if (baMode) {
+  ingestBaForgeQuery()
+}
 const cameraDistanceOther = baMode ? 2.55 : 6
 const centerCameraTargetOther = new THREE.Vector3(baMode ? 0.12 : 0, baMode ? 0.95 : 0.8, 0)
 const centerCameraPositionOther = new THREE.Vector3(

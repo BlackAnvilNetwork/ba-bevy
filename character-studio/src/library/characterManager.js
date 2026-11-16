@@ -6,7 +6,7 @@ import { BlinkManager } from "./blinkManager";
 import { EmotionManager } from "./EmotionManager";
 import { VRMLoaderPlugin, VRMSpringBoneCollider } from "@pixiv/three-vrm";
 import { getAsArray, disposeVRM, renameVRMBones, addModelData } from "./utils";
-import { downloadGLB, downloadVRMWithAvatar } from "../library/download-utils"
+import { downloadGLB, downloadVRMWithAvatar, getGLBBlobData } from "../library/download-utils"
 import { getNodesWithColliders, saveVRMCollidersToUserData, renameMorphTargets} from "./load-utils";
 import { cullHiddenMeshes, setTextureToChildMeshes, addChildAtFirst } from "./utils";
 import { LipSync } from "./lipsync";
@@ -370,6 +370,14 @@ export class CharacterManager {
       else{
         console.error("Download not supported");
       }
+    }
+    /**
+     * Build an optimized GLB Blob for Black Anvil draft save (no browser download).
+     */
+    async getGLBBlob(exportOptions = null){
+      exportOptions = exportOptions || {}
+      const finalOptions = {...this.manifestDataManager.getExportOptions(), ...exportOptions};
+      return getGLBBlobData(this.characterModel, finalOptions);
     }
     /**
      * Gets the current avatar selection.

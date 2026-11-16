@@ -1,6 +1,15 @@
 [workspace]
 resolver = "2"
-members = [".", "crates/ba_pixel_core", "crates/ba_pixel_geometry", "crates/ba_pixel_sim"]
+members = [
+    ".",
+    "crates/ba_pixel_core",
+    "crates/ba_pixel_geometry",
+    "crates/ba_pixel_sim",
+    "crates/ba_protocol",
+    "crates/ba_combat",
+    "crates/ba_zone_server",
+]
+exclude = ["launcher/src-tauri"]
 
 [package]
 name = "black_anvil"
@@ -16,6 +25,9 @@ rand = { version = "0.9", features = ["small_rng"] }
 ba_pixel_core = { path = "crates/ba_pixel_core" }
 ba_pixel_geometry = { path = "crates/ba_pixel_geometry" }
 ba_pixel_sim = { path = "crates/ba_pixel_sim" }
+ba_protocol = { path = "crates/ba_protocol" }
+ba_combat = { path = "crates/ba_combat" }
+tungstenite = { version = "0.26", default-features = true }
 
 [profile.dev]
 opt-level = 1

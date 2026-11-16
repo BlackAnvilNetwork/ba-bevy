@@ -1,0 +1,10 @@
+[package]
+name = "ba_combat"
+version = "0.1.0"
+edition = "2021"
+description = "Black Anvil combat math (shared client/server) — SoT aligns with src/rpg/COMBAT_CALCULATIONS.md"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = { version = "0.9", features = ["small_rng"] }

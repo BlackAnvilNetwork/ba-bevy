@@ -1,5 +1,6 @@
 ﻿$ErrorActionPreference = "Stop"
-$studio = "C:\Users\raxac\OneDrive\Desktop\apps\black-anvil\character-studio"
+$root = Split-Path -Parent $PSScriptRoot
+$studio = Join-Path $root "character-studio"
 
 if (-not (Test-Path "$studio\package.json")) {
   Write-Host "Character Studio missing. Run scripts\install-character-studio.ps1 then scripts\setup-ba-character-studio.ps1"
@@ -12,8 +13,9 @@ if (-not (Test-Path "node_modules")) {
   npm install --legacy-peer-deps
 }
 
-Write-Host "Black Anvil Character Studio — male/female Anata, body+face kept, starter gear."
-Write-Host "Open http://127.0.0.1:5173  (Optimize page merges meshes/atlas per docs)"
-# Call vite directly — `npm run dev -- --port 5173` mangles into `vite --host 127.0.0.1 5173`
-# (positional root dir) and serves a 404.
+New-Item -ItemType Directory -Force -Path (Join-Path $root "assets\character\exports") | Out-Null
+
+Write-Host "Black Anvil Character Studio — Anata male/female."
+Write-Host "Save page: Save for Black Anvil → assets/character/exports/active.{json,glb}"
+Write-Host "Open http://127.0.0.1:5173"
 npx vite --host 127.0.0.1 --port 5173 --strictPort

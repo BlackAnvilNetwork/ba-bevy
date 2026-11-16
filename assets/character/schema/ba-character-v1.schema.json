@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blackanvil.local/schema/ba-character-v1.json",
+  "title": "BaCharacterV1",
+  "description": "Canonical Black Anvil character draft / finalized appearance record.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "revision",
+    "characterId",
+    "name",
+    "startingJob",
+    "pack",
+    "manifestId",
+    "catalogVersion",
+    "bodyTraits",
+    "starterEquipment",
+    "runtime"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "characterId": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1, "maxLength": 24 },
+    "startingJob": {
+      "type": "string",
+      "enum": [
+        "TimeMage",
+        "Knight",
+        "Rogue",
+        "Cleric",
+        "Sorcerer",
+        "Fighter",
+        "BattleMage",
+        "Druid"
+      ]
+    },
+    "pack": { "type": "string", "examples": ["anata"] },
+    "manifestId": {
+      "type": "string",
+      "enum": ["anata/male", "anata/female"]
+    },
+    "catalogVersion": { "type": "string" },
+    "bodyTraits": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "blendshapes": {
+            "type": "object",
+            "additionalProperties": { "type": "number" }
+          },
+          "colors": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      }
+    },
+    "starterEquipment": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["format", "relativePath"],
+      "properties": {
+        "format": { "type": "string", "const": "glb" },
+        "relativePath": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}

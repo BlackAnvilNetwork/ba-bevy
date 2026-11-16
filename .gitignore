@@ -5,9 +5,15 @@ Cargo.lock
 
 # Character Studio local/runtime (source + public assets are tracked)
 /character-studio/node_modules/
+/character-studio/build/
 /character-studio/.env
 /character-studio/.env.local
 /character-studio/cert.pem
 /character-studio/key.pem
 /character-studio/public/character-assets/
 /assets/character/exports/
+
+# Launcher
+/launcher/node_modules/
+/launcher/dist/
+/launcher/src-tauri/target/

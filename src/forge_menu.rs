@@ -6,6 +6,7 @@ use bevy::input::ButtonState;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
+use crate::character::{load_active_draft, CharacterProfile, HasPlayerAvatar};
 use crate::dialogue::{HudRoot, SheetText};
 use crate::forge_vfx::{ForgeVfx, ForgeVfxLayer};
 use crate::player::NoteComposer;
@@ -134,11 +135,43 @@ fn ignore_pick() -> Pickable {
     Pickable::IGNORE
 }
 
+fn job_wire_name(job: JobId) -> &'static str {
+    match job {
+        JobId::TimeMage => "TimeMage",
+        JobId::Knight => "Knight",
+        JobId::Rogue => "Rogue",
+        JobId::Cleric => "Cleric",
+        JobId::Sorcerer => "Sorcerer",
+        JobId::Fighter => "Fighter",
+        JobId::BattleMage => "BattleMage",
+        JobId::Druid => "Druid",
+    }
+}
+
+fn apply_studio_draft(draft: &mut CharacterDraft, profile: &CharacterProfile) {
+    let Some(ba) = profile.draft.as_ref() else {
+        return;
+    };
+    if !ba.name.trim().is_empty() {
+        draft.name = ba.name.clone();
+    }
+    draft.job = ba.job_id();
+    draft.appearance = if ba.is_female() {
+        Appearance::Female
+    } else {
+        Appearance::Male
+    };
+}
+
 pub fn spawn_forge_menu(
     mut commands: Commands,
     assets: Res<AssetServer>,
     vfx: Res<ForgeVfx>,
+    profile: Res<CharacterProfile>,
+    mut draft: ResMut<CharacterDraft>,
 ) {
+    apply_studio_draft(&mut draft, &profile);
+
     let backdrop = assets.load("ui/boot/forge-backdrop.png");
     let banner = assets.load("ui/black-anvil/slices/a1-title-banner.png");
     let vfx_image = vfx.image.clone();
@@ -620,12 +653,17 @@ pub fn forge_menu_clicks(
     }
 
     if open_studio {
-        open_character_studio(draft.appearance);
+        open_character_studio(&draft);
     }
 
     sync_draft_visuals(&draft, &mut hint_text, &mut style);
 
     if enter {
+        // Prefer freshly saved Studio draft for appearance / name / job.
+        if let Some(ba) = load_active_draft() {
+            apply_studio_draft(&mut draft, &CharacterProfile { draft: Some(ba.clone()) });
+            commands.insert_resource(CharacterProfile { draft: Some(ba) });
+        }
         enter_yard(
             &draft,
             &mut flow,
@@ -678,12 +716,16 @@ pub fn forge_menu_keys(
         draft.name_focused = false;
     }
     if keys.just_pressed(KeyCode::KeyC) && !draft.name_focused {
-        open_character_studio(draft.appearance);
+        open_character_studio(&draft);
     }
 
     sync_draft_visuals(&draft, &mut hint_text, &mut style);
 
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter) {
+        if let Some(ba) = load_active_draft() {
+            apply_studio_draft(&mut draft, &CharacterProfile { draft: Some(ba.clone()) });
+            commands.insert_resource(CharacterProfile { draft: Some(ba) });
+        }
         enter_yard(
             &draft,
             &mut flow,
@@ -697,14 +739,30 @@ pub fn forge_menu_keys(
 
 /// Opens the local Character Studio (Anata male/female + face blendshapes).
 /// Expects `scripts/run-character-studio.ps1` / `npm run dev` on :5173.
-fn open_character_studio(appearance: Appearance) {
+fn open_character_studio(draft: &CharacterDraft) {
     let url = format!(
-        "http://127.0.0.1:5173/?ba_gender={}",
-        appearance.studio_key()
+        "http://127.0.0.1:5173/?ba_gender={}&ba_name={}&ba_job={}",
+        draft.appearance.studio_key(),
+        urlencoding_lightweight(&draft.name),
+        job_wire_name(draft.job),
     );
     let _ = std::process::Command::new("cmd")
         .args(["/C", "start", "", &url])
         .spawn();
+}
+
+fn urlencoding_lightweight(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            b' ' => out.push_str("%20"),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 fn sync_draft_visuals(
@@ -795,9 +853,11 @@ fn enter_yard(
         if let Some(mut f) = fighter {
             rebuild_hotbar(&mut f, kits, prog.job, prog.level);
         }
+        // Allow attach_player_avatar to pick up a freshly saved Studio GLB.
         commands
             .entity(entity)
-            .insert((CharacterName(name.clone()), CharacterAppearance(draft.appearance)));
+            .insert((CharacterName(name.clone()), CharacterAppearance(draft.appearance)))
+            .remove::<HasPlayerAvatar>();
     }
 
     for entity in menu_root.iter() {
