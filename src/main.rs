@@ -34,7 +34,7 @@ use cel::{cel_shade_figures, CelMaterial};
 use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode, spawn_first_person_rig, animate_first_person_hands};
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
-    update_avatar_animation,
+    bind_avatar_animators, update_avatar_animation,
 };
 use data::load_game_data;
 use net::{
