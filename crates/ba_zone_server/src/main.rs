@@ -100,12 +100,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let addr = std::env::var("BA_ZONE_BIND").unwrap_or_else(|_| "127.0.0.1:8787".into());
-    if !addr.starts_with("127.0.0.1") && !addr.starts_with("localhost") && std::env::var_os("BA_ZONE_ALLOW_NONLOCAL").is_none()
-    {
-        eprintln!(
-            "refusing non-loopback bind `{addr}` — set BA_ZONE_ALLOW_NONLOCAL=1 to override (unsafe)"
-        );
-        std::process::exit(2);
+    // This developer server has NO account authentication. Never permit a
+    // public bind, even through an override flag. Discord ticket admission
+    // is a prerequisite for an Internet-facing game server.
+    let parsed: SocketAddr = addr.parse().map_err(|_| "BA_ZONE_BIND must be a numeric loopback socket address")?;
+    if !parsed.ip().is_loopback() {
+        return Err("Unauthenticated zone server may only bind to loopback".into());
     }
     let listener = TcpListener::bind(&addr).await?;
     info!(
@@ -145,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         let (stream, peer) = listener.accept().await?;
-        if !peer.ip().is_loopback() && std::env::var_os("BA_ZONE_ALLOW_NONLOCAL").is_none() {
+        if !peer.ip().is_loopback() {
             warn!("rejecting non-loopback peer {peer}");
             continue;
         }
