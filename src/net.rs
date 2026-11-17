@@ -69,7 +69,7 @@ pub struct RemotePlayer {
 }
 
 #[derive(Component)]
-struct RemoteAvatarPlaceholder;
+pub(crate) struct RemoteAvatarPlaceholder;
 
 const MAX_UNACKED_PREDICTIONS: usize = 128;
 
