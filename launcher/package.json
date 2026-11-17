@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "studio:dev": "powershell -ExecutionPolicy Bypass -File ../scripts/run-character-studio.ps1",
+    "studio:build": "powershell -ExecutionPolicy Bypass -File ../scripts/build-launcher-studio.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.1.0"
