@@ -85,7 +85,7 @@ async function waitUntil(fn, ms, label) {
 
 const a = await openClient("Alpha", "Fighter");
 const b = await openClient("Bravo", "Knight");
-if (!a.spawn || a.spawn.x !== 0) throw new Error("server spawn expected at origin");
+if (!a.spawn || Math.abs(a.spawn.x - 0.2) > 0.001 || Math.abs(a.spawn.z - 6.4) > 0.001) throw new Error("server spawn must match Greymere Yard zone data");
 
 const idBeforeDup = a.id;
 a.ws.send(
