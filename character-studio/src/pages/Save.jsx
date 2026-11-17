@@ -11,37 +11,11 @@ import MessageWindow from "../components/MessageWindow"
 import MergeOptions from "../components/MergeOptions"
 import FileDropComponent from "../components/FileDropComponent"
 import PurchaseMenu from "../components/PurchaseMenu"
-import { getAtlasSize } from "../library/utils"
-import { local } from "../library/store"
-import { buildBaCharacterV1, saveBaCharacterDraft } from "../library/ba-character"
+import { finishBaCharacterForGame } from "../library/ba-game-handoff"
 
 const baMode = import.meta.env.VITE_BA_MODE === "1"
 
-function mergeExportOptions() {
-  const currentOption = local["mergeOptions_sel_option"] || 0
-  const createTextureAtlas =
-    local["mergeOptions_create_atlas"] == null
-      ? true
-      : local["mergeOptions_create_atlas"]
-  return {
-    createTextureAtlas,
-    mToonAtlasSize: getAtlasSize(local["mergeOptions_atlas_mtoon_size"] || 6),
-    mToonAtlasSizeTransp: getAtlasSize(
-      local["mergeOptions_atlas_mtoon_transp_size"] || 6,
-    ),
-    stdAtlasSize: getAtlasSize(local["mergeOptions_atlas_std_size"] || 6),
-    stdAtlasSizeTransp: getAtlasSize(
-      local["mergeOptions_atlas_std_transp_size"] || 6,
-    ),
-    ktxCompression: local["merge_options_ktx_compression"],
-    exportStdAtlas: currentOption === 0 || currentOption == 2,
-    exportMtoonAtlas: currentOption === 1 || currentOption == 2,
-    twoSidedMaterial: local["mergeOptions_two_sided_mat"] || false,
-    optimized: true,
-  }
-}
-
-function Save() {
+function Save({ onCharacterSaved }) {
 
   // Translate hook
   const { t } = useContext(LanguageContext);
@@ -75,21 +49,18 @@ function Save() {
   const saveForBlackAnvil = async () => {
     if (baSaving) return
     setBaSaving(true)
+    setDialogMessage("")
     try {
-      const character = buildBaCharacterV1(characterManager)
-      const glbBlob = await characterManager.getGLBBlob(mergeExportOptions())
-      const result = await saveBaCharacterDraft(character, glbBlob)
-      setDialogMessage(
-        `Saved for Black Anvil (rev ${character.revision}). Use Back to launcher, then Play Black Anvil.\n${result.json}`,
-      )
-      setConfirmDialogWindow(true)
+      const { character } = await finishBaCharacterForGame(characterManager)
+      if (typeof onCharacterSaved === "function") {
+        onCharacterSaved(character)
+      } else {
+        setDialogMessage("Character saved. Open the Black Anvil launcher to play.")
+      }
       !isMute && playSound("backNextButton")
     } catch (err) {
-      console.error(err)
-      setDialogMessage(
-        `Save failed: ${err?.message || err}. Check the saved avatar and try again. In dev mode, verify the local Studio service is running.`,
-      )
-      setConfirmDialogWindow(true)
+      console.error("Black Anvil save failed:", err)
+      setDialogMessage(`Save failed: ${err?.message || err}. Your edits are still here; please retry.`)
     } finally {
       setBaSaving(false)
     }
@@ -120,6 +91,26 @@ function Save() {
   }
   const cancelPurchase = () =>{
     setPurchaseTraits([]);
+  }
+
+  // Black Anvil always saves the playable character; never expose the
+  // standalone Studio Download Options or ExportMenu in launcher mode.
+  if (baMode) {
+    return (
+      <div className={styles.container}>
+        <h2>Finish your character</h2>
+        <p>Your customized avatar will be saved to Black Anvil automatically.</p>
+        <div style={{ display: "flex", gap: 16 }}>
+          <button type="button" disabled={baSaving} onClick={back}>
+            Continue editing
+          </button>
+          <button type="button" disabled={baSaving} onClick={saveForBlackAnvil}>
+            {baSaving ? "Saving character…" : "Save and return to launcher"}
+          </button>
+        </div>
+        {dialogMessage && <p role="status">{dialogMessage}</p>}
+      </div>
+    )
   }
 
   return (
