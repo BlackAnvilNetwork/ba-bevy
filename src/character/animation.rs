@@ -8,8 +8,18 @@ use bevy::prelude::*;
 #[derive(Component)]
 pub struct AvatarAnimationGraph {
     handle: Handle<AnimationGraph>,
+    idle_clip: Handle<AnimationClip>,
     idle: AnimationNodeIndex,
     walk: AnimationNodeIndex,
+}
+
+#[derive(Component)]
+struct LegacyRigPoseApplied;
+
+#[derive(Component)]
+struct LegacyArmPose {
+    rest: Quat,
+    direction: f32,
 }
 
 #[derive(Component)]
@@ -30,13 +40,17 @@ pub fn prepare_avatar_animation(
     root: Entity,
     glb_uri: &str,
 ) {
+    let idle_clip: Handle<AnimationClip> =
+        asset_server.load(GltfAssetLabel::Animation(0).from_asset(glb_uri.to_string()));
+    let walk_clip: Handle<AnimationClip> =
+        asset_server.load(GltfAssetLabel::Animation(1).from_asset(glb_uri.to_string()));
     let (graph, nodes) = AnimationGraph::from_clips([
-        asset_server.load(GltfAssetLabel::Animation(0).from_asset(glb_uri.to_string())),
-        asset_server.load(GltfAssetLabel::Animation(1).from_asset(glb_uri.to_string())),
+        idle_clip.clone(),
+        walk_clip,
     ]);
     let handle = graphs.add(graph);
     commands.entity(root).insert(AvatarAnimationGraph {
-        handle, idle: nodes[0], walk: nodes[1],
+        handle, idle_clip, idle: nodes[0], walk: nodes[1],
     });
 }
 
@@ -68,6 +82,57 @@ pub fn bind_avatar_animators(
                 info!("Bound BA_Idle/BA_Walk animation to skinned avatar player {descendant:?}");
             }
         }
+    }
+}
+
+/// Older locally saved GLBs may predate BA_Idle/BA_Walk (and Bevy won't
+/// spawn an AnimationPlayer for them). Give such skeletons a relaxed arms-down
+/// fallback instead of rendering a permanent T-pose. The newer clips take
+/// precedence and are never mixed with this fallback.
+pub fn pose_legacy_unanimated_avatars(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    roots: Query<(Entity,&AvatarAnimationGraph,&Children), Without<LegacyRigPoseApplied>>,
+    names: Query<(&Name,&Transform)>,
+) {
+    use bevy::asset::LoadState;
+    for (root,graph,children) in &roots {
+        if !matches!(asset_server.load_state(graph.idle_clip.id()), LoadState::Failed(_)) {
+            continue;
+        }
+        let mut posed=0_usize;
+        for entity in children.iter_descendants(root) {
+            let Ok((name,transform))=names.get(entity) else {continue};
+            let simple=name.to_ascii_lowercase().replace(['_','-','.',' '],"");
+            let side = if simple.contains("leftupperarm") || simple.contains("leftarm") {
+                Some(-1.0)
+            } else if simple.contains("rightupperarm") || simple.contains("rightarm") {
+                Some(1.0)
+            } else {
+                None
+            };
+            if let Some(direction)=side {
+                commands.entity(entity).insert(LegacyArmPose {
+                    rest:transform.rotation,
+                    direction,
+                });
+                posed+=1;
+            }
+        }
+        if posed>0 {
+            commands.entity(root).insert(LegacyRigPoseApplied);
+            warn!("Avatar GLB has no BA_Idle clip; applied animated legacy arms-down pose to {posed} bones. Re-save in Studio to embed animation clips.");
+        }
+    }
+}
+
+pub fn animate_legacy_arm_pose(
+    time: Res<Time>,
+    mut arms: Query<(&LegacyArmPose,&mut Transform)>,
+) {
+    let breathe=(time.elapsed_secs()*1.8).sin()*0.035;
+    for (arm,mut transform) in &mut arms {
+        transform.rotation=arm.rest*Quat::from_rotation_z(arm.direction*(1.0+breathe));
     }
 }
 
