@@ -15,7 +15,9 @@ use ba_combat::{
     SwingOutcome, TargetRef, AUTO_REACH,
 };
 use ba_protocol::{
-    integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage, PROTOCOL_VERSION, TICK_HZ, SPRINT_SPEED,
+    integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage,
+    DEV_ZONE_MAX_X, DEV_ZONE_MAX_Z, DEV_ZONE_MIN_X, DEV_ZONE_MIN_Z,
+    PROTOCOL_VERSION, SPRINT_SPEED, TICK_HZ,
 };
 use futures_util::{SinkExt, StreamExt};
 use rand::rngs::SmallRng;
@@ -29,12 +31,12 @@ use tracing::{info, warn};
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const INTEREST_RADIUS_METERS: f32 = 96.0;
 const MAX_MOVE_PACKETS_PER_SEC: u32 = 80;
-const BOUNDS: (f32, f32, f32, f32) = (-20.0, 20.0, -20.0, 20.0);
+const BOUNDS: (f32, f32, f32, f32) = (DEV_ZONE_MIN_X, DEV_ZONE_MAX_X, DEV_ZONE_MIN_Z, DEV_ZONE_MAX_Z);
 const DT: f32 = 1.0 / TICK_HZ as f32;
 const DEFAULT_SPAWN: Pose = Pose {
-    x: 0.0,
+    x: 0.2,
     y: 1.65,
-    z: 0.0,
+    z: 6.4,
     yaw: 0.0,
 };
 
