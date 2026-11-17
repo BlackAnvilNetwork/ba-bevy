@@ -7,6 +7,7 @@ import { ViewContext, ViewMode } from "./context/ViewContext"
 import { EffectManager } from "./library/effectManager"
 //import { AnimationManager } from "./library/animationManager"
 import MessageWindow from "./components/MessageWindow"
+import BaLauncherDashboard from "./components/BaLauncherDashboard"
 
 import Background from "./components/Background"
 
@@ -21,12 +22,17 @@ import Mint from "./pages/Mint"
 import Optimizer from "./pages/Optimizer"
 import Save from "./pages/Save"
 import Wallet from "./pages/Wallet"
+import { ingestBaForgeQuery } from "./library/ba-character"
+import { hasLoadedAvatar } from "./library/ba-creator"
 
 // dynamically import the manifest
-const assetImportPath = import.meta.env.VITE_ASSET_PATH + "/manifest.json"
+const assetImportPath = (import.meta.env.VITE_ASSET_PATH || "") + "/manifest.json"
 //const assetImportPath = "./manifest.json"
 
 const baMode = import.meta.env.VITE_BA_MODE === "1"
+if (baMode) {
+  ingestBaForgeQuery()
+}
 const cameraDistanceOther = baMode ? 2.55 : 6
 const centerCameraTargetOther = new THREE.Vector3(baMode ? 0.12 : 0, baMode ? 0.95 : 0.8, 0)
 const centerCameraPositionOther = new THREE.Vector3(
@@ -97,6 +103,8 @@ export default function App() {
     effectManager,
   } = resource.read()
   const [hideUi, setHideUi] = useState(false)
+  // The Tauri window is the launcher. Character Studio is an in-app view.
+  const [launcherHome, setLauncherHome] = useState(baMode && Boolean(window.__TAURI__))
   const {
     camera,
     controls,
@@ -104,9 +112,10 @@ export default function App() {
     moveCamera,
     setManifest,
     lookAtManager,
-    showEnvironmentModels
+    showEnvironmentModels,
+    characterManager,
   } = useContext(SceneContext)
-  const { viewMode } = useContext(ViewContext)
+  const { viewMode, setViewMode } = useContext(ViewContext)
 
   effectManager.camera = camera
   effectManager.scene = scene
@@ -149,6 +158,11 @@ export default function App() {
     [ViewMode.APPEARANCE]: (
       <Appearance
         confirmDialog={confirmDialog}
+        onCharacterSaved={baMode && window.__TAURI__ ? () => {
+          // The launcher remounts and reads the newly selected native revision.
+          // Play remains an explicit player action after the save succeeds.
+          setLauncherHome(true)
+        } : undefined}
       />
     ),
     [ViewMode.OPTIMIZER]:<Optimizer/>,
@@ -159,7 +173,7 @@ export default function App() {
     [ViewMode.BATCHDOWNLOAD]: <BatchDownload />,
     [ViewMode.LOAD]: <Load />,
     [ViewMode.MINT]: <Mint />,
-    [ViewMode.SAVE]: <Save />,
+    [ViewMode.SAVE]: <Save onCharacterSaved={baMode && window.__TAURI__ ? () => setLauncherHome(true) : undefined} />,
   }
 
   let lastTap = 0
@@ -205,8 +219,24 @@ export default function App() {
   // Translate hook
   const {t} = useContext(LanguageContext);
 
+  if (launcherHome) {
+    return <BaLauncherDashboard onCustomize={() => {
+      // APPEARANCE only edits an avatar that is already in the Three.js scene.
+      // On first entry the CREATE page must load the selected gender's pack
+      // and initial traits before opening APPEARANCE. Skipping that step
+      // produced a blank character until the player pressed Back.
+      setViewMode(hasLoadedAvatar(characterManager) ? ViewMode.APPEARANCE : ViewMode.CREATE)
+      setLauncherHome(false)
+    }} />
+  }
+
   return (
     <Fragment>
+      {baMode && window.__TAURI__ && (
+        <button type="button" className="ba-back-to-launcher" onClick={() => setLauncherHome(true)}>
+          ← Back to launcher
+        </button>
+      )}
       
       <div className="generalTitle">{baMode ? "Black Anvil" : "Character Studio"}</div>
 

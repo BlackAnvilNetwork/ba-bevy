@@ -11,9 +11,11 @@ import MessageWindow from "../components/MessageWindow"
 import MergeOptions from "../components/MergeOptions"
 import FileDropComponent from "../components/FileDropComponent"
 import PurchaseMenu from "../components/PurchaseMenu"
+import { finishBaCharacterForGame } from "../library/ba-game-handoff"
 
+const baMode = import.meta.env.VITE_BA_MODE === "1"
 
-function Save() {
+function Save({ onCharacterSaved }) {
 
   // Translate hook
   const { t } = useContext(LanguageContext);
@@ -25,6 +27,7 @@ function Save() {
 
   const [confirmDialogWindow, setConfirmDialogWindow] = useState(false)
   const [dialogMessage, setDialogMessage] = useState("")
+  const [baSaving, setBaSaving] = useState(false)
 
   const [currentPrice, setCurrentPrice] = React.useState(0)
   const [purchaseTraits, setPurchaseTraits] = React.useState([])
@@ -42,6 +45,25 @@ function Save() {
   const mint = () => {
     setViewMode(ViewMode.MINT)
     !isMute && playSound('backNextButton');
+  }
+  const saveForBlackAnvil = async () => {
+    if (baSaving) return
+    setBaSaving(true)
+    setDialogMessage("")
+    try {
+      const { character } = await finishBaCharacterForGame(characterManager)
+      if (typeof onCharacterSaved === "function") {
+        onCharacterSaved(character)
+      } else {
+        setDialogMessage("Character saved. Open the Black Anvil launcher to play.")
+      }
+      !isMute && playSound("backNextButton")
+    } catch (err) {
+      console.error("Black Anvil save failed:", err)
+      setDialogMessage(`Save failed: ${err?.message || err}. Your edits are still here; please retry.`)
+    } finally {
+      setBaSaving(false)
+    }
   }
   const onPurchaseClick = async() =>{
     //console.log(characterManager.getPurchaseTraitsArray());
@@ -69,6 +91,26 @@ function Save() {
   }
   const cancelPurchase = () =>{
     setPurchaseTraits([]);
+  }
+
+  // Black Anvil always saves the playable character; never expose the
+  // standalone Studio Download Options or ExportMenu in launcher mode.
+  if (baMode) {
+    return (
+      <div className={styles.container}>
+        <h2>Finish your character</h2>
+        <p>Your customized avatar will be saved to Black Anvil automatically.</p>
+        <div style={{ display: "flex", gap: 16 }}>
+          <button type="button" disabled={baSaving} onClick={back}>
+            Continue editing
+          </button>
+          <button type="button" disabled={baSaving} onClick={saveForBlackAnvil}>
+            {baSaving ? "Saving character…" : "Save and return to launcher"}
+          </button>
+        </div>
+        {dialogMessage && <p role="status">{dialogMessage}</p>}
+      </div>
+    )
   }
 
   return (
@@ -104,8 +146,18 @@ function Save() {
           currentPrice = {currentPrice}
           onPurchaseClick = {onPurchaseClick}
         />
+
+        {baMode && (
+          <CustomButton
+            theme="light"
+            text={baSaving ? "Saving…" : "Save for Black Anvil"}
+            size={14}
+            className={styles.buttonRight}
+            onClick={saveForBlackAnvil}
+          />
+        )}
         
-        {import.meta.env.VITE_BA_MODE !== "1" && (
+        {!baMode && (
           <CustomButton
               theme="light"
               text="mint"

@@ -1,0 +1,42 @@
+name: windows-bundle
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-bundle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Compile Bevy and build self-contained staging MSI
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -Channel staging
+      - name: Extract and verify MSI payload
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "launcher/src-tauri/target/release/bundle/msi" -Filter "*.msi" | Select-Object -First 1
+          if (-not $msi) { throw "MSI not built" }
+          ./scripts/test-windows-package.ps1 -MsiPath $msi.FullName
+      - name: Install MSI on clean Windows runner and verify installed game
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem "launcher/src-tauri/target/release/bundle/msi" -Filter "*.msi" | Select-Object -First 1
+          if (-not $msi) { throw "MSI not built" }
+          ./scripts/test-windows-clean-install.ps1 -MsiPath $msi.FullName
+      - name: Upload unsigned test installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: black-anvil-windows-staging-msi
+          path: launcher/src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+          retention-days: 7

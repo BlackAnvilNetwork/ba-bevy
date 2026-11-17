@@ -1,0 +1,22 @@
+[package]
+name = "ba_zone_server"
+version = "0.1.0"
+edition = "2021"
+description = "Authoritative Greymere zone server (M2 MVP)"
+
+[[bin]]
+name = "ba_zone_server"
+path = "src/main.rs"
+
+[dependencies]
+ba_protocol = { path = "../ba_protocol" }
+ba_combat = { path = "../ba_combat" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = { version = "0.9", features = ["small_rng"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

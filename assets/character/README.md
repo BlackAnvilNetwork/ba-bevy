@@ -1,27 +1,28 @@
 # Black Anvil characters
 
-Player creation uses [Character Studio](https://github.com/M3-org/CharacterStudio) with the **neurohacker** pack ([character-assets](https://github.com/memelotsqui/character-assets)).
+Canonical draft format: [`schema/ba-character-v1.schema.json`](schema/ba-character-v1.schema.json).
 
-## Player can customize
+Player creation uses Character Studio (vendored in `character-studio/`) with **Anata** male/female packs under `loot-assets`.
 
-- Hair styles + hair colors  
-- Body / skin tones  
-- Eyes + eye colors  
-- Any blendshapes the body VRM exposes  
+## Pipeline
 
-## Locked (not customizable)
+1. Run Studio: `.\scripts\run-character-studio.ps1` (`VITE_BA_MODE=1`)
+2. Customize → Save → **Save for Black Anvil**
+3. Bridge writes `exports/active.json` + `exports/active.glb` (gitignored)
+4. `cargo run` — forge reads the draft; Bevy spawns the GLB on Enter
 
-- **Shirt** (`simpleshirt`) + **pants** (`streetpants`) + boots  
-- Full loot armor/weapons live in `loot-craft-catalog.json` for crafting later  
+## Body vs equipment
 
-## Install / run
+| Kind | Trait groups | Authority |
+|------|----------------|-----------|
+| Body | Body, Head, Eyes, Basic Colors | Immutable after finalize (M3) |
+| Equipment | Chest, Legs, Shoes, Hands, … | Starter now; server inventory later |
+
+## Optional packs
+
+Neurohacker / drophunter still install into `character-studio/public/character-assets/` (gitignored):
 
 ```powershell
-.\scripts\install-character-studio.ps1
 .\scripts\install-neurohacker.ps1
-python .\scripts\ba-neuro-manifest.py
-.\scripts\run-character-studio.ps1
+.\scripts\install-drophunter.ps1
 ```
-
-Forge: **Customize body & face** (or `C`) → http://127.0.0.1:5173/  
-Optimize before download to atlas + merge meshes.

@@ -6,7 +6,7 @@ import { BlinkManager } from "./blinkManager";
 import { EmotionManager } from "./EmotionManager";
 import { VRMLoaderPlugin, VRMSpringBoneCollider } from "@pixiv/three-vrm";
 import { getAsArray, disposeVRM, renameVRMBones, addModelData } from "./utils";
-import { downloadGLB, downloadVRMWithAvatar } from "../library/download-utils"
+import { downloadGLB, downloadVRMWithAvatar, getGLBBlobData } from "../library/download-utils"
 import { getNodesWithColliders, saveVRMCollidersToUserData, renameMorphTargets} from "./load-utils";
 import { cullHiddenMeshes, setTextureToChildMeshes, addChildAtFirst } from "./utils";
 import { LipSync } from "./lipsync";
@@ -372,18 +372,80 @@ export class CharacterManager {
       }
     }
     /**
+     * Build an optimized GLB Blob for Black Anvil draft save (no browser download).
+     */
+    async getGLBBlob(exportOptions = null){
+      exportOptions = exportOptions || {}
+      const finalOptions = {...this.manifestDataManager.getExportOptions(), ...exportOptions};
+      return getGLBBlobData(this.characterModel, finalOptions);
+    }
+    /**
      * Gets the current avatar selection.
      * @returns {Object} Object containing selected traits and their IDs
      */
     getAvatarSelection(){
       var result = {};
       for (const prop in this.avatar) {
-        result[prop] = {
-          name:this.avatar[prop].name,
-          id:this.avatar[prop].traitInfo?.id
+        const trait = this.avatar[prop];
+        // Applied morph weights (not just trait ids) for reconstruction.
+        const blendshapes = {};
+        const info = trait.blendShapeTraitsInfo || {};
+        for (const k in info) {
+          const bs = info[k];
+          const id =
+            typeof bs?.getId === "function"
+              ? bs.getId()
+              : bs?.id || (typeof bs?.getGroupId === "function" ? bs.getGroupId() : k);
+          let weight = null;
+          if (trait.model && bs?.id != null) {
+            trait.model.traverse?.((child) => {
+              if (weight != null) return;
+              const dict = child.morphTargetDictionary;
+              const infl = child.morphTargetInfluences;
+              if (!dict || !infl) return;
+              const idx = dict[bs.id];
+              if (idx != null) weight = infl[idx];
+            });
+          }
+          // Schema stores morph id → applied weight (0..1).
+          const key = String(id || k);
+          blendshapes[key] = typeof weight === "number" ? weight : 1;
         }
+        const colors = {};
+        if (trait.colorTrait?.value != null) {
+          const vals = Array.isArray(trait.colorTrait.value)
+            ? trait.colorTrait.value
+            : [trait.colorTrait.value];
+          vals.forEach((v, i) => {
+            colors[`c${i}`] = typeof v === "string" ? v : String(v);
+          });
+        }
+        // Collect distinct material colors (hair/skin channels), not only the first mesh.
+        if (trait.model) {
+          let n = 0;
+          trait.model.traverse?.((child) => {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            for (const m of mats) {
+              if (!m || n >= 8) continue;
+              let hex = null;
+              if (m.color?.getHexString) hex = `#${m.color.getHexString()}`;
+              else if (m.uniforms?.litFactor?.value?.getHexString) {
+                hex = `#${m.uniforms.litFactor.value.getHexString()}`;
+              }
+              if (hex && !Object.values(colors).includes(hex)) {
+                colors[`mat${n++}`] = hex;
+              }
+            }
+          });
+        }
+        result[prop] = {
+          name: trait.name,
+          id: trait.traitInfo?.id,
+          blendshapes,
+          colors,
+        };
       }
-      return result; 
+      return result;
     }
     /**
      * Gets the bone and triangle count of the current character.
@@ -621,21 +683,13 @@ export class CharacterManager {
      * Loads initial traits based on manifest data.
      * @returns {Promise<void>} Promise that resolves when traits are loaded
      */
-    loadInitialTraits() {
-      return new Promise(async(resolve, reject) => {
-        // Check if manifest data is available
-        if (this.manifestDataManager.hasExistingManifest()) {
-          // Load initial traits using the _loadTraits method
-          await this._loadTraits(this.manifestDataManager.getInitialTraits());
-
-          resolve();
-        } else {
-          // Manifest data is not available, log an error and reject the Promise
-          const errorMessage = "No manifest was loaded, initial traits cannot be loaded.";
-          console.error(errorMessage);
-          reject(new Error(errorMessage));
-        }
-      });
+    async loadInitialTraits() {
+      // Using an async Promise executor here previously swallowed rejections
+      // from _loadTraits, leaving the creator stuck loading indefinitely.
+      if (!this.manifestDataManager.hasExistingManifest()) {
+        throw new Error("No manifest was loaded, initial traits cannot be loaded.");
+      }
+      await this._loadTraits(this.manifestDataManager.getInitialTraits());
     }
 
     /**
@@ -885,26 +939,19 @@ export class CharacterManager {
 
           // Set the color to child meshes of the model
           model.traverse((mesh) => {
-            if (mesh.isMesh) {
-              if (mesh.material.type === "MeshStandardMaterial") {
-                if (Array.isArray(mesh.material)) {
-                  mesh.material.forEach((mat) => {
-                    mat.color = color;
-                    //mat.emissive = color;
-                  });
-                } else {
-                  mesh.material.color = color;
-                  //mesh.material.emissive = color;
+            if (!mesh.isMesh) return
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+            materials.forEach((mat) => {
+              if (!mat) return
+              if (mat.uniforms?.litFactor) {
+                mat.uniforms.litFactor.value = color
+                if (mat.uniforms.shadeColorFactor) {
+                  mat.uniforms.shadeColorFactor.value = color.clone().multiplyScalar(0.8)
                 }
-              } else {
-                mesh.material[0].uniforms.litFactor.value = color;
-                mesh.material[0].uniforms.shadeColorFactor.value = new THREE.Color(
-                  color.r * 0.8,
-                  color.g * 0.8,
-                  color.b * 0.8
-                );
+              } else if (mat.color?.isColor) {
+                mat.color.copy(color)
               }
-            }
+            })
           });
         } catch (error) {
           console.error("Error setting trait color:", error.message);

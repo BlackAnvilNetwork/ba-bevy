@@ -1,5 +1,6 @@
 import { Group, MeshStandardMaterial, Color } from "three"
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter"
+import { buildBaAvatarAnimations } from "./ba-procedural-animation"
 import { cloneSkeleton, combine, combineNoAtlas } from "./merge-geometry"
 import VRMExporter from "./VRMExporter"
 import VRMExporterv0 from "./VRMExporterv0"
@@ -70,7 +71,10 @@ export async function getGLBBlobData(model, options){
   const finalModel = await (optimized ? 
      getOptimizedGLB(model, options) :
      getUnopotimizedGLB(model))
-  const glb = await parseGLB(finalModel);
+  // Export exactly the skinned bones plus two original, rig-bound clips.
+  // Three GLTFExporter requires TRS transforms for animated nodes.
+  const clips = buildBaAvatarAnimations(finalModel);
+  const glb = await parseGLB(finalModel, clips);
   return new Blob([glb], { type: 'model/gltf-binary' });
 }
 
@@ -175,7 +179,7 @@ export async function downloadGLB(model, fileName = "", options){
     })
 }
 
-function parseGLB (glbModel){
+function parseGLB (glbModel, clips = []){
   return new Promise((resolve) => {
     const exporter =  new GLTFExporter();
     return exporter.parse(
@@ -187,7 +191,8 @@ function parseGLB (glbModel){
           console.error("Error parsing", error)
         },
         {
-          trs: false,
+          trs: clips.length > 0,
+          animations: clips,
           onlyVisible: false,
           truncateDrawRange: true,
           binary: true,

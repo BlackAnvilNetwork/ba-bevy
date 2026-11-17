@@ -10,6 +10,7 @@ import { SoundContext } from "../context/SoundContext"
 import { AudioContext } from "../context/AudioContext"
 
 import { getAsArray } from "../library/utils"
+import { hasLoadedAvatar, loadCreatorAvatar } from "../library/ba-creator"
 
 function Create() {
   
@@ -20,7 +21,10 @@ function Create() {
   const { playSound } = React.useContext(SoundContext)
   const { isMute } = React.useContext(AudioContext)
   const { manifest, characterManager } = React.useContext(SceneContext)
-  const [ classes, setClasses ] = useState([]) 
+  const [ classes, setClasses ] = useState([])
+  const [creationError, setCreationError] = useState("")
+  // Prevent StrictMode/effect re-renders from loading the same pack twice.
+  const initializationStarted = React.useRef(false)
 
 
   const baMode = import.meta.env.VITE_BA_MODE === "1"
@@ -69,45 +73,57 @@ function Create() {
   }
 
   const selectClass = async (index) => {
+    if (initializationStarted.current) return
+    const selectedClass = classes[index]
+    if (!selectedClass || !characterManager) {
+      setCreationError("Character assets are not ready. Please try again.")
+      return
+    }
+    initializationStarted.current = true
+    setCreationError("")
     setIsLoading(true)
-    const selectedClass = classes[index];
-    const gender =
-      selectedClass.baGender === "female" || selectedClass.baGender === "male"
-        ? selectedClass.baGender
-        : selectedClass.name?.toLowerCase() === "female"
-          ? "female"
-          : "male"
+
     try {
-      sessionStorage.setItem("ba_gender", gender)
-    } catch (_) { /* ignore */ }
+      const gender =
+        selectedClass.baGender === "female" || selectedClass.baGender === "male"
+          ? selectedClass.baGender
+          : selectedClass.name?.toLowerCase() === "female"
+            ? "female"
+            : "male"
+      try {
+        sessionStorage.setItem("ba_gender", gender)
+      } catch (_) { /* storage can be disabled */ }
 
-    const manifestId = gender === "female" ? "ba-female" : "ba-male"
-    await characterManager.loadManifest(selectedClass.manifest, baMode ? manifestId : selectedClass.name);
+      const manifestId = gender === "female" ? "ba-female" : "ba-male"
+      // The editor can only open after the manifest and visible VRM are ready.
+      await loadCreatorAvatar(
+        characterManager,
+        selectedClass,
+        baMode ? manifestId : selectedClass.name,
+        baMode,
+      )
 
-    setViewMode(ViewMode.APPEARANCE)
-    const promises = selectedClass.manifestAppend.map(manifestAppend => {
-      return new Promise((resolve)=>{
-        
-        characterManager.loadManifest(manifestAppend.manifest, manifestAppend.name).then(()=>{
-          resolve();
-        })
-      })
-    });
-
-    await Promise.all(promises);
-    // When Manifest is Loaded, load initial traits from given manifest
-
-    characterManager.loadInitialTraits().then(()=>{
+      setViewMode(ViewMode.APPEARANCE)
+      !isMute && playSound("classSelect")
+    } catch (error) {
+      console.error("Failed to initialize character:", error)
+      setCreationError(error?.message || "Unable to load character. Please retry.")
+    } finally {
+      initializationStarted.current = false
       setIsLoading(false)
-    })
-    !isMute && playSound('classSelect');
-
+    }
   }
 
   // BA: skip class grid — jump straight into the pack matching ba_gender (default male).
   useEffect(() => {
-    if (!baMode || !classes.length || isLoading) return
-    if (characterManager.manifestDataManager?.hasExistingManifest?.()) return
+    if (!baMode || !classes.length || !characterManager || isLoading || creationError ||
+        initializationStarted.current) return
+    // A returning player may already have a fully loaded model from an earlier
+    // editor visit. Reuse it, but never treat a manifest alone as an avatar.
+    if (hasLoadedAvatar(characterManager)) {
+      setViewMode(ViewMode.APPEARANCE)
+      return
+    }
     let gender = "male"
     try {
       const fromUrl = new URLSearchParams(window.location.search).get("ba_gender")
@@ -120,12 +136,39 @@ function Create() {
     )
     selectClass(idx >= 0 ? idx : 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baMode, classes])
+  }, [baMode, classes, characterManager, isLoading, creationError])
 
   const hoverSound = () => {
     !isMute && playSound('classMouseOver');
   }
   
+  if (baMode) {
+    return (
+      <div className={styles.baLoading} role="status" aria-live="polite">
+        <h2>{creationError ? "Character loading failed" : "Forging your character…"}</h2>
+        <p>{creationError || "Preparing your character model and customization options."}</p>
+        {creationError && (
+          <button
+            type="button"
+            onClick={() => {
+              let gender = "male"
+              try {
+                const stored = sessionStorage.getItem("ba_gender")
+                if (stored === "female") gender = "female"
+              } catch (_) { /* storage can be disabled */ }
+              const index = classes.findIndex(
+                (c) => c.baGender === gender || c.name?.toLowerCase() === gender,
+              )
+              selectClass(index >= 0 ? index : 0)
+            }}
+          >
+            Retry character loading
+          </button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className={`${styles.container} horizontalScroll`}>
       <div className={"sectionTitle"}>{t('pageTitles.chooseClass')}</div>

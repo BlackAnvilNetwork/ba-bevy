@@ -1,7 +1,10 @@
 mod atmosphere;
+mod avatar_delivery;
 mod boss;
 mod cel;
+mod character;
 mod data;
+mod net;
 mod debug_shot;
 mod dialogue;
 mod forge_menu;
@@ -15,7 +18,11 @@ mod tree;
 mod vfx;
 mod well;
 
+use std::path::PathBuf;
+
 use bevy::prelude::*;
+use bevy::asset::AssetApp;
+use bevy::asset::io::{file::FileAssetReader, AssetSourceBuilder};
 
 use atmosphere::{flicker_well_fire, tick_atmosphere, StickAtmosphere};
 use boss::{
@@ -23,7 +30,15 @@ use boss::{
     WardenPossessRequest,
 };
 use cel::{cel_shade_figures, CelMaterial};
+use character::{
+    attach_player_avatar, load_character_profile, resolve_pending_avatars,
+    update_avatar_animation,
+};
 use data::load_game_data;
+use net::{
+    apply_zone_snapshots, connect_zone_on_enter, interpolate_remote_players,
+    refresh_remote_avatar_models, maybe_enable_zone_net, send_local_move, ZoneNet, ZonePrediction,
+};
 use debug_shot::{
     capture_debug_shot, spawn_debug_hud, toggle_debug_hud, type_note, update_debug_hud,
 };
@@ -50,16 +65,58 @@ use vfx::{
 use well::{tick_well, tick_well_splash, WellPour};
 
 fn main() {
-    App::new()
+    let asset_root = {
+        // Installed builds must never read the developer's build-directory
+        // path baked into CARGO_MANIFEST_DIR. Launcher passes the packaged,
+        // verified game/assets directory explicitly.
+        if let Some(root) = std::env::var_os("BA_GAME_ASSET_ROOT") {
+            PathBuf::from(root)
+        } else {
+            let installed = std::env::current_exe().ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("assets")));
+            match installed {
+                Some(dir) if dir.is_dir() => dir,
+                _ => {
+                    let dev=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+                    if dev.is_dir() { dev } else { PathBuf::from("assets") }
+                }
+            }
+        }
+    };
+    if !asset_root.is_dir() {
+        eprintln!("Black Anvil game assets missing at {}",asset_root.display());
+    }
+
+    // User-customized character assets live in a separate, read-only Bevy
+    // asset source. Launcher-managed revisions are never copied into the
+    // game's installed assets or source tree.
+    let mut app = App::new();
+    if let Some(root) = std::env::var_os("BA_CHARACTER_ROOT") {
+        let root = PathBuf::from(root);
+        if root.is_dir() {
+            app.register_asset_source(
+                "character",
+                AssetSourceBuilder::new(move || Box::new(FileAssetReader::new(root.clone()))),
+            );
+        } else {
+            eprintln!("Character asset root is missing: {}", root.display());
+        }
+    }
+    app
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "Black Anvil — Greymere Yard".into(),
-                    resolution: (1280, 720).into(),
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        title: "Black Anvil — Greymere Yard".into(),
+                        resolution: (1280, 720).into(),
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    file_path: asset_root.to_string_lossy().into_owned(),
                     ..default()
                 }),
-                ..default()
-            }),
             MaterialPlugin::<StickSkyMaterial>::default(),
             MaterialPlugin::<CelMaterial>::default(),
         ))
@@ -69,6 +126,8 @@ fn main() {
         .init_resource::<PossessFx>()
         .init_resource::<GameFlow>()
         .init_resource::<CharacterDraft>()
+        .init_resource::<ZoneNet>()
+        .init_resource::<ZonePrediction>()
         .insert_resource(ClearColor(atmosphere::hex_rgb(atmosphere::SKY_TOP)))
         .add_message::<DeathDissolveRequest>()
         .add_message::<WardenPossessRequest>()
@@ -79,6 +138,7 @@ fn main() {
             (
                 load_game_data,
                 load_combat_kits,
+                load_character_profile,
                 spawn_opening_scene.after(load_game_data),
                 spawn_player.after(load_game_data),
                 attach_pixel_camera.after(spawn_player),
@@ -88,7 +148,22 @@ fn main() {
                 setup_forge_vfx,
                 spawn_forge_menu
                     .after(attach_pixel_camera)
-                    .after(setup_forge_vfx),
+                    .after(setup_forge_vfx)
+                    .after(load_character_profile),
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                attach_player_avatar,
+                resolve_pending_avatars.after(attach_player_avatar),
+                maybe_enable_zone_net,
+                connect_zone_on_enter,
+                send_local_move.run_if(in_yard).after(look_player),
+                apply_zone_snapshots.run_if(in_yard).after(send_local_move),
+                interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
+                refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
+                update_avatar_animation.run_if(in_yard).after(refresh_remote_avatar_models),
             ),
         )
         .add_systems(
@@ -114,7 +189,9 @@ fn main() {
             (
                 grab_cursor.run_if(in_yard),
                 look_player.run_if(in_yard),
-                move_player.run_if(in_yard),
+                // Online movement has exactly one writer: net prediction.
+                // Offline developer mode retains the original Bevy locomotion.
+                move_player.run_if(offline_yard),
                 update_proximity.run_if(in_yard),
                 handle_interact.run_if(in_yard),
                 on_possess_request.after(handle_interact).run_if(in_yard),
@@ -127,18 +204,19 @@ fn main() {
         .add_systems(
             Update,
             (
-                cycle_job.run_if(in_yard),
+                cycle_job.run_if(offline_yard),
+                // Local boss/XP sim is offline-only; zone WelcomeVerified owns combat HP.
                 boss_fight
                     .after(tick_possession)
                     .after(ensure_fighter)
-                    .run_if(in_yard),
+                    .run_if(offline_yard),
                 apply_xp_grants
                     .after(handle_interact)
                     .after(boss_fight)
-                    .run_if(in_yard),
-                announce_level_up.after(apply_xp_grants).run_if(in_yard),
+                    .run_if(offline_yard),
+                announce_level_up.after(apply_xp_grants).run_if(offline_yard),
                 update_sheet_hud.after(apply_xp_grants),
-                start_dissolve.after(boss_fight).run_if(in_yard),
+                start_dissolve.after(boss_fight).run_if(offline_yard),
             ),
         )
         .add_systems(
@@ -168,4 +246,9 @@ fn main() {
 
 fn in_yard(flow: Res<GameFlow>) -> bool {
     !flow.in_menu()
+}
+
+fn offline_yard(flow: Res<GameFlow>, net: Res<ZoneNet>) -> bool {
+    // Never execute local-authoritative combat/XP while waiting for a zone handshake.
+    !flow.in_menu() && !net.enabled
 }

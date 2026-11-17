@@ -133,7 +133,7 @@
   right: auto;
   bottom: 72px;
   width: min(380px, calc(100vw - 160px));
-  max-height: 42vh;
+  max-height: 70vh;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -165,7 +165,7 @@
   gap: 12px;
   padding: 12px 14px 14px;
   overflow-y: auto;
-  max-height: 32vh;
+  max-height: 56vh;
 }
 .baStyleRow {
   display: flex;
@@ -238,18 +238,6 @@
   background: var(--ba-void);
   border: 1.5px solid var(--ba-cream);
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
-}
-
-.baColorPop {
-  position: absolute;
-  left: 120px;
-  bottom: calc(42vh + 84px);
-  z-index: 50;
-  pointer-events: auto;
-  border: 1px solid var(--ba-panel-edge);
-  border-radius: 4px;
-  overflow: hidden;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
 }
 
 .baFooter {
@@ -430,4 +418,27 @@
   flex-direction: column;
   display: flex;
   color: white;
+}
+
+/* Character completion feedback lives above the editor footer, not as an
+   export dialog. Failed saves keep the edited avatar onscreen for retry. */
+.baFinishError, .baFinishNotice {
+  position: absolute;
+  z-index: 70;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  width: min(440px, calc(100% - 40px));
+  padding: 12px 16px;
+  border-radius: 7px;
+  text-align: center;
+  pointer-events: auto;
+  color: #f4e5d5;
+  background: rgba(27, 21, 19, 0.96);
+  border: 1px solid rgba(205, 152, 81, 0.7);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.34);
+}
+.baFinishError {
+  border-color: #de8070;
+  color: #ffd6cc;
 }

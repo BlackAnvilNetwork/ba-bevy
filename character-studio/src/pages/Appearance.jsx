@@ -1,5 +1,6 @@
 import React, { useContext } from "react"
 import styles from "./Appearance.module.css"
+import { finishBaCharacterForGame } from "../library/ba-game-handoff"
 import { ViewMode, ViewContext } from "../context/ViewContext"
 import { SceneContext } from "../context/SceneContext"
 import CustomButton from "../components/custom-button"
@@ -18,6 +19,7 @@ import DecalGridView from "../components/decals/decalGrid"
 import randomizeIcon from "../images/randomize.png"
 import colorPicker from "../images/color-palette.png"
 import { ChromePicker   } from 'react-color'
+import BaColorPicker from "../components/BaColorPicker"
 import RightPanel from "../components/RightPanel"
 import SaleIcon from "../images/sale-icon.png"
 
@@ -101,12 +103,33 @@ const BA_SKIN_PRESETS = [
   { id: "deep", hex: "#5a3824", name: "Deep" },
 ]
 
+// Sampled from the neurohacker face atlases. The old ramp painted tone1 as a
+// light tan and tone4 as deep brown; the textures are the other way around.
 const BA_SKIN_SWATCH = {
-  originalskin: "#f0c9a8",
-  tone1skin: "#e0b07a",
-  tone2skin: "#c48a58",
-  tone3skin: "#8d5a38",
-  tone4skin: "#5a3824",
+  originalskin: "#f4cebe",
+  tone1skin: "#462728",
+  tone2skin: "#463334",
+  tone3skin: "#bc7647",
+  tone4skin: "#f2cb87",
+}
+
+const SKIN_BASE = [0xf4, 0xce, 0xbe]
+
+function hexToRgb(hex) {
+  const h = String(hex || "").replace("#", "")
+  if (h.length !== 6) return [255, 255, 255]
+  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) || 0)
+}
+
+function skinLitHex(targetHex) {
+  const [r, g, b] = hexToRgb(targetHex)
+  const lit = [r, g, b].map((channel, i) => Math.round(Math.min(255, (channel / SKIN_BASE[i]) * 255)))
+  return `#${lit.map((v) => v.toString(16).padStart(2, "0")).join("")}`
+}
+
+function skinLuminance(hex) {
+  const [r, g, b] = hexToRgb(hex)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
 function baEyeSwatch(name = "") {
@@ -196,7 +219,7 @@ function baHairColors(selectedTrait) {
   return preferred.length ? preferred : all.slice(0, 14)
 }
 
-function Appearance() {
+function Appearance({ onCharacterSaved }) {
   const { isLoading, setViewMode, setIsLoading } = React.useContext(ViewContext)
   const {
     toggleDebugMode,
@@ -208,6 +231,10 @@ function Appearance() {
   const [traitView, setTraitView] = React.useState(TraitPage.TRAIT)
   const baMode = import.meta.env.VITE_BA_MODE === "1"
   const [traitsVersion, setTraitsVersion] = React.useState(0)
+  const [baFinishing, setBaFinishing] = React.useState(false)
+  const [baFinishError, setBaFinishError] = React.useState("")
+  const [baFinishNotice, setBaFinishNotice] = React.useState("")
+  const baFinishPending = React.useRef(false)
 
   const { playSound } = React.useContext(SoundContext)
   const { isMute } = React.useContext(AudioContext)
@@ -231,6 +258,31 @@ function Appearance() {
     }
   }, [])
   
+
+  // Black Anvil native flow: Done saves the selected character revision and
+  // returns to the launcher with Play enabled. No export/download menu.
+  const finishForBlackAnvil = async () => {
+    if (baFinishPending.current || isLoading) return
+    baFinishPending.current = true
+    setBaFinishing(true)
+    setBaFinishError("")
+    setBaFinishNotice("")
+    try {
+      const { character } = await finishBaCharacterForGame(characterManager)
+      if (typeof onCharacterSaved === "function") {
+        onCharacterSaved(character)
+      } else {
+        setBaFinishNotice("Character saved. Open the Black Anvil launcher to play.")
+      }
+      !isMute && playSound("backNextButton")
+    } catch (error) {
+      console.error("Black Anvil character save failed:", error)
+      setBaFinishError(error?.message || "Could not save this character. Try again.")
+    } finally {
+      baFinishPending.current = false
+      setBaFinishing(false)
+    }
+  }
 
   const back = () => {
     !isMute && playSound('backNextButton');
@@ -258,6 +310,7 @@ function Appearance() {
   const [baActiveColorId, setBaActiveColorId] = React.useState(null)
   const [baActiveTextureId, setBaActiveTextureId] = React.useState(null)
   const [baCustomActive, setBaCustomActive] = React.useState(false)
+  const skinBaseReady = React.useRef(false)
   const [baGender, setBaGender] = React.useState(() => (baMode ? readBaGender() : "male"))
   const [baSide, setBaSide] = React.useState(null) // "gender" | trait id | null
 
@@ -297,12 +350,34 @@ function Appearance() {
   }
   const handleChangeComplete = (color) =>{
     setColorPicked({ background: color.hex });
+    if (baMode && (selectedTraitGroup?.trait === "body" || selectedTraitGroup?.trait === "Body")) {
+      applySkinCustom(color.hex)
+      return
+    }
     characterManager.setTraitColor(selectedTraitGroup?.trait, color.hex);
     if (baMode) {
       setBaCustomActive(true)
       setBaActiveColorId(null)
       setBaActiveTextureId(null)
     }
+  }
+
+  const applySkinCustom = async (hex) => {
+    const group = selectedTraitGroup?.trait || "body"
+    setBaCustomActive(true)
+    setBaActiveColorId(null)
+    setBaActiveTextureId(null)
+    if (!skinBaseReady.current) {
+      skinBaseReady.current = true
+      const base = baSkinTextures(selectedTrait).find((tex) => tex.id === "originalskin")
+      const currentId = characterManager.avatar?.[group]?.textureInfo?.id
+      if (base && currentId !== "originalskin") {
+        await characterManager._loadTraits([
+          { traitModel: selectedTrait, traitTexture: base, traitColor: null },
+        ])
+      }
+    }
+    characterManager.setTraitColor(group, skinLitHex(hex))
   }
 
   const applyBaHairColor = (colorTrait) => {
@@ -329,6 +404,9 @@ function Appearance() {
     setIsPickingColor(false)
     setBaCustomActive(false)
     setBaActiveTextureId(textureTrait.id)
+    skinBaseReady.current = false
+    const skinHex = BA_SKIN_SWATCH[textureTrait.id]
+    if (skinHex) setColorPicked({ background: skinHex })
     setIsLoading(true)
     try {
       await characterManager._loadTraits([
@@ -338,6 +416,9 @@ function Appearance() {
           traitColor: null,
         },
       ])
+      if (skinHex) {
+        try { characterManager.setTraitColor(selectedTraitGroup.trait, "#ffffff") } catch (_) { /* group has no tint target */ }
+      }
     } finally {
       setIsLoading(false)
     }
@@ -794,9 +875,12 @@ function Appearance() {
 
               {traitKey === "body" && (
                 <div className={styles.baColorRow} aria-label="Skin colors">
-                  {skinTextures.map((tex) => {
-                    const hex = BA_SKIN_SWATCH[tex.id] || "#c9a07a"
-                    const active = !baCustomActive && baActiveTextureId === tex.id
+                  {skinTextures
+                    .map((tex) => ({ tex, hex: BA_SKIN_SWATCH[tex.id] || "#c9a07a" }))
+                    .sort((a, b) => skinLuminance(b.hex) - skinLuminance(a.hex))
+                    .map(({ tex, hex }) => {
+                    const currentId = characterManager.avatar?.[traitKey]?.textureInfo?.id
+                    const active = !baCustomActive && (baActiveTextureId || currentId) === tex.id
                     return (
                       <button
                         key={tex.id}
@@ -871,19 +955,16 @@ function Appearance() {
                   </button>
                 </div>
               )}
+              {!!isPickingColor && (
+                <BaColorPicker
+                  hex={colorPicked.background}
+                  onChange={(hex) => {
+                    setColorPicked({ background: hex })
+                    handleChangeComplete({ hex })
+                  }}
+                />
+              )}
             </div>
-          </div>
-        )}
-
-        {!!isPickingColor && (
-          <div className={styles.baColorPop} draggable={false}>
-            <ChromePicker
-              styles={{ default: { picker: { width: "220px" } } }}
-              color={colorPicked.background}
-              disableAlpha
-              onChange={handleColorChange}
-              onChangeComplete={handleChangeComplete}
-            />
           </div>
         )}
 
@@ -898,10 +979,18 @@ function Appearance() {
           </div>
         )}
 
+        {(baFinishError || baFinishNotice) && (
+          <div className={baFinishError ? styles.baFinishError : styles.baFinishNotice}
+            role={baFinishError ? "alert" : "status"}>
+            {baFinishError || baFinishNotice}
+          </div>
+        )}
         <div className={styles.baFooter}>
-          <CustomButton theme="light" text={t("callToAction.back")} size={14} onClick={back} />
+          <CustomButton theme="light" text={t("callToAction.back")} size={14}
+            onClick={() => { if (!baFinishPending.current) back() }} />
           {characterManager.canDownload() && (
-            <CustomButton theme="light" text="Done" size={14} onClick={next} />
+            <CustomButton theme="light" text={baFinishing ? "Saving character…" : "Done"}
+              size={14} onClick={finishForBlackAnvil} />
           )}
         </div>
       </div>
