@@ -418,6 +418,44 @@ mod tests {
         assert!(assert_glb(b"not gltf").is_err());
     }
 
+    fn fixture_glb() -> Vec<u8> {
+        let mut glb = b"glTF".to_vec();
+        glb.extend_from_slice(&2u32.to_le_bytes()); // GLB v2
+        glb.extend_from_slice(&20u32.to_le_bytes()); // total length
+        glb.extend_from_slice(&0u32.to_le_bytes()); // empty JSON chunk (storage fixture only)
+        glb.extend_from_slice(b"JSON");
+        glb
+    }
+
+    #[test]
+    fn selected_revision_is_atomic_and_idempotent() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("ba-character-store-{}-{}", std::process::id(), stamp));
+        fs::create_dir_all(&root).unwrap();
+
+        let json = r#"{"schemaVersion":1,"revision":1,"characterId":"fixture-player","name":"Chrona","startingJob":"TimeMage","pack":"anata","manifestId":"anata/male","catalogVersion":"anata-2026-11","runtime":{"format":"glb","relativePath":"character://fixture-player/revisions/r1/character.glb"}}"#;
+        let character = validate_character(json).unwrap();
+        let glb = fixture_glb();
+        let hash = glb_hash(&glb);
+        save_revision(&root, &character, json, &glb, &hash).unwrap();
+        save_revision(&root, &character, json, &glb, &hash).unwrap(); // exact retry
+        let (selected, saved, _) = read_selected_character(&root).unwrap().unwrap();
+        assert_eq!(selected.revision, 1);
+        assert_eq!(selected.content_hash, hash);
+        assert_eq!(saved, json);
+
+        // An unpublished second revision must not change the selected snapshot.
+        let pending = root.join("fixture-player/revisions/.pending-r2-incomplete");
+        fs::create_dir_all(&pending).unwrap();
+        fs::write(pending.join("character.json"), b"incomplete").unwrap();
+        assert_eq!(read_selection(&root).unwrap().unwrap().revision, 1);
+
+        // A different asset cannot silently overwrite the same revision.
+        assert!(save_revision(&root, &character, "different", &glb, &hash).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn enforces_revision_and_schema_bounds() {
         let base = r#"{"schemaVersion":1,"revision":1,"characterId":"abc-123","name":"Chrona","startingJob":"TimeMage","pack":"anata","manifestId":"anata/male","catalogVersion":"1","runtime":{"format":"glb"}}"#;
