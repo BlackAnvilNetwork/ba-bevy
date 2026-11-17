@@ -33,12 +33,12 @@ export function buildBaAvatarAnimations(model) {
     const left = side === "left"
     const sideWord = left ? "left" : "right"
     const sideShort = left ? "l" : "r"
-    const partWords = part === "arm" ? ["upperarm", "arm"] : ["upperleg", "upleg", "thigh"]
+    const partWords = part === "arm" ? ["upperarm", "arm"] : ["upperleg", "upleg", "thigh", "leg"]
     return partWords.some((p) => (
-      key.includes(sideWord + p) ||
+      key.endsWith(sideWord + p) ||
       key.includes(p + sideWord) ||
       key.includes("bip" + sideShort + p) ||
-      key.includes(p + sideShort) ||
+      key.endsWith(p + sideShort) ||
       key.includes("mixamorig" + sideWord + p)
     ))
   }

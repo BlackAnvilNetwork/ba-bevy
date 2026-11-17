@@ -127,6 +127,7 @@ fn main() {
         .init_resource::<StickAtmosphere>()
         .init_resource::<NoteComposer>()
         .init_resource::<CameraView>()
+        .init_resource::<character::SwingPose>()
         .init_resource::<WellPour>()
         .init_resource::<PossessFx>()
         .init_resource::<GameFlow>()
@@ -215,6 +216,7 @@ fn main() {
             (
                 cycle_job.run_if(offline_yard),
                 // Local boss/XP sim is offline-only; zone WelcomeVerified owns combat HP.
+                camera_rig::free_swing.run_if(offline_yard),
                 boss_fight
                     .after(tick_possession)
                     .after(ensure_fighter)

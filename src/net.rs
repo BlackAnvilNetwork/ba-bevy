@@ -608,6 +608,7 @@ pub fn refresh_remote_avatar_models(
 
 pub fn apply_zone_snapshots(
     mut commands: Commands,
+    mut swing: ResMut<crate::character::SwingPose>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
@@ -665,6 +666,7 @@ pub fn apply_zone_snapshots(
                 target_hp,
                 ..
             }) => {
+                if Some(attacker_id)==net.local_player_id { swing.strike(time.elapsed_secs()); }
                 if hit {
                     info!(
                         "Zone hit {attacker_id}->{target_id} dmg={damage}{} hp={target_hp}",

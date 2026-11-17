@@ -5,10 +5,10 @@
 //! posed for first person in character::animation. The full GLB (including
 //! authored clothing and equipment) stays the only rendered local player.
 
-use bevy::prelude::*;
 use crate::character::PlayerAvatarMesh;
 use crate::forge_menu::GameFlow;
-use crate::player::NoteComposer;
+use crate::player::{NoteComposer, Player};
+use bevy::prelude::*;
 
 #[derive(Component)]
 pub struct PlayerCamera;
@@ -42,7 +42,8 @@ pub fn target_camera_transform(mode: CameraMode, pitch: f32) -> Transform {
             ..default()
         },
         CameraMode::ThirdPerson => Transform {
-            translation: Vec3::new(0.0, THIRD_PERSON_HEIGHT, THIRD_PERSON_DISTANCE),
+            translation: Vec3::Y * THIRD_PERSON_HEIGHT
+                + Quat::from_rotation_x(pitch) * (Vec3::Z * THIRD_PERSON_DISTANCE),
             rotation: Quat::from_rotation_x(pitch - 0.10),
             ..default()
         },
@@ -63,22 +64,44 @@ pub fn toggle_camera_mode(
             CameraMode::FirstPerson => CameraMode::ThirdPerson,
             CameraMode::ThirdPerson => CameraMode::FirstPerson,
         };
-        info!("Camera now {:?} — using the same skinned player GLB", view.mode);
+        info!(
+            "Camera now {:?} — using the same skinned player GLB",
+            view.mode
+        );
     }
 }
 
 pub fn apply_camera_mode(
     time: Res<Time>,
     view: Res<CameraView>,
-    mut camera: Query<(&mut Transform,&mut Projection), With<PlayerCamera>>,
+    mut camera: Query<(&mut Transform, &mut Projection), With<PlayerCamera>>,
+    eyes: Query<&GlobalTransform, With<crate::character::LocalEye>>,
+    actor: Query<&GlobalTransform, With<Player>>,
     mut avatars: Query<&mut Visibility, With<PlayerAvatarMesh>>,
 ) {
-    let Ok((mut camera,mut projection)) = camera.single_mut() else { return };
-    let target = target_camera_transform(view.mode, view.pitch);
+    let Ok((mut camera, mut projection)) = camera.single_mut() else {
+        return;
+    };
+    let mut target = target_camera_transform(view.mode, view.pitch);
+    if view.mode == CameraMode::FirstPerson {
+        if let Ok(actor) = actor.single() {
+            let mut heights = eyes
+                .iter()
+                .map(|eye| eye.translation().y - actor.translation().y);
+            if let Some(height) = heights.find(|height| height.is_finite() && height.abs() < 1.0) {
+                target.translation.y = height - 0.07;
+                target.translation.z = -0.24;
+            }
+        }
+    }
     if let Projection::Perspective(ref mut perspective) = *projection {
         // Fingers on the actual skinned model can be closer to the eyes than
         // Bevy's default 10cm clipping plane. Do not clip the real hands.
-        perspective.near = if view.mode == CameraMode::FirstPerson { 0.025 } else { 0.1 };
+        perspective.near = if view.mode == CameraMode::FirstPerson {
+            0.025
+        } else {
+            0.1
+        };
     }
 
     // Never interpolate camera translation THROUGH the avatar's head. That
@@ -114,5 +137,22 @@ mod tests {
         let high = target_camera_transform(CameraMode::FirstPerson, 500.0);
         let limited = target_camera_transform(CameraMode::FirstPerson, 1.48);
         assert_eq!(high.rotation, limited.rotation);
+    }
+}
+
+pub fn free_swing(
+    mouse: Res<ButtonInput<MouseButton>>,
+    cursor: Single<&bevy::window::CursorOptions>,
+    note: Res<NoteComposer>,
+    time: Res<Time>,
+    session: Res<crate::dialogue::DialogueSession>,
+    mut pose: ResMut<crate::character::SwingPose>,
+) {
+    if !note.active
+        && cursor.grab_mode != bevy::window::CursorGrabMode::None
+        && session.phase != crate::dialogue::DialoguePhase::BossFight
+        && mouse.just_pressed(MouseButton::Left)
+    {
+        pose.preview(time.elapsed_secs());
     }
 }
