@@ -4,6 +4,9 @@
 //! Connection phases are explicit — never treat channel creation as Welcome.
 
 use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::path::PathBuf;
+use sha2::{Digest, Sha256};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -437,17 +440,43 @@ pub fn send_local_move(
     }
 }
 
-fn spawn_remote_capsule(
+const MAX_CACHED_AVATAR_SIZE: u64 = 32 * 1024 * 1024;
+
+fn verified_cache_uri(hash: &str) -> Option<String> {
+    // No filesystem path supplied by the peer ever reaches Bevy's loader.
+    if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let root = PathBuf::from(std::env::var_os("BA_CHARACTER_ROOT")?);
+    let path = root.join("cache").join(format!("{hash}.glb"));
+    let size = fs::metadata(&path).ok()?.len();
+    if size < 20 || size > MAX_CACHED_AVATAR_SIZE {
+        return None;
+    }
+    let content = fs::read(&path).ok()?;
+    if content.len() < 20 || &content[0..4] != b"glTF" {
+        return None;
+    }
+    if u32::from_le_bytes(content[4..8].try_into().ok()?) != 2
+        || u32::from_le_bytes(content[8..12].try_into().ok()?) as usize != content.len()
+    {
+        return None;
+    }
+    let actual = format!("{:x}", Sha256::digest(&content));
+    if !actual.eq_ignore_ascii_case(hash) {
+        warn!("Rejecting modified remote avatar cache: {hash}");
+        return None;
+    }
+    Some(format!("character://cache/{hash}.glb"))
+}
+
+fn spawn_remote_player(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    asset_server: &AssetServer,
     state: &PlayerState,
 ) {
-    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.75, 0.55, 0.35),
-        ..default()
-    });
     let root = commands
         .spawn((
             RemotePlayer {
@@ -461,15 +490,36 @@ fn spawn_remote_capsule(
             Visibility::default(),
         ))
         .id();
-    let body = commands
-        .spawn((
-            Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
-            Mesh3d(mesh),
-            MeshMaterial3d(mat),
-            Transform::default(),
+
+    // Same-host prototype only: both client processes can share the launcher
+    // content-addressed cache. Production requires authenticated asset delivery
+    // and a trusted catalog before loading downloaded user-created models.
+    if let Some(uri) = state.appearance.glb_content_hash.as_deref().and_then(verified_cache_uri) {
+        let handle: Handle<WorldAsset> =
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri.clone()));
+        let model = commands.spawn((
+            Name::new(format!("RemoteAvatar:{}", state.appearance.name)),
+            WorldAssetRoot(handle),
+            Transform::from_xyz(0.0, -1.65, 0.0),
             Visibility::default(),
-        ))
-        .id();
+        )).id();
+        commands.entity(root).add_child(model);
+        info!("Queued verified same-host remote avatar {uri}");
+        return;
+    }
+
+    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
+    let mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.75, 0.55, 0.35),
+        ..default()
+    });
+    let body = commands.spawn((
+        Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
+        Mesh3d(mesh),
+        MeshMaterial3d(mat),
+        Transform::default(),
+        Visibility::default(),
+    )).id();
     commands.entity(root).add_child(body);
 }
 
@@ -477,6 +527,7 @@ pub fn apply_zone_snapshots(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
     mut net: ResMut<ZoneNet>,
     mut remotes: Query<(Entity, &mut RemotePlayer, &Transform)>,
     mut local_prog: Query<&mut crate::rpg::Progression, With<Player>>,
@@ -651,10 +702,10 @@ pub fn apply_zone_snapshots(
         }
     }
 
-    // Remotes always use capsules until signed content-hash asset cache exists.
-    // Never load network-provided filesystem paths.
+    // Remote avatars use hash-verified local cache assets when present;
+    // otherwise show a deliberately safe capsule placeholder.
     for (_id, state) in seen {
-        spawn_remote_capsule(&mut commands, &mut meshes, &mut materials, &state);
+        spawn_remote_player(&mut commands, &mut meshes, &mut materials, &asset_server, &state);
     }
 }
 
@@ -675,6 +726,19 @@ pub fn interpolate_remote_players(
         };
         let target_rot = Quat::from_euler(EulerRot::YXZ, remote.target_yaw, 0.0, 0.0);
         transform.rotation = transform.rotation.slerp(target_rot, alpha);
+    }
+}
+
+
+#[cfg(test)]
+mod avatar_cache_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_or_injected_hash_cannot_form_asset_path() {
+        assert!(verified_cache_uri("../../../../outside").is_none());
+        assert!(verified_cache_uri("not-a-hash").is_none());
+        assert!(verified_cache_uri(&"0".repeat(64)).is_none());
     }
 }
 
