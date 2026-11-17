@@ -191,7 +191,7 @@ const moved = await eventually(() => a.snapshots.find((snapshot) => {
 }));
 const last = moved.players.find((p) => p.playerId === a.welcome.player_id);
 a.ws.send(JSON.stringify({ type: "attack", target_id: 0 }));
-await eventually(() => a.snapshots.at(-1)?.ashworks?.cinder === 1, 30000);
+await eventually(() => a.snapshots.at(-1)?.marsh?.drops?.some(d=>d.age>=0.8),30000);
 const closed = new Promise((resolve) => a.ws.once("close", resolve));
 a.ws.close();
 await closed;
@@ -206,6 +206,8 @@ if (rejoined.welcome.reconnect_token === a.welcome.reconnect_token) {
 if (rejoined.welcome.spawn.z >= a.welcome.spawn.z - 0.08) {
   throw new Error("Reconnect did not restore server-owned position");
 }
+await eventually(() => rejoined.snapshots.at(-1)?.marsh?.drops?.some(d=>d.age>=0.8));
+rejoined.ws.send(JSON.stringify({type:"interact"}));
 await eventually(() => rejoined.snapshots.at(-1)?.ashworks?.cinder === 1);
 if (selectedA.xp !== 125) throw new Error("Kill XP did not persist across reconnect");
 let oldReconnectRejected = false;

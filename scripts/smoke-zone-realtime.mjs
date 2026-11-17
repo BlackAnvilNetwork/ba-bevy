@@ -58,7 +58,7 @@ function openClient(name, job = "Fighter") {
         }
       } else if (msg.type === "snapshot") {
         state.peers = msg.players;
-        state.ashworks = msg.ashworks;
+        state.ashworks = msg.ashworks;state.marsh=msg.marsh;
       } else if (msg.type === "damage") {
         state.damages.push(msg);
       } else if (msg.type === "buff_applied") {
@@ -152,6 +152,8 @@ async function hunt() {
   await waitUntil(() => a.ashworks.constructs[0].hp > 0, 9000, "imp rekindles");
   const stock = a.ashworks.cinder;
   strike(a, imp);
+  await waitUntil(() => a.marsh.drops.some(d=>d.age>=0.8),30000,"ground bundle");
+  send(a,{type:"interact"});send(b,{type:"interact"});
   await waitUntil(() => a.ashworks.cinder > stock, 30000, "earn raw cinder");
 }
 await hunt();
@@ -191,6 +193,15 @@ const boss = a.ashworks.constructs[1].id;
 strike(a,boss);
 await waitUntil(() => a.damages.filter(d => d.attacker_id === a.id && d.hit).length >= 10, 16000, "earn weapon skill");
 cast(a,"ws_gs_hard_slash");
+// The heavy pulse knocks attackers away. Re-enter melee range after impact.
+const untilHeart = Date.now() + 60000;
+while (!a.marsh.drops.some(d=>d.age>=0.8)) {
+  if (Date.now()>untilHeart) throw new Error("ground heart");
+  await walkTo(22,-1.5);
+  await sleep(200);
+}
+await walkTo(22,-1.5);
+send(a,{type:"interact"});
 await waitUntil(() => a.ashworks.heart, 45000, "kiln heart");
 if (a.rejects.filter(r => r.ability_id === "ws_gs_hard_slash").length !== 1) throw new Error("earned weapon skill rejected");
 if (a.peers.find(p => pid(p) === a.id).level < 2) throw new Error("XP did not advance level");

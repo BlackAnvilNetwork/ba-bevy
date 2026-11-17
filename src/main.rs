@@ -1,3 +1,4 @@
+mod stillwater;
 mod ashworks;
 mod atmosphere;
 mod avatar_delivery;
@@ -205,7 +206,7 @@ fn main() {
                 // Offline developer mode retains the original Bevy locomotion.
                 move_player.run_if(offline_yard),
                 update_proximity.run_if(in_yard),
-                handle_interact.run_if(in_yard),
+                handle_interact.run_if(offline_yard),
                 on_possess_request.after(handle_interact).run_if(in_yard),
                 tick_possession.after(on_possess_request).run_if(in_yard),
                 tick_warden_acting.run_if(in_yard),
@@ -253,7 +254,10 @@ fn main() {
                     .run_if(in_yard),
             ),
         )
-        .add_systems(Startup, ashworks::spawn)
+        .init_resource::<stillwater::DisplayState>()
+        .add_systems(Startup,(stillwater::setup,ashworks::spawn))
+        .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::roll_avatar,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal).after(apply_zone_snapshots))
+        .add_systems(Update,stillwater::camera_feedback.after(apply_camera_mode))
         .add_systems(Update, (ashworks::display, ashworks::gallery_visibility).after(apply_zone_snapshots))
         .run();
 }

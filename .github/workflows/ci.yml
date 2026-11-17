@@ -47,6 +47,7 @@ jobs:
       - name: Run zone smoke
         shell: pwsh
         run: |
+          $env:BA_ZONE_START = "greymere"
           $env:BA_DEV_ALLOW_UNAUTH = "1" # explicit localhost-only legacy smoke
           $p = Start-Process -FilePath "target\debug\ba_zone_server.exe" -PassThru -NoNewWindow
           try {
