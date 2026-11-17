@@ -25,7 +25,7 @@ import Wallet from "./pages/Wallet"
 import { ingestBaForgeQuery } from "./library/ba-character"
 
 // dynamically import the manifest
-const assetImportPath = import.meta.env.VITE_ASSET_PATH + "/manifest.json"
+const assetImportPath = (import.meta.env.VITE_ASSET_PATH || "") + "/manifest.json"
 //const assetImportPath = "./manifest.json"
 
 const baMode = import.meta.env.VITE_BA_MODE === "1"
