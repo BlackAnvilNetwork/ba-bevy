@@ -14,7 +14,7 @@ pub struct AvatarAnimationGraph {
 }
 
 #[derive(Component)]
-struct AvatarAnimationDrive {
+pub(crate) struct AvatarAnimationDrive {
     root: Entity,
     last_position: Vec3,
     initialized: bool,
