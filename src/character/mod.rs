@@ -115,22 +115,46 @@ pub fn active_json_path() -> PathBuf {
 }
 
 pub fn active_glb_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("BA_CHARACTER_GLB_PATH") {
+        return PathBuf::from(path);
+    }
     exports_dir().join("active.glb")
 }
 
 pub fn load_active_draft() -> Option<BaCharacterV1> {
-    let path = active_json_path();
-    load_draft_from_path(&path)
+    if let Some(path) = std::env::var_os("BA_CHARACTER_DRAFT_PATH") {
+        return load_draft_from_path(&PathBuf::from(path));
+    }
+    load_draft_from_path(&active_json_path())
+}
+
+/// On launcher handoff, only the expected launcher-managed content-addressed
+/// revision is a valid asset path. Ignore attacker-edited paths in local JSON.
+fn valid_character_asset(draft: &BaCharacterV1) -> bool {
+    if draft.character_id.is_empty() || draft.character_id.len() > 64
+        || !draft.character_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        || draft.revision == 0 || draft.runtime.format != "glb"
+    {
+        return false;
+    }
+    if std::env::var_os("BA_CHARACTER_ROOT").is_some() {
+        let expected = format!(
+            "character://{}/revisions/r{}/character.glb",
+            draft.character_id, draft.revision
+        );
+        return draft.runtime.relative_path == expected;
+    }
+    true // standalone developer forge keeps its historical local export path
 }
 
 pub fn load_draft_from_path(path: &Path) -> Option<BaCharacterV1> {
     let raw = fs::read_to_string(path).ok()?;
     match serde_json::from_str::<BaCharacterV1>(&raw) {
-        Ok(draft) if draft.schema_version == SCHEMA_VERSION => Some(draft),
+        Ok(draft) if draft.schema_version == SCHEMA_VERSION && valid_character_asset(&draft) => Some(draft),
         Ok(draft) => {
             warn!(
-                "BaCharacter schemaVersion {} unsupported (want {})",
-                draft.schema_version, SCHEMA_VERSION
+                "Rejected BaCharacter revision {}: schemaVersion {}, asset URI {}",
+                draft.revision, draft.schema_version, draft.runtime.relative_path
             );
             None
         }
@@ -159,7 +183,7 @@ pub fn load_character_profile(mut commands: Commands, mut flow: ResMut<crate::fo
             d.glb_asset_path()
         );
     } else {
-        info!("No active BaCharacterV1 at {}", active_json_path().display());
+        info!("No valid selected BaCharacterV1 (standalone path: {})", active_json_path().display());
     }
     commands.insert_resource(CharacterProfile { draft });
 }
