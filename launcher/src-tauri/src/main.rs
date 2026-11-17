@@ -10,7 +10,7 @@
 mod discord;
 
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Read,Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
@@ -23,6 +23,63 @@ use tauri::Manager;
 
 static RUNNING_GAME: Mutex<Option<Child>> = Mutex::new(None);
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
+static VERIFIED_GAME: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+#[derive(Deserialize)]
+#[serde(rename_all="camelCase")]
+struct GameManifest {
+    schema_version: u32,
+    files: Vec<GameManifestFile>,
+}
+
+#[derive(Deserialize)]
+struct GameManifestFile {
+    path: String,
+    bytes: u64,
+    sha256: String,
+}
+
+/// Verify every packaged game asset before first launch. The release pipeline
+/// signs the EXE and installer; this manifest detects broken/corrupt installs.
+/// An unsigned staging MSI is NOT a secure production update.
+fn verify_game_bundle(root:&Path) -> Result<(),String> {
+    let mut verified=VERIFIED_GAME.lock().map_err(|_|"Game verification lock poisoned")?;
+    if verified.as_ref().is_some_and(|path| path==root) {return Ok(());}
+    let raw=fs::read_to_string(root.join("manifest.json"))
+        .map_err(|_|"Game manifest missing; repair or reinstall Black Anvil")?;
+    let manifest: GameManifest=serde_json::from_str(&raw)
+        .map_err(|_|"Malformed game content manifest")?;
+    if manifest.schema_version!=1 || manifest.files.len()<2 || manifest.files.len()>50_000 {
+        return Err("Invalid game content manifest".into());
+    }
+    for item in manifest.files {
+        let rel=Path::new(&item.path);
+        if !rel.components().all(|part| matches!(part,std::path::Component::Normal(_)))
+            || item.path.contains(':') || item.sha256.len()!=64 {
+            return Err("Manifest contains an unsafe file path or hash".into());
+        }
+        let path=root.join(rel);
+        let mut file=fs::File::open(&path)
+            .map_err(|_|format!("Game file missing: {}",item.path))?;
+        let metadata=file.metadata().map_err(|_|"Cannot inspect game file")?;
+        if !metadata.is_file() || metadata.len()!=item.bytes {
+            return Err(format!("Game file size mismatch: {}",item.path));
+        }
+        let mut checksum=Sha256::new();
+        let mut buffer=[0_u8;65536];
+        loop {
+            let n=file.read(&mut buffer).map_err(|_|"Cannot validate game file")?;
+            if n==0 {break;}
+            checksum.update(&buffer[..n]);
+        }
+        if !format!("{:x}",checksum.finalize()).eq_ignore_ascii_case(&item.sha256) {
+            return Err(format!("Game file hash mismatch: {}",item.path));
+        }
+    }
+    *verified=Some(root.to_path_buf());
+    Ok(())
+}
+
 
 const MAX_GLB: usize = 32 * 1024 * 1024;
 const MAX_JSON: usize = 128 * 1024;
@@ -393,12 +450,18 @@ async fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_j
     if !binary.is_file() {
         return Err(format!("Bevy game executable not installed: {}", binary.display()));
     }
+    #[cfg(not(debug_assertions))]
+    verify_game_bundle(&working_dir)?;
+
     let mut command = Command::new(&binary);
     command.current_dir(&working_dir);
     command.env("BA_LAUNCH_MODE", "game");
     command.env("BA_CHARACTER_ROOT", &root);
     command.env("BA_CHARACTER_DRAFT_PATH", &draft_path);
     command.env("BA_CHARACTER_GLB_PATH", &glb);
+    // Bevy's installed AssetServer reads the packaged resources, never the
+    // original developer checkout from CARGO_MANIFEST_DIR.
+    command.env("BA_GAME_ASSET_ROOT", working_dir.join("assets"));
     if let Some(ticket) = game_ticket {
         // One-use, short-lived zone ticket. No Discord token, no wallet signer,
         // and no long-lived game account token are passed to Bevy.
@@ -407,6 +470,13 @@ async fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_j
     }
     if multiplayer {
         command.env("BA_ZONE", "1");
+        if let Ok(url)=std::env::var("BA_ZONE_URL") {
+            command.env("BA_ZONE_URL",url);
+        } else if let Some(url)=option_env!("BA_ZONE_PUBLIC_URL") {
+            command.env("BA_ZONE_URL",url);
+        } else if !cfg!(debug_assertions) {
+            return Err("Game server WSS URL is not configured for this release".into());
+        }
     } else {
         command.env_remove("BA_ZONE");
         command.env_remove("BA_ZONE_URL");
