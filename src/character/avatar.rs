@@ -23,6 +23,7 @@ pub struct PendingPlayerAvatar {
 pub fn attach_player_avatar(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
     profile: Res<CharacterProfile>,
     player: Query<
         Entity,
@@ -63,6 +64,9 @@ pub fn attach_player_avatar(
         ))
         .id();
 
+    super::prepare_avatar_animation(
+        &mut commands, &asset_server, &mut graphs, avatar, glb,
+    );
     commands.entity(player_entity).add_child(avatar);
     commands
         .entity(player_entity)
