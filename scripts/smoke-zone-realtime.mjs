@@ -58,6 +58,7 @@ function openClient(name, job = "Fighter") {
         }
       } else if (msg.type === "snapshot") {
         state.peers = msg.players;
+        state.ashworks = msg.ashworks;
       } else if (msg.type === "damage") {
         state.damages.push(msg);
       } else if (msg.type === "buff_applied") {
@@ -132,57 +133,71 @@ a.ws.send(JSON.stringify({ type: "move_intent", seq: 82, forward: 0, strafe: 0, 
 b.ws.send(JSON.stringify({ type: "move_intent", seq: 1, forward: 0, strafe: 0, yaw: 0, sprint: false }));
 await sleep(100);
 
-// Test Knight's shield skill while both combatants are still alive. The
-// Fighter's Berserk + 10 hits + weapon skill below can otherwise kill the
-// Knight before this assertion, correctly making the server reject casts.
-const beforeBash = b.damages.length;
-b.ws.send(JSON.stringify({ type: "attack", target_id: 0 }));
-b.ws.send(JSON.stringify({ type: "cast", ability_id: "shield_bash" }));
-await waitUntil(
-  () => b.damages.slice(beforeBash).some(
-    (d) => d.attacker_id === b.id && d.target_id === a.id
-  ) || b.rejects.some((r) => r.ability_id === "shield_bash"),
-  5000, "shield_bash outcome"
-);
-const bashReject = b.rejects.find((r) => r.ability_id === "shield_bash");
-if (bashReject) throw new Error(`shield_bash unexpectedly rejected: ${bashReject.reason}`);
+const imp = a.ashworks.constructs[0].id;
+const send = (client, msg) => client.ws.send(JSON.stringify(msg));
+const strike = (client, target_id) => send(client, { type: "attack", target_id });
+const cast = (client, ability_id) => send(client, { type: "cast", ability_id });
 
-a.ws.send(JSON.stringify({ type: "cast", ability_id: "berserk" }));
-await waitUntil(() => a.buffs.some((d) => d.ability_id === "berserk"), 3000, "berserk buff");
+strike(a, b.id);
+await sleep(900);
+if (a.damages.some(d => d.attacker_id === a.id)) throw new Error("player target accepted");
+cast(a, "ws_gs_hard_slash");
+await waitUntil(() => a.rejects.some(r => r.reason === "tp"), 3000, "weapon skill must require TP");
+cast(b, "shield_bash");
+await waitUntil(() => b.damages.some(d => d.attacker_id === b.id && d.target_id === imp), 3000, "bash construct");
+cast(a, "berserk");
+await waitUntil(() => a.buffs.some(d => d.ability_id === "berserk"), 3000, "berserk buff");
 
-a.ws.send(JSON.stringify({ type: "cast", ability_id: "ws_gs_hard_slash" }));
-await waitUntil(
-  () =>
-    a.rejects.some(
-      (r) =>
-        r.ability_id === "ws_gs_hard_slash" &&
-        (r.reason === "tp" || r.reason === "no_target" || r.reason === "out_of_range")
-    ),
-  3000,
-  "ws reject without TP/target"
-);
+async function hunt() {
+  await waitUntil(() => a.ashworks.constructs[0].hp > 0, 9000, "imp rekindles");
+  const stock = a.ashworks.cinder;
+  strike(a, imp);
+  await waitUntil(() => a.ashworks.cinder > stock, 30000, "earn raw cinder");
+}
+await hunt();
+if (b.ashworks.cinder !== 1) await waitUntil(() => b.ashworks.cinder === 1, 2000, "shared contribution reward");
+await hunt();
+send(a, { type: "forge_ward" });
+await sleep(300);
+if (a.ashworks.ward || a.ashworks.cinder !== 2) throw new Error("crafted away from forge");
 
-a.ws.send(JSON.stringify({ type: "attack", target_id: 0 }));
-await waitUntil(
-  () => a.damages.filter((d) => d.attacker_id === a.id && d.target_id === b.id && d.hit).length >= 10,
-  14000,
-  "10 auto hits for TP"
-);
-
-const beforeWs = a.damages.length;
-a.ws.send(JSON.stringify({ type: "cast", ability_id: "ws_gs_hard_slash" }));
-await waitUntil(() => {
-  const fresh = a.damages.slice(beforeWs);
-  return fresh.some((d) => d.attacker_id === a.id && d.target_id === b.id && d.hit && d.damage > 0);
-}, 4000, "weapon skill");
-
-const wsHit = a.damages
-  .slice(beforeWs)
-  .find((d) => d.attacker_id === a.id && d.target_id === b.id && d.hit && d.damage > 0);
-
+let seq = 83;
+async function walkTo(x, z) {
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const pose = a.peers.find(p => pid(p) === a.id).pose;
+    const dx = x - pose.x, dz = z - pose.z;
+    const distance = Math.hypot(dx,dz);
+    if (distance < 0.9) {
+      send(a, {type:"move_intent",seq:seq++,forward:0,strafe:0,yaw:0,sprint:false});
+      return;
+    }
+    send(a, {type:"move_intent",seq:seq++,forward:-dz/distance,strafe:dx/distance,yaw:0,sprint:true});
+    await sleep(90);
+  }
+  throw new Error("could not reach waypoint");
+}
+await walkTo(-2.05,0.35);
+send(a, { type: "forge_ward" });
+send(a, { type: "forge_ward" });
+await waitUntil(() => a.ashworks.ward && a.ashworks.cinder === 0, 2000, "forge ward");
+if (b.ashworks.ward) throw new Error("ward leaked to other character");
+// Finish the forge order with the boss heart. The extra imp also supplies
+// the second cinder and enough TP to exercise the weapon skill.
+await walkTo(1.6, 4.8);
+await hunt();
+await walkTo(22,-1.5);
+const boss = a.ashworks.constructs[1].id;
+strike(a,boss);
+await waitUntil(() => a.damages.filter(d => d.attacker_id === a.id && d.hit).length >= 10, 16000, "earn weapon skill");
+cast(a,"ws_gs_hard_slash");
+await waitUntil(() => a.ashworks.heart, 45000, "kiln heart");
+if (a.rejects.filter(r => r.ability_id === "ws_gs_hard_slash").length !== 1) throw new Error("earned weapon skill rejected");
+if (a.peers.find(p => pid(p) === a.id).level < 2) throw new Error("XP did not advance level");
+await walkTo(-2.05,0.35);
+send(a, { type: "forge_ward" });
+await waitUntil(() => a.ashworks.edge && !a.ashworks.heart && a.ashworks.cinder === 0, 2000, "temper edge");
 a.ws.close();
 b.ws.close();
-console.log(
-  `PASS zone kits smoke v5: dup-hello reject, tick-bound movement, buff+wsDmg=${wsHit.damage}+shield_bash`
-);
+console.log("PASS cooperative hunt, XP materials, forge distance, crafting and character ownership");
 process.exit(0);

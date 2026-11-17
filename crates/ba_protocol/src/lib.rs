@@ -3,6 +3,8 @@
 //! Auth is intentionally not wallet-based. Discord/session tickets land in M3.
 //! This crate is a **dev/loopback prototype** until ticket verification lands.
 
+pub mod ashworks;
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -222,6 +224,7 @@ pub enum ClientMessage {
     Cast {
         ability_id: String,
     },
+    ForgeWard,
     Ping {
         client_time_ms: u64,
     },
@@ -243,6 +246,8 @@ pub enum ServerMessage {
     Snapshot {
         tick: u64,
         players: Vec<PlayerState>,
+        #[serde(default)]
+        ashworks: ashworks::AshworksView,
     },
     Progression {
         tick: u64,

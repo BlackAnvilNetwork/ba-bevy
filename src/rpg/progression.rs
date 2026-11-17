@@ -9,21 +9,7 @@ use super::combat::{
 use super::grades::{combined_job_stats, combined_job_vitals, CombatStats, Vitals};
 use super::jobs::JobId;
 
-/// ba-stick `XP_TO_NEXT` — index 0 = XP needed to leave level 1.
-pub const XP_TO_NEXT: [u32; 75] = [
-    500, 567, 778, 989, 1200, 1412, 1623, 1835, 2046, 2400, 2600, 2800, 3000, 3200, 3400, 3600,
-    3800, 4000, 4200, 4400, 4600, 4809, 4931, 5054, 5176, 5299, 5421, 5544, 5666, 5700, 5800, 5900,
-    6000, 6100, 6200, 6300, 6400, 6500, 6600, 6700, 6800, 6900, 7000, 7100, 7200, 7300, 7400, 7500,
-    7600, 7700, 7800, 8389, 9478, 10567, 11656, 12744, 13833, 14922, 16011, 17600, 18800, 20117,
-    21583, 23050, 24517, 25983, 27450, 28917, 30383, 32000, 34000, 49500, 52000, 54500, 44000,
-];
-
-pub const MAX_LEVEL: u32 = 75;
-
-pub fn xp_to_next_level(level: u32) -> u32 {
-    let lv = level.clamp(1, XP_TO_NEXT.len() as u32) as usize;
-    XP_TO_NEXT[lv - 1]
-}
+pub use ba_combat::experience::{xp_to_next_level, MAX_LEVEL};
 
 #[derive(Component, Clone, Debug)]
 pub struct Progression {
