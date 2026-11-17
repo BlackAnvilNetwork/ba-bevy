@@ -302,7 +302,9 @@ pub fn send_local_move(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     player: Query<&Transform, With<Player>>,
-    mut last: Local<Option<(Vec3, f32)>>,
+    time: Res<Time>,
+    mut elapsed: Local<f32>,
+    mut next_seq: Local<u64>,
 ) {
     if !net.online() || flow.in_menu() {
         return;
@@ -316,24 +318,26 @@ pub fn send_local_move(
     if let Some(ability_id) = zone_hotbar_press(&keys, draft_job(&profile, &draft)) {
         let _ = tx.send(ClientMessage::Cast { ability_id });
     }
-    let Ok(transform) = player.single() else {
+    // Send input at the zone tick cadence, including neutral input to stop.
+    // The server advances movement at 20 Hz regardless of packet frequency.
+    *elapsed = (*elapsed + time.delta_secs()).min(0.1);
+    let send_interval = 1.0 / ba_protocol::TICK_HZ as f32;
+    if *elapsed < send_interval {
         return;
-    };
-    let (_, yaw, _) = transform.rotation.to_euler(EulerRot::YXZ);
-    let pos = transform.translation;
-    if let Some((prev, prev_yaw)) = *last {
-        if (prev - pos).length_squared() < 0.0001 && (prev_yaw - yaw).abs() < 0.01 {
-            return;
-        }
     }
-    *last = Some((pos, yaw));
-    let _ = tx.send(ClientMessage::Move {
-        pose: Pose {
-            x: pos.x,
-            y: pos.y,
-            z: pos.z,
-            yaw,
-        },
+    *elapsed -= send_interval;
+
+    let Ok(transform) = player.single() else { return };
+    let (_, yaw, _) = transform.rotation.to_euler(EulerRot::YXZ);
+    let forward = (keys.pressed(KeyCode::KeyW) as i8 - keys.pressed(KeyCode::KeyS) as i8) as f32;
+    let strafe = (keys.pressed(KeyCode::KeyD) as i8 - keys.pressed(KeyCode::KeyA) as i8) as f32;
+    *next_seq = next_seq.wrapping_add(1);
+    let _ = tx.send(ClientMessage::MoveIntent {
+        seq: *next_seq,
+        forward,
+        strafe,
+        yaw,
+        sprint: keys.pressed(KeyCode::ShiftLeft),
     });
 }
 
@@ -389,6 +393,7 @@ pub fn apply_zone_snapshots(
 
     let mut latest: Option<Vec<PlayerState>> = None;
     let mut local_hp: Option<(i32, i32)> = None;
+    let mut local_authoritative_pose: Option<Pose> = None;
     let mut spawn: Option<Pose> = None;
     loop {
         match rx.try_recv() {
@@ -405,6 +410,7 @@ pub fn apply_zone_snapshots(
                 if let Some(id) = net.local_player_id {
                     if let Some(me) = players.iter().find(|p| p.player_id == id) {
                         local_hp = Some((me.hp, me.max_hp));
+                        local_authoritative_pose = Some(me.pose);
                     }
                 }
                 latest = Some(players);
@@ -490,6 +496,20 @@ pub fn apply_zone_snapshots(
         if let Ok(mut xf) = local_xf.single_mut() {
             xf.translation = Vec3::new(s.x, s.y, s.z);
             xf.rotation = Quat::from_euler(EulerRot::YXZ, s.yaw, 0.0, 0.0);
+        }
+    }
+
+    // Lightweight local presentation correction. Full tick-indexed prediction
+    // replay is intentionally tracked as follow-up; no client pose is trusted.
+    if let Some(server_pose) = local_authoritative_pose {
+        if let Ok(mut transform) = local_xf.single_mut() {
+            let auth = Vec3::new(server_pose.x, server_pose.y, server_pose.z);
+            let drift = transform.translation.distance(auth);
+            if drift > 0.7 {
+                transform.translation = auth;
+            } else if drift > 0.03 {
+                transform.translation = transform.translation.lerp(auth, 0.22);
+            }
         }
     }
 
