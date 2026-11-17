@@ -144,7 +144,7 @@ fn main() {
                 load_combat_kits,
                 load_character_profile,
                 spawn_opening_scene.after(load_game_data),
-                spawn_player.after(load_game_data),
+                spawn_player.after(load_game_data).after(load_character_profile),
                 attach_pixel_camera.after(spawn_player),
                 spawn_sky_dome.after(spawn_player),
                 spawn_hud,
