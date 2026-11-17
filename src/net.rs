@@ -63,7 +63,13 @@ pub struct RemotePlayer {
     pub player_id: u32,
     pub target: Vec3,
     pub target_yaw: f32,
+    pub avatar_hash: Option<String>,
+    pub pending_avatar: Option<Handle<WorldAsset>>,
+    pub has_avatar: bool,
 }
+
+#[derive(Component)]
+struct RemoteAvatarPlaceholder;
 
 const MAX_UNACKED_PREDICTIONS: usize = 128;
 
@@ -497,50 +503,95 @@ fn spawn_remote_player(
     asset_server: &AssetServer,
     state: &PlayerState,
 ) {
-    let root = commands
-        .spawn((
-            RemotePlayer {
-                player_id: state.player_id,
-                target: Vec3::new(state.pose.x, state.pose.y, state.pose.z),
-                target_yaw: state.pose.yaw,
-            },
-            Name::new(format!("Remote:{}", state.appearance.name)),
-            Transform::from_translation(Vec3::new(state.pose.x, state.pose.y, state.pose.z))
-                .with_rotation(Quat::from_euler(EulerRot::YXZ, state.pose.yaw, 0.0, 0.0)),
-            Visibility::default(),
-        ))
-        .id();
-
-    // Same-host prototype only: both client processes can share the launcher
-    // content-addressed cache. Production requires authenticated asset delivery
-    // and a trusted catalog before loading downloaded user-created models.
-    if let Some(uri) = state.appearance.glb_content_hash.as_deref().and_then(verified_cache_uri) {
-        let handle: Handle<WorldAsset> =
-            asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri.clone()));
-        let model = commands.spawn((
-            Name::new(format!("RemoteAvatar:{}", state.appearance.name)),
-            WorldAssetRoot(handle),
-            Transform::from_xyz(0.0, -1.65, 0.0),
-            Visibility::default(),
-        )).id();
-        commands.entity(root).add_child(model);
-        info!("Queued verified same-host remote avatar {uri}");
-        return;
+    let hash = state.appearance.glb_content_hash.clone();
+    if let Some(hash) = hash.as_deref() {
+        crate::avatar_delivery::prefetch(hash);
     }
-
-    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.75, 0.55, 0.35),
-        ..default()
-    });
-    let body = commands.spawn((
-        Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
-        Mesh3d(mesh),
-        MeshMaterial3d(mat),
-        Transform::default(),
+    let uri = hash.as_deref().and_then(verified_cache_uri);
+    let handle: Option<Handle<WorldAsset>> = uri.as_ref().map(|uri|
+        asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri.clone()))
+    );
+    let root = commands.spawn((
+        RemotePlayer {
+            player_id: state.player_id,
+            target: Vec3::new(state.pose.x,state.pose.y,state.pose.z),
+            target_yaw: state.pose.yaw,
+            avatar_hash: hash,
+            pending_avatar: handle.clone(),
+            has_avatar: false,
+        },
+        Name::new(format!("Remote:{}",state.appearance.name)),
+        Transform::from_translation(Vec3::new(state.pose.x,state.pose.y,state.pose.z))
+            .with_rotation(Quat::from_euler(EulerRot::YXZ,state.pose.yaw,0.0,0.0)),
         Visibility::default(),
     )).id();
-    commands.entity(root).add_child(body);
+
+    // Leave capsule visible until all glTF dependencies have loaded. A failed
+    // download/model does not make other players invisible.
+    let mesh = meshes.add(Capsule3d::new(0.35,1.0));
+    let mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.75,0.55,0.35), ..default()
+    });
+    let capsule = commands.spawn((
+        RemoteAvatarPlaceholder,
+        Name::new(format!("RemoteCapsule:{}",state.appearance.name)),
+        Mesh3d(mesh), MeshMaterial3d(mat), Transform::default(),
+        Visibility::default(),
+    )).id();
+    commands.entity(root).add_child(capsule);
+
+    if let Some(handle) = handle {
+        let scene = commands.spawn((
+            Name::new(format!("RemoteAvatar:{}",state.appearance.name)),
+            WorldAssetRoot(handle),
+            Transform::from_xyz(0.0,-1.65,0.0),
+            Visibility::default(),
+        )).id();
+        commands.entity(root).add_child(scene);
+    }
+}
+
+/// Once the cross-machine download completes, queue its verified GLB without
+/// recreating player entities. Remove the fallback only after the scene AND
+/// its dependencies are loaded by Bevy.
+pub fn refresh_remote_avatar_models(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut remotes: Query<(Entity,&mut RemotePlayer,&Children)>,
+    placeholders: Query<(),With<RemoteAvatarPlaceholder>>,
+) {
+    use bevy::asset::LoadState;
+    for (entity,mut remote,children) in &mut remotes {
+        if remote.has_avatar {continue;}
+        if let Some(handle) = remote.pending_avatar.as_ref() {
+            if asset_server.is_loaded_with_dependencies(handle.id()) {
+                for child in children.iter() {
+                    if placeholders.get(child).is_ok() {
+                        commands.entity(child).despawn();
+                    }
+                }
+                remote.pending_avatar=None;
+                remote.has_avatar=true;
+            } else if matches!(asset_server.load_state(handle.id()),LoadState::Failed(_)) {
+                // Explicit fallback; no silent infinite retries in renderer.
+                warn!("Remote avatar scene load failed; retaining capsule");
+                remote.pending_avatar=None;
+                remote.avatar_hash=None;
+            }
+            continue;
+        }
+        if let Some(uri) = remote.avatar_hash.as_deref().and_then(verified_cache_uri) {
+            let handle: Handle<WorldAsset>=asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri));
+            let scene=commands.spawn((
+                Name::new("RemoteVerifiedAvatar"),
+                WorldAssetRoot(handle.clone()),
+                Transform::from_xyz(0.0,-1.65,0.0),
+                Visibility::default(),
+            )).id();
+            commands.entity(entity).add_child(scene);
+            remote.pending_avatar=Some(handle);
+        }
+    }
 }
 
 pub fn apply_zone_snapshots(
@@ -728,8 +779,17 @@ pub fn apply_zone_snapshots(
 
     for (entity, mut remote, _transform) in &mut remotes {
         if let Some(state) = seen.remove(&remote.player_id) {
+            if remote.avatar_hash != state.appearance.glb_content_hash {
+                commands.entity(entity).despawn();
+                // Rebuild changed appearance with a fresh fallback/model.
+                seen.insert(state.player_id,state);
+                continue;
+            }
             remote.target = Vec3::new(state.pose.x, state.pose.y, state.pose.z);
             remote.target_yaw = state.pose.yaw;
+            if let Some(hash)=remote.avatar_hash.as_deref() {
+                crate::avatar_delivery::prefetch(hash);
+            }
         } else {
             commands.entity(entity).despawn();
         }
