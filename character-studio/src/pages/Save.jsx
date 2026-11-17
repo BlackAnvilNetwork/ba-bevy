@@ -80,14 +80,14 @@ function Save() {
       const glbBlob = await characterManager.getGLBBlob(mergeExportOptions())
       const result = await saveBaCharacterDraft(character, glbBlob)
       setDialogMessage(
-        `Saved for Black Anvil (rev ${character.revision}). Return to the forge and Enter Greymere.\n${result.json}`,
+        `Saved for Black Anvil (rev ${character.revision}). Use Back to launcher, then Play Black Anvil.\n${result.json}`,
       )
       setConfirmDialogWindow(true)
       !isMute && playSound("backNextButton")
     } catch (err) {
       console.error(err)
       setDialogMessage(
-        `Save failed: ${err?.message || err}. Is Studio running via scripts/run-character-studio.ps1?`,
+        `Save failed: ${err?.message || err}. Check the saved avatar and try again. In dev mode, verify the local Studio service is running.`,
       )
       setConfirmDialogWindow(true)
     } finally {
