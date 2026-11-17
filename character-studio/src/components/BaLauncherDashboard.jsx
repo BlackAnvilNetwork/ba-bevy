@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react"
 import "./BaLauncherDashboard.css"
+import { rememberBaCharacterDraft } from "../library/ba-character"
 
 /**
  * Black Anvil's native entry surface. Character Studio stays mounted in the
@@ -35,8 +36,9 @@ export default function BaLauncherDashboard({ onCustomize }) {
       if (draft.schemaVersion !== 1 || !draft.characterId) {
         throw new Error("Character format is not supported")
       }
+      rememberBaCharacterDraft(draft)
       setCharacter(draft)
-      setStatus("Saved locally · development preview")
+      setStatus("Character ready · Play Black Anvil")
     }).catch((e) => {
       if (active) {
         setError(String(e?.message || e))
@@ -102,8 +104,9 @@ export default function BaLauncherDashboard({ onCustomize }) {
         const raw = await invoke("get_draft")
         const saved = raw ? JSON.parse(raw) : null
         if (!saved?.characterId) throw new Error("The restored character is not readable")
+        rememberBaCharacterDraft(saved)
         setCharacter(saved)
-        setStatus(result.restored ? "Character restored from your Discord account" : "Account character is already saved on this PC")
+        setStatus(result.restored ? "Character restored · Ready to play" : "Character ready · Play Black Anvil")
       }
     } catch (e) {
       setError(String(e?.message || e))
