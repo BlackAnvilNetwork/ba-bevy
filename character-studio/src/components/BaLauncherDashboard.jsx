@@ -107,6 +107,28 @@ export default function BaLauncherDashboard({ onCustomize }) {
     }
   }
 
+  const restore = async () => {
+    if (!account?.connected || busy || typeof invoke !== "function") return
+    setBusy(true)
+    setError("")
+    try {
+      const result = await invoke("restore_account_character")
+      if (result.reason === "no_account_character") {
+        setStatus("No cloud character exists yet — create one here")
+      } else {
+        const raw = await invoke("get_draft")
+        const saved = raw ? JSON.parse(raw) : null
+        if (!saved?.characterId) throw new Error("The restored character is not readable")
+        setCharacter(saved)
+        setStatus(result.restored ? "Character restored from your Discord account" : "Account character is already saved on this PC")
+      }
+    } catch (e) {
+      setError(String(e?.message || e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const play = async () => {
     if (busy || !character || typeof invoke !== "function") return
     if (multiplayer && !account?.connected) {
@@ -159,6 +181,10 @@ export default function BaLauncherDashboard({ onCustomize }) {
           </div>
           <div className="ba-actions">
             <button type="button" className="ba-secondary" onClick={onCustomize}>{character ? "Customize character" : "Create character"}</button>
+            {account?.connected && !character &&
+              <button type="button" className="ba-secondary" onClick={restore} disabled={busy}>
+                Restore saved character
+              </button>}
             <button type="button" className="ba-primary" onClick={play} disabled={!character || busy}>{busy ? "Launching…" : "Play Black Anvil"}</button>
           </div>
           <label className="ba-multi"><input type="checkbox" checked={multiplayer} disabled={!account?.connected} onChange={(e) => setMultiplayer(e.target.checked)} /> Multiplayer — authenticated Discord character and one-use zone ticket</label>
