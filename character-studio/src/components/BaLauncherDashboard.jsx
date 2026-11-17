@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react"
 import "./BaLauncherDashboard.css"
+import { rememberBaCharacterDraft } from "../library/ba-character"
 
 /**
  * Black Anvil's native entry surface. Character Studio stays mounted in the
@@ -11,6 +12,7 @@ export default function BaLauncherDashboard({ onCustomize }) {
   const [error, setError] = useState("")
   const [status, setStatus] = useState("Loading local character…")
   const [busy, setBusy] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
   const [multiplayer, setMultiplayer] = useState(false)
   const [account, setAccount] = useState(null)
   const [authPending, setAuthPending] = useState(false)
@@ -29,14 +31,17 @@ export default function BaLauncherDashboard({ onCustomize }) {
       if (!raw) {
         setCharacter(null)
         setStatus("No character saved yet")
+        setDraftReady(true)
         return
       }
       const draft = JSON.parse(raw)
       if (draft.schemaVersion !== 1 || !draft.characterId) {
         throw new Error("Character format is not supported")
       }
+      rememberBaCharacterDraft(draft)
       setCharacter(draft)
-      setStatus("Saved locally · development preview")
+      setDraftReady(true)
+      setStatus("Character ready · Play Black Anvil")
     }).catch((e) => {
       if (active) {
         setError(String(e?.message || e))
@@ -102,8 +107,9 @@ export default function BaLauncherDashboard({ onCustomize }) {
         const raw = await invoke("get_draft")
         const saved = raw ? JSON.parse(raw) : null
         if (!saved?.characterId) throw new Error("The restored character is not readable")
+        rememberBaCharacterDraft(saved)
         setCharacter(saved)
-        setStatus(result.restored ? "Character restored from your Discord account" : "Account character is already saved on this PC")
+        setStatus(result.restored ? "Character restored · Ready to play" : "Character ready · Play Black Anvil")
       }
     } catch (e) {
       setError(String(e?.message || e))
@@ -163,7 +169,10 @@ export default function BaLauncherDashboard({ onCustomize }) {
             </div>
           </div>
           <div className="ba-actions">
-            <button type="button" className="ba-secondary" onClick={onCustomize}>{character ? "Customize character" : "Create character"}</button>
+            <button type="button" className="ba-secondary"
+              onClick={onCustomize} disabled={!draftReady || busy}>
+              {!draftReady ? "Checking character…" : character ? "Customize character" : "Create character"}
+            </button>
             {account?.connected && !character &&
               <button type="button" className="ba-secondary" onClick={restore} disabled={busy}>
                 Restore saved character

@@ -101,7 +101,7 @@ jobs:
         run: npm ci --legacy-peer-deps
       - name: Validate Studio rig animations and Create Character avatar bootstrap
         working-directory: character-studio
-        run: npm run test:run -- src/library/ba-procedural-animation.test.js src/library/ba-creator.test.js
+        run: npm run test:run -- src/library/ba-procedural-animation.test.js src/library/ba-creator.test.js src/library/ba-game-handoff.test.js
       - name: Install launcher dependencies
         working-directory: launcher
         run: npm ci

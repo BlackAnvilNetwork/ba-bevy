@@ -158,6 +158,11 @@ export default function App() {
     [ViewMode.APPEARANCE]: (
       <Appearance
         confirmDialog={confirmDialog}
+        onCharacterSaved={baMode && window.__TAURI__ ? () => {
+          // The launcher remounts and reads the newly selected native revision.
+          // Play remains an explicit player action after the save succeeds.
+          setLauncherHome(true)
+        } : undefined}
       />
     ),
     [ViewMode.OPTIMIZER]:<Optimizer/>,
@@ -168,7 +173,7 @@ export default function App() {
     [ViewMode.BATCHDOWNLOAD]: <BatchDownload />,
     [ViewMode.LOAD]: <Load />,
     [ViewMode.MINT]: <Mint />,
-    [ViewMode.SAVE]: <Save />,
+    [ViewMode.SAVE]: <Save onCharacterSaved={baMode && window.__TAURI__ ? () => setLauncherHome(true) : undefined} />,
   }
 
   let lastTap = 0
