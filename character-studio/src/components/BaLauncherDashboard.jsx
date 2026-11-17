@@ -60,39 +60,22 @@ export default function BaLauncherDashboard({ onCustomize }) {
     return () => { active = false }
   }, [invoke])
 
-  useEffect(() => {
-    if (!authPending || typeof invoke !== "function") return
-    let active = true
-    const timer = setInterval(async () => {
-      try {
-        const outcome = await invoke("poll_discord_login")
-        if (!active) return
-        if (outcome?.status === "complete") {
-          setAuthPending(false)
-          setAccount({ connected: true, accountId: outcome.accountId, displayName: outcome.displayName })
-          setAuthMessage("Discord connected — multiplayer ready")
-        }
-      } catch (e) {
-        if (active) {
-          setAuthPending(false)
-          setAuthMessage(String(e?.message || e))
-        }
-      }
-    }, 1400)
-    return () => { active = false; clearInterval(timer) }
-  }, [authPending, invoke])
-
   const signIn = async () => {
     setError("")
+    setAuthPending(true)
     try {
       const result = await invoke("begin_discord_login")
       const open = window.__TAURI__?.shell?.open
       if (typeof open !== "function") throw new Error("System browser opening is unavailable")
       await open(result.authorizationUrl)
-      setAuthPending(true)
-      setAuthMessage("Approve Black Anvil in Discord; this launcher will update automatically.")
+      setAuthMessage("Approve Black Anvil in Discord, then return to this launcher.")
+      const outcome = await invoke("await_discord_login")
+      setAccount({ connected: true, accountId: outcome.accountId, displayName: outcome.displayName })
+      setAuthMessage("Discord connected — multiplayer ready")
     } catch (e) {
       setAuthMessage(String(e?.message || e))
+    } finally {
+      setAuthPending(false)
     }
   }
 

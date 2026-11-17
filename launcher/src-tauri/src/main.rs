@@ -494,9 +494,13 @@ async fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_j
 
 fn main() {
     tauri::Builder::default()
+        .setup(|_app| {
+            discord::ensure_dev_gateway();
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             save_draft, get_draft, launch_game,
-            discord::begin_discord_login, discord::poll_discord_login,
+            discord::begin_discord_login, discord::await_discord_login,
             discord::discord_account, discord::discord_logout,
         ])
         .run(tauri::generate_context!())
