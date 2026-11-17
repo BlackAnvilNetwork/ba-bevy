@@ -32,6 +32,7 @@ use boss::{
 use cel::{cel_shade_figures, CelMaterial};
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
+    update_avatar_animation,
 };
 use data::load_game_data;
 use net::{
@@ -162,6 +163,7 @@ fn main() {
                 apply_zone_snapshots.run_if(in_yard).after(send_local_move),
                 interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
                 refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
+                update_avatar_animation.run_if(in_yard).after(refresh_remote_avatar_models),
             ),
         )
         .add_systems(
