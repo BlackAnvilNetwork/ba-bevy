@@ -66,10 +66,10 @@ function getUnopotimizedGLB (model){
 }
 
 
-export async function getGLBBlobData(model, options){
+export async function getGLBBlobData(model, avatar, options = {}){
   const {optimized = true} = options;
   const finalModel = await (optimized ? 
-     getOptimizedGLB(model, options) :
+     getOptimizedGLB(model, avatar, options) :
      getUnopotimizedGLB(model))
   // Export exactly the skinned bones plus two original, rig-bound clips.
   // Three GLTFExporter requires TRS transforms for animated nodes.
@@ -78,17 +78,18 @@ export async function getGLBBlobData(model, options){
   return new Blob([glb], { type: 'model/gltf-binary' });
 }
 
-export async function getVRMBlobData(model, avatar, options){
-  const finalModel = await getOptimizedGLB(model, options)
+export async function getVRMBlobData(model, avatar, options = {}){
+  const finalModel = await getOptimizedGLB(model, avatar, options)
   const vrm = await parseVRM(finalModel, avatar, options);
   // save it as glb now
   return new Blob([vrm], { type: 'model/gltf-binary' });
 }
 
 // returns a promise with the parsed data
-async function getGLBData(model, options){
+async function getGLBData(model, avatar, options = {}){
+  const {optimized = true} = options;
   if (optimized){
-    const finalModel = await getOptimizedGLB(model, options)
+    const finalModel = await getOptimizedGLB(model, avatar, options)
     return parseGLB(finalModel); 
   }
   else{
@@ -142,22 +143,22 @@ async function getVRMData(model, avatar, options){
   return parseVRM(vrmModel,avatar,options) 
 }
 
-function getOptimizedGLB(model, avatar, options){
+function getOptimizedGLB(model, avatar, options = {}){
+  if (!avatar || typeof avatar !== "object") {
+    throw new TypeError("Cannot export Black Anvil avatar without loaded trait data");
+  }
   const modelClone = cloneAvatarModel(model)
-  // default for now ?
-  options.mergeAppliedMorphs = true;
-  const { createTextureAtlas = true } = options;
+  // Copy export settings instead of mutating the editor's saved preferences.
+  const exportOptions = {...options, mergeAppliedMorphs: true};
+  const { createTextureAtlas = true } = exportOptions;
   if (createTextureAtlas){
-    return combine(modelClone, avatar, options);
+    return combine(modelClone, avatar, exportOptions);
   }
-  else{
-    console.log("no atlas");
-    return combineNoAtlas(modelClone,avatar, options)
-  }
+  return combineNoAtlas(modelClone, avatar, exportOptions);
 }
 
 
-export async function downloadGLB(model, fileName = "", options){
+export async function downloadGLB(model, avatar, fileName = "", options = {}){
   const downloadFileName = `${
     fileName && fileName !== "" ? fileName : "AvatarCreatorModel"
   }`
@@ -165,7 +166,7 @@ export async function downloadGLB(model, fileName = "", options){
   const {optimized = true} = options;
 
   const finalModel = optimized ?
-    await getOptimizedGLB(model, options):
+    await getOptimizedGLB(model, avatar, options):
     getUnopotimizedGLB(model)
 
   parseGLB(finalModel)
@@ -180,7 +181,7 @@ export async function downloadGLB(model, fileName = "", options){
 }
 
 function parseGLB (glbModel, clips = []){
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const exporter =  new GLTFExporter();
     return exporter.parse(
         glbModel,
@@ -189,6 +190,7 @@ function parseGLB (glbModel, clips = []){
         },
         (error) => {
           console.error("Error parsing", error)
+          reject(error)
         },
         {
           trs: clips.length > 0,
