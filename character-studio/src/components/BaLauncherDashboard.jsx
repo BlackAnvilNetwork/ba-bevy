@@ -12,6 +12,7 @@ export default function BaLauncherDashboard({ onCustomize }) {
   const [error, setError] = useState("")
   const [status, setStatus] = useState("Loading local character…")
   const [busy, setBusy] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
   const [multiplayer, setMultiplayer] = useState(false)
   const [account, setAccount] = useState(null)
   const [authPending, setAuthPending] = useState(false)
@@ -27,6 +28,7 @@ export default function BaLauncherDashboard({ onCustomize }) {
     }
     invoke("get_draft").then((raw) => {
       if (!active) return
+      setDraftReady(true)
       if (!raw) {
         setCharacter(null)
         setStatus("No character saved yet")
@@ -166,7 +168,10 @@ export default function BaLauncherDashboard({ onCustomize }) {
             </div>
           </div>
           <div className="ba-actions">
-            <button type="button" className="ba-secondary" onClick={onCustomize}>{character ? "Customize character" : "Create character"}</button>
+            <button type="button" className="ba-secondary"
+              onClick={onCustomize} disabled={!draftReady || busy}>
+              {!draftReady ? "Checking character…" : character ? "Customize character" : "Create character"}
+            </button>
             {account?.connected && !character &&
               <button type="button" className="ba-secondary" onClick={restore} disabled={busy}>
                 Restore saved character
