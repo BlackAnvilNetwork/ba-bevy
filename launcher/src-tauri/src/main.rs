@@ -3,28 +3,32 @@
     windows_subsystem = "windows"
 )]
 
-//! Studio-host prototype IPC. Validates BaCharacterV1 + GLB before writing
-//! character-scoped files under app data, then updates the Bevy `active.*` pointer
-//! for local AssetServer loads (dev only — not an installed-release store).
+//! Black Anvil local launcher: explicit versioned character save and native
+//! Bevy handoff. Production requires Discord tickets and signed game packs.
+//! No game login or AA ownership is inferred from local filesystem contents.
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
+use atomicwrites::{AllowOverwrite, AtomicFile};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tauri::Manager;
 
-// A native Play action must not spawn duplicate game processes on double clicks.
 static RUNNING_GAME: Mutex<Option<Child>> = Mutex::new(None);
+static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 const MAX_GLB: usize = 32 * 1024 * 1024;
+const MAX_JSON: usize = 128 * 1024;
 const JOBS: &[&str] = &[
     "TimeMage", "Knight", "Rogue", "Cleric", "Sorcerer", "Fighter", "BattleMage", "Druid",
 ];
 
+#[cfg(debug_assertions)]
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -32,46 +36,33 @@ fn repo_root() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
 }
 
-fn exports_dir() -> PathBuf {
-    repo_root().join("assets").join("character").join("exports")
-}
-
-fn app_characters_dir() -> PathBuf {
-    dirs_next::data_local_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("BlackAnvil")
-        .join("characters")
+fn app_characters_dir() -> Result<PathBuf, String> {
+    let data_dir = dirs_next::data_local_dir()
+        .ok_or("Could not locate operating-system application data directory")?;
+    Ok(data_dir.join("BlackAnvil").join("characters"))
 }
 
 fn assert_safe_character_id(id: &str) -> Result<(), String> {
-    if id.is_empty() || id.len() > 64 {
-        return Err("characterId length".into());
-    }
-    if !id
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    if id.is_empty() || id.len() > 64
+        || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        || id == "." || id == ".."
     {
-        return Err("characterId must be alphanumeric/[_-] only".into());
-    }
-    if id == "." || id == ".." {
-        return Err("characterId reserved".into());
+        return Err("characterId must be a safe 1-64 character identifier".into());
     }
     Ok(())
 }
 
 fn scoped_under(root: &Path, id: &str) -> Result<PathBuf, String> {
     assert_safe_character_id(id)?;
-    let root = root
-        .canonicalize()
-        .unwrap_or_else(|_| root.to_path_buf());
-    fs::create_dir_all(&root).map_err(|e| e.to_string())?;
-    let candidate = root.join(id);
+    fs::create_dir_all(root).map_err(|e| e.to_string())?;
+    let canonical_root = root.canonicalize().map_err(|e| e.to_string())?;
+    let candidate = canonical_root.join(id);
     let resolved = if candidate.exists() {
         candidate.canonicalize().map_err(|e| e.to_string())?
     } else {
         candidate
     };
-    if !resolved.starts_with(&root) {
+    if !resolved.starts_with(&canonical_root) {
         return Err("characterId path escape blocked".into());
     }
     Ok(resolved)
@@ -99,154 +90,234 @@ struct BaCharacterV1 {
     runtime: RuntimeAsset,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SelectedCharacter {
+    character_id: String,
+    revision: u64,
+    content_hash: String,
+}
+
 fn validate_character(json: &str) -> Result<BaCharacterV1, String> {
+    if json.len() > MAX_JSON {
+        return Err("character definition too large".into());
+    }
     let c: BaCharacterV1 =
         serde_json::from_str(json).map_err(|e| format!("invalid BaCharacterV1: {e}"))?;
-    if c.schema_version != 1 {
-        return Err("schemaVersion must be 1".into());
-    }
-    if c.revision < 1 {
-        return Err("revision must be >= 1".into());
+    if c.schema_version != 1 || c.revision < 1 {
+        return Err("unsupported schemaVersion or revision".into());
     }
     assert_safe_character_id(&c.character_id)?;
-    if c.name.is_empty() || c.name.len() > 24 {
-        return Err("name length".into());
+    if c.name.trim().is_empty() || c.name.chars().count() > 24 {
+        return Err("invalid character name".into());
     }
     if !JOBS.contains(&c.starting_job.as_str()) {
-        return Err("startingJob".into());
+        return Err("unknown startingJob".into());
     }
-    if c.pack != "anata" {
-        return Err("pack".into());
+    if c.pack != "anata"
+        || (c.manifest_id != "anata/male" && c.manifest_id != "anata/female")
+    {
+        return Err("unknown character catalog".into());
     }
-    if c.manifest_id != "anata/male" && c.manifest_id != "anata/female" {
-        return Err("manifestId".into());
+    if c.catalog_version.is_empty() || c.runtime.format != "glb" {
+        return Err("invalid catalogVersion or asset format".into());
     }
-    if c.catalog_version.is_empty() {
-        return Err("catalogVersion".into());
-    }
-    if c.runtime.format != "glb" {
-        return Err("runtime.format".into());
-    }
-    let _ = c.runtime.relative_path;
+    let _ = c.runtime.relative_path; // Never trust unvalidated paths supplied by Studio.
     Ok(c)
 }
 
 fn assert_glb(bytes: &[u8]) -> Result<(), String> {
-    if bytes.len() < 12 {
-        return Err("glb too small".into());
+    if bytes.len() < 20 || bytes.len() > MAX_GLB || &bytes[0..4] != b"glTF" {
+        return Err("invalid GLB size or magic".into());
     }
-    if bytes.len() > MAX_GLB {
-        return Err("glb too large".into());
-    }
-    if &bytes[0..4] != b"glTF" {
-        return Err("glb magic must be glTF".into());
+    let version = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+    let declared_size = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
+    let json_chunk_size = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    if version != 2 || declared_size != bytes.len() || &bytes[16..20] != b"JSON"
+        || json_chunk_size > bytes.len().saturating_sub(20)
+    {
+        return Err("GLB v2 header or JSON chunk is invalid".into());
     }
     Ok(())
 }
 
-fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
-    fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, path).map_err(|e| e.to_string())?;
-    Ok(())
+fn glb_hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
-/// Write JSON+GLB into a staging directory with a COMMIT marker, then promote.
-fn transactional_character_write(
-    scoped: &Path,
-    json: &str,
+fn revision_folder(root: &Path, selected: &SelectedCharacter) -> Result<PathBuf, String> {
+    let character_dir = scoped_under(root, &selected.character_id)?;
+    if selected.revision == 0 {
+        return Err("invalid selected revision".into());
+    }
+    Ok(character_dir.join("revisions").join(format!("r{}", selected.revision)))
+}
+
+fn selection_path(root: &Path) -> PathBuf {
+    root.join("selected.json")
+}
+
+fn read_selection(root: &Path) -> Result<Option<SelectedCharacter>, String> {
+    let path = selection_path(root);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let raw = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let selected: SelectedCharacter =
+        serde_json::from_str(&raw).map_err(|e| format!("Corrupt selected character: {e}"))?;
+    assert_safe_character_id(&selected.character_id)?;
+    if selected.revision == 0 || selected.content_hash.len() != 64
+        || !selected.content_hash.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err("Invalid selected character pointer".into());
+    }
+    Ok(Some(selected))
+}
+
+fn read_selected_character(root: &Path) -> Result<Option<(SelectedCharacter, String, PathBuf)>, String> {
+    let Some(selected) = read_selection(root)? else {
+        return Ok(None);
+    };
+    let rev = revision_folder(root, &selected)?;
+    let json = fs::read_to_string(rev.join("character.json"))
+        .map_err(|e| format!("Character revision missing: {e}"))?;
+    let character = validate_character(&json)?;
+    if character.character_id != selected.character_id || character.revision != selected.revision {
+        return Err("Selected character revision does not match its record".into());
+    }
+    let glb_path = rev.join("character.glb");
+    let bytes = fs::read(&glb_path).map_err(|e| format!("Character avatar missing: {e}"))?;
+    assert_glb(&bytes)?;
+    if glb_hash(&bytes) != selected.content_hash {
+        return Err("Character avatar has changed since save; re-save it in Studio".into());
+    }
+    Ok(Some((selected, json, glb_path)))
+}
+
+fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let mut file = File::create(path).map_err(|e| e.to_string())?;
+    file.write_all(bytes).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())
+}
+
+/// Publish immutable revision files *before* atomically selecting the new revision.
+/// A crash before selection leaves the prior character usable and the new
+/// revision safely retryable. No JSON/GLB active-pair rewrite is required.
+fn save_revision(
+    root: &Path,
+    character: &BaCharacterV1,
+    normalized: &str,
     glb: &[u8],
-    active_json: &Path,
-    active_glb: &Path,
-) -> Result<(), String> {
-    fs::create_dir_all(scoped).map_err(|e| e.to_string())?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let staging = scoped.join(format!(".staging-{}-{}", std::process::id(), stamp));
-    fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
-    fs::write(staging.join("character.json"), json.as_bytes()).map_err(|e| e.to_string())?;
-    fs::write(staging.join("character.glb"), glb).map_err(|e| e.to_string())?;
-    // COMMIT last — incomplete staging is discarded.
-    fs::write(staging.join("COMMIT"), b"ok\n").map_err(|e| e.to_string())?;
-
-    atomic_write(&scoped.join("character.json"), json.as_bytes())?;
-    atomic_write(&scoped.join("character.glb"), glb)?;
-    fs::write(scoped.join("COMMIT"), format!("{stamp}\n")).map_err(|e| e.to_string())?;
-
-    if let Some(parent) = active_json.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    hash: &str,
+) -> Result<PathBuf, String> {
+    let existing = read_selection(root)?;
+    if let Some(old) = &existing {
+        if old.character_id == character.character_id {
+            if character.revision < old.revision {
+                return Err("Refusing to overwrite newer character revision".into());
+            }
+            if character.revision == old.revision && old.content_hash != hash {
+                return Err("Revision conflict: new avatar requires a higher revision".into());
+            }
+        }
     }
-    atomic_write(active_json, json.as_bytes())?;
-    atomic_write(active_glb, glb)?;
 
-    let _ = fs::remove_dir_all(&staging);
-    Ok(())
+    let pointer = SelectedCharacter {
+        character_id: character.character_id.clone(),
+        revision: character.revision,
+        content_hash: hash.to_string(),
+    };
+    let rev = revision_folder(root, &pointer)?;
+    if rev.is_dir() {
+        let old_json = fs::read_to_string(rev.join("character.json"))
+            .map_err(|e| e.to_string())?;
+        let old_glb = fs::read(rev.join("character.glb")).map_err(|e| e.to_string())?;
+        if old_json != normalized || glb_hash(&old_glb) != hash {
+            return Err("Revision already exists with different contents".into());
+        }
+    } else {
+        let parent = rev.parent().ok_or("Invalid revisions path")?;
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        let stage = parent.join(format!(
+            ".pending-r{}-{}-{}",
+            character.revision,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| e.to_string())?
+                .as_nanos()
+        ));
+        fs::create_dir(&stage).map_err(|e| e.to_string())?;
+        let write_result = (|| {
+            write_synced(&stage.join("character.json"), normalized.as_bytes())?;
+            write_synced(&stage.join("character.glb"), glb)?;
+            fs::rename(&stage, &rev).map_err(|e| e.to_string())?;
+            Ok::<(), String>(())
+        })();
+        if write_result.is_err() {
+            let _ = fs::remove_dir_all(&stage);
+        }
+        write_result?;
+    }
+
+    // This is the sole active-selection mutation. Atomic on Windows and POSIX.
+    let data = serde_json::to_vec(&pointer).map_err(|e| e.to_string())?;
+    AtomicFile::new(selection_path(root), AllowOverwrite)
+        .write(|f| {
+            f.write_all(&data)?;
+            f.sync_all()
+        })
+        .map_err(|e| format!("Could not select saved character: {e}"))?;
+    Ok(rev)
 }
 
-/// Persist BaCharacterV1 JSON + GLB (validated) for Bevy.
 #[tauri::command]
 fn save_draft(character_json: String, glb_base64: String) -> Result<serde_json::Value, String> {
+    let _guard = SAVE_LOCK.lock().map_err(|_| "character save lock poisoned")?;
     let c = validate_character(&character_json)?;
-    let glb = B64
-        .decode(glb_base64.as_bytes())
-        .map_err(|e| format!("invalid glb base64: {e}"))?;
+    if glb_base64.len() > MAX_GLB * 4 / 3 + 8 {
+        return Err("avatar upload too large".into());
+    }
+    let glb = B64.decode(glb_base64.as_bytes())
+        .map_err(|e| format!("invalid avatar encoding: {e}"))?;
     assert_glb(&glb)?;
+    let hash = glb_hash(&glb);
 
     let mut value: serde_json::Value =
         serde_json::from_str(&character_json).map_err(|e| e.to_string())?;
     if let Some(runtime) = value.get_mut("runtime") {
         runtime["format"] = serde_json::json!("glb");
-        runtime["relativePath"] = serde_json::json!("character/exports/active.glb");
+        runtime["relativePath"] = serde_json::json!(
+            format!("character://{}/revisions/r{}/character.glb", c.character_id, c.revision)
+        );
+        runtime["contentHash"] = serde_json::json!(hash);
     }
     let normalized = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
-
-    let scoped = scoped_under(&app_characters_dir(), &c.character_id)?;
-    let exports = exports_dir();
-    transactional_character_write(
-        &scoped,
-        &normalized,
-        &glb,
-        &exports.join("active.json"),
-        &exports.join("active.glb"),
-    )?;
-
+    let root = app_characters_dir()?;
+    let rev = save_revision(&root, &c, &normalized, &glb, &hash)?;
     Ok(serde_json::json!({
-        "ok": true,
-        "prototype": true,
-        "json": "assets/character/exports/active.json",
-        "glb": "assets/character/exports/active.glb",
-        "scoped": scoped.display().to_string(),
-        "bytes": glb.len(),
+        "ok": true, "prototype": true, "revision": c.revision,
+        "json": rev.join("character.json").display().to_string(),
+        "glb": rev.join("character.glb").display().to_string(),
+        "contentHash": hash,
     }))
 }
 
 #[tauri::command]
 fn get_draft() -> Result<Option<String>, String> {
-    let path = exports_dir().join("active.json");
-    if !path.is_file() {
-        return Ok(None);
-    }
-    fs::read_to_string(path).map(Some).map_err(|e| e.to_string())
+    let root = app_characters_dir()?;
+    Ok(read_selected_character(&root)?.map(|(_, json, _)| json))
 }
 
-
-/// Launch a native Bevy game process without accepting an arbitrary executable path.
-///
-/// The development preview uses this checkout's compiled Bevy binary. A production
-/// installer must bundle a signed executable and matching assets before this path
-/// is eligible for release. Discord session-ticket handoff is a separate gate.
+/// Start the native Bevy executable with the *selected immutable revision*.
+/// The selected revision is verified before game launch. This is a local preview,
+/// not a Discord-authenticated or signed-production game session.
 #[tauri::command]
 fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::Value, String> {
-    let draft = get_draft()?.ok_or("Create and save a character before playing")?;
-    validate_character(&draft)?;
-    if !exports_dir().join("active.glb").is_file() {
-        return Err("The character's avatar is missing. Save it again in Character Studio.".into());
-    }
+    let root = app_characters_dir()?;
+    let (selected, _, glb) = read_selected_character(&root)?
+        .ok_or("Create and save your character in Studio before playing")?;
+    let draft_path = revision_folder(&root, &selected)?.join("character.json");
 
     let mut running = RUNNING_GAME.lock().map_err(|_| "game process lock poisoned")?;
     if let Some(child) = running.as_mut() {
@@ -269,42 +340,42 @@ fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::V
     let (binary, working_dir) = {
         let game = app.path_resolver()
             .resolve_resource(if cfg!(windows) { "game/black_anvil.exe" } else { "game/black_anvil" })
-            .ok_or("Game is not packaged with this launcher release")?;
-        let root = game.parent().ok_or("Invalid packaged game path")?.to_path_buf();
-        (game, root)
+            .ok_or("Bevy game is not included with this launcher build")?;
+        let dir = game.parent().ok_or("Invalid packaged game path")?.to_path_buf();
+        (game, dir)
     };
-    let _ = &app; // Debug builds do not need the production resource resolver.
+    let _ = &app;
 
     #[cfg(debug_assertions)]
     if multiplayer {
-        let zone = std::net::SocketAddr::from(([127, 0, 0, 1], 8787));
-        std::net::TcpStream::connect_timeout(&zone, std::time::Duration::from_millis(350))
-            .map_err(|_| "Local zone server is not running. Start cargo run -p ba_zone_server, or uncheck multiplayer.".to_string())?;
+        let address = std::net::SocketAddr::from(([127, 0, 0, 1], 8787));
+        std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_millis(350))
+            .map_err(|_| "Local zone is unavailable; start cargo run -p ba_zone_server".to_string())?;
     }
 
     if !binary.is_file() {
-        return Err(format!(
-            "Bevy game executable not installed at {}. Development: run cargo build --bin black_anvil first.",
-            binary.display()
-        ));
+        return Err(format!("Bevy game executable not installed: {}", binary.display()));
     }
     let mut command = Command::new(&binary);
     command.current_dir(&working_dir);
-    // Explicit native launcher entry: Bevy skips its separate developer forge.
     command.env("BA_LAUNCH_MODE", "game");
+    command.env("BA_CHARACTER_ROOT", &root);
+    command.env("BA_CHARACTER_DRAFT_PATH", &draft_path);
+    command.env("BA_CHARACTER_GLB_PATH", &glb);
     if multiplayer {
         command.env("BA_ZONE", "1");
     } else {
         command.env_remove("BA_ZONE");
         command.env_remove("BA_ZONE_URL");
     }
-    let child = command.spawn().map_err(|e| format!("Could not start Bevy: {e}"))?;
+    let child = command.spawn().map_err(|e| format!("Failed to launch Bevy: {e}"))?;
     let pid = child.id();
     *running = Some(child);
     Ok(serde_json::json!({
-        "pid": pid,
-        "alreadyRunning": false,
-        "mode": if multiplayer { "loopback-zone" } else { "local-preview" }
+        "pid": pid, "alreadyRunning": false,
+        "mode": if multiplayer { "loopback-zone" } else { "local-preview" },
+        "characterId": selected.character_id,
+        "revision": selected.revision
     }))
 }
 
@@ -313,4 +384,25 @@ fn main() {
         .invoke_handler(tauri::generate_handler![save_draft, get_draft, launch_game])
         .run(tauri::generate_context!())
         .expect("error while running Black Anvil launcher");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_path_traversal_and_bad_glb() {
+        assert!(assert_safe_character_id("../escape").is_err());
+        assert!(assert_safe_character_id("a/b").is_err());
+        assert!(assert_safe_character_id("aaa_bbb-001").is_ok());
+        assert!(assert_glb(b"not gltf").is_err());
+    }
+
+    #[test]
+    fn enforces_revision_and_schema_bounds() {
+        let base = r#"{"schemaVersion":1,"revision":1,"characterId":"abc-123","name":"Chrona","startingJob":"TimeMage","pack":"anata","manifestId":"anata/male","catalogVersion":"1","runtime":{"format":"glb"}}"#;
+        assert!(validate_character(base).is_ok());
+        assert!(validate_character(&base.replace("\"revision\":1", "\"revision\":0")).is_err());
+        assert!(validate_character(&base.replace("TimeMage", "UnknownJob")).is_err());
+    }
 }
