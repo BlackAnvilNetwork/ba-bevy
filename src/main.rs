@@ -1,4 +1,5 @@
 mod atmosphere;
+mod avatar_delivery;
 mod boss;
 mod cel;
 mod character;
@@ -34,8 +35,8 @@ use character::{
 };
 use data::load_game_data;
 use net::{
-    apply_zone_snapshots, connect_zone_on_enter, interpolate_remote_players, maybe_enable_zone_net,
-    send_local_move, ZoneNet, ZonePrediction,
+    apply_zone_snapshots, connect_zone_on_enter, interpolate_remote_players,
+    refresh_remote_avatar_models, maybe_enable_zone_net, send_local_move, ZoneNet, ZonePrediction,
 };
 use debug_shot::{
     capture_debug_shot, spawn_debug_hud, toggle_debug_hud, type_note, update_debug_hud,
@@ -147,6 +148,7 @@ fn main() {
                 send_local_move.run_if(in_yard).after(look_player),
                 apply_zone_snapshots.run_if(in_yard).after(send_local_move),
                 interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
+                refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
             ),
         )
         .add_systems(
