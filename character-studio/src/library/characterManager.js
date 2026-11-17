@@ -683,21 +683,13 @@ export class CharacterManager {
      * Loads initial traits based on manifest data.
      * @returns {Promise<void>} Promise that resolves when traits are loaded
      */
-    loadInitialTraits() {
-      return new Promise(async(resolve, reject) => {
-        // Check if manifest data is available
-        if (this.manifestDataManager.hasExistingManifest()) {
-          // Load initial traits using the _loadTraits method
-          await this._loadTraits(this.manifestDataManager.getInitialTraits());
-
-          resolve();
-        } else {
-          // Manifest data is not available, log an error and reject the Promise
-          const errorMessage = "No manifest was loaded, initial traits cannot be loaded.";
-          console.error(errorMessage);
-          reject(new Error(errorMessage));
-        }
-      });
+    async loadInitialTraits() {
+      // Using an async Promise executor here previously swallowed rejections
+      // from _loadTraits, leaving the creator stuck loading indefinitely.
+      if (!this.manifestDataManager.hasExistingManifest()) {
+        throw new Error("No manifest was loaded, initial traits cannot be loaded.");
+      }
+      await this._loadTraits(this.manifestDataManager.getInitialTraits());
     }
 
     /**
