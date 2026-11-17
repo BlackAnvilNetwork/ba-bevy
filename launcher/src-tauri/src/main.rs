@@ -15,6 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde::Deserialize;
+use tauri::Manager;
 
 // A native Play action must not spawn duplicate game processes on double clicks.
 static RUNNING_GAME: Mutex<Option<Child>> = Mutex::new(None);
@@ -272,7 +273,7 @@ fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::V
         let root = game.parent().ok_or("Invalid packaged game path")?.to_path_buf();
         (game, root)
     };
-    let _ = &app;
+    let _ = &app; // Debug builds do not need the production resource resolver.
 
     if !binary.is_file() {
         return Err(format!(
