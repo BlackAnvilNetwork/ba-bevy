@@ -166,7 +166,7 @@ fn main() {
         .add_systems(
             Update,
             (
-                cycle_job.run_if(in_yard),
+                cycle_job.run_if(offline_yard),
                 // Local boss/XP sim is offline-only; zone WelcomeVerified owns combat HP.
                 boss_fight
                     .after(tick_possession)
@@ -211,5 +211,6 @@ fn in_yard(flow: Res<GameFlow>) -> bool {
 }
 
 fn offline_yard(flow: Res<GameFlow>, net: Res<ZoneNet>) -> bool {
-    !flow.in_menu() && !net.online()
+    // Never execute local-authoritative combat/XP while waiting for a zone handshake.
+    !flow.in_menu() && !net.enabled
 }
