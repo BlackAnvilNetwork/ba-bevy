@@ -388,6 +388,49 @@ fn get_draft() -> Result<Option<String>, String> {
     Ok(read_selected_character(&root)?.map(|(_, json, _)| json))
 }
 
+/// Explicitly restore the Discord-account-owned character on a new PC.
+/// Never silently replace a more recent local revision or a different avatar.
+#[tauri::command]
+async fn restore_account_character()->Result<serde_json::Value,String> {
+    let Some((mut remote,bytes))=discord::retrieve_character().await? else {
+        return Ok(serde_json::json!({"restored":false,"reason":"no_account_character"}));
+    };
+    assert_glb(&bytes)?;
+    let hash=glb_hash(&bytes);
+    let id=remote.get("characterId").and_then(serde_json::Value::as_str)
+        .ok_or("Account character is missing its ID")?.to_owned();
+    let revision=remote.get("revision").and_then(serde_json::Value::as_u64)
+        .ok_or("Account character is missing its revision")?;
+    assert_safe_character_id(&id)?;
+    let root=app_characters_dir()?;
+
+    let _guard=SAVE_LOCK.lock().map_err(|_|"Character restore lock poisoned")?;
+    if let Some(selected)=read_selection(&root)? {
+        if selected.character_id==id && selected.revision==revision
+            && selected.content_hash==hash {
+            return Ok(serde_json::json!({"restored":false,"alreadyLocal":true,"characterId":id}));
+        }
+        if selected.character_id!=id || selected.revision>=revision {
+            return Err("Local character is newer or belongs to another account; restore will not overwrite it".into());
+        }
+    }
+
+    remote["runtime"]=serde_json::json!({
+        "format":"glb",
+        "relativePath":format!("character://{id}/revisions/r{revision}/character.glb"),
+        "contentHash":hash,
+    });
+    let json=serde_json::to_string_pretty(&remote).map_err(|_|"Malformed account character")?;
+    let parsed=validate_character(&json)?;
+    if parsed.character_id!=id || parsed.revision!=revision {
+        return Err("Saved account record does not match the selected character".into());
+    }
+    save_revision(&root,&parsed,&json,&bytes,&hash)?;
+    Ok(serde_json::json!({
+        "restored":true,"characterId":id,"revision":revision,"contentHash":hash,
+    }))
+}
+
 /// Start the native Bevy executable with the *selected immutable revision*.
 /// The selected revision is verified before game launch. This is a local preview,
 /// not a Discord-authenticated or signed-production game session.
@@ -495,7 +538,7 @@ async fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_j
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            save_draft, get_draft, launch_game,
+            save_draft, get_draft, restore_account_character, launch_game,
             discord::begin_discord_login, discord::poll_discord_login,
             discord::discord_account, discord::discord_logout,
         ])
