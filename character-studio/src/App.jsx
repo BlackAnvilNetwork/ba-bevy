@@ -112,7 +112,8 @@ export default function App() {
     moveCamera,
     setManifest,
     lookAtManager,
-    showEnvironmentModels
+    showEnvironmentModels,
+    characterManager,
   } = useContext(SceneContext)
   const { viewMode, setViewMode } = useContext(ViewContext)
 
