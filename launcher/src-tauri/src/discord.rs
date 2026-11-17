@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use std::time::{Duration,Instant};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::Deserialize;
+use sha2::Digest;
 use serde_json::{json,Value};
 
 static LOGIN: Mutex<Option<PendingLogin>> = Mutex::new(None);
