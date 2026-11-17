@@ -65,13 +65,26 @@ use well::{tick_well, tick_well_splash, WellPour};
 
 fn main() {
     let asset_root = {
-        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-        if manifest.is_dir() {
-            manifest
+        // Installed builds must never read the developer's build-directory
+        // path baked into CARGO_MANIFEST_DIR. Launcher passes the packaged,
+        // verified game/assets directory explicitly.
+        if let Some(root) = std::env::var_os("BA_GAME_ASSET_ROOT") {
+            PathBuf::from(root)
         } else {
-            PathBuf::from("assets")
+            let installed = std::env::current_exe().ok()
+                .and_then(|exe| exe.parent().map(|dir| dir.join("assets")));
+            match installed {
+                Some(dir) if dir.is_dir() => dir,
+                _ => {
+                    let dev=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
+                    if dev.is_dir() { dev } else { PathBuf::from("assets") }
+                }
+            }
         }
     };
+    if !asset_root.is_dir() {
+        eprintln!("Black Anvil game assets missing at {}",asset_root.display());
+    }
 
     // User-customized character assets live in a separate, read-only Bevy
     // asset source. Launcher-managed revisions are never copied into the
