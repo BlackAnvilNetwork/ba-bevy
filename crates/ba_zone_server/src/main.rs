@@ -879,7 +879,7 @@ mod tests {
     fn interest_filter_rejects_out_of_range_players() {
         let origin = DEFAULT_SPAWN;
         let near = Pose { x: 20.0, ..origin };
-        let far = Pose { x: INTEREST_RADIUS_METERS + 0.01, ..origin };
+        let far = Pose { x: origin.x + INTEREST_RADIUS_METERS + 1.0, ..origin };
         assert!(dist_xz(origin, near) < INTEREST_RADIUS_METERS);
         assert!(dist_xz(origin, far) > INTEREST_RADIUS_METERS);
     }
