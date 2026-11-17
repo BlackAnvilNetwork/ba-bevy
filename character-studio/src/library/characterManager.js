@@ -365,7 +365,7 @@ export class CharacterManager {
       if (this.canDownload()){
         exportOptions = exportOptions || {}
         const finalOptions = {...this.manifestDataManager.getExportOptions(), ...exportOptions};
-        downloadGLB(this.characterModel, name, finalOptions);
+        downloadGLB(this.characterModel, this.avatar, name, finalOptions);
       }
       else{
         console.error("Download not supported");
@@ -377,7 +377,7 @@ export class CharacterManager {
     async getGLBBlob(exportOptions = null){
       exportOptions = exportOptions || {}
       const finalOptions = {...this.manifestDataManager.getExportOptions(), ...exportOptions};
-      return getGLBBlobData(this.characterModel, finalOptions);
+      return getGLBBlobData(this.characterModel, this.avatar, finalOptions);
     }
     /**
      * Gets the current avatar selection.
