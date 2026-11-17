@@ -66,7 +66,7 @@ pub fn spawn_hud(mut commands: Commands) {
         .with_children(|root| {
             root.spawn((
                 PromptText,
-                Text::new("Click to look · WASD move · E talk · T note · Enter sends it"),
+                Text::new("Click to look · WASD move · V/F5 camera · E talk · T note"),
                 TextFont::from_font_size(18.0),
                 TextColor(Color::srgba(0.85, 0.78, 0.65, 0.9)),
                 Node {
