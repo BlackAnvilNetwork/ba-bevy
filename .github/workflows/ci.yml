@@ -20,6 +20,16 @@ jobs:
       - name: Shared protocol & zone unit tests
         run: cargo test -p ba_protocol -p ba_zone_server
 
+  gateway:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile Discord gateway
+        run: cargo check -p ba_gateway
+      - name: Gateway API, security and persistence unit tests
+        run: cargo test -p ba_gateway
+
   zone-smoke:
     runs-on: windows-latest
     needs: rust
