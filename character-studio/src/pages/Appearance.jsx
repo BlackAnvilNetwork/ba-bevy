@@ -1,5 +1,6 @@
 import React, { useContext } from "react"
 import styles from "./Appearance.module.css"
+import { finishBaCharacterForGame } from "../library/ba-game-handoff"
 import { ViewMode, ViewContext } from "../context/ViewContext"
 import { SceneContext } from "../context/SceneContext"
 import CustomButton from "../components/custom-button"
@@ -218,7 +219,7 @@ function baHairColors(selectedTrait) {
   return preferred.length ? preferred : all.slice(0, 14)
 }
 
-function Appearance() {
+function Appearance({ onCharacterSaved }) {
   const { isLoading, setViewMode, setIsLoading } = React.useContext(ViewContext)
   const {
     toggleDebugMode,
@@ -230,6 +231,10 @@ function Appearance() {
   const [traitView, setTraitView] = React.useState(TraitPage.TRAIT)
   const baMode = import.meta.env.VITE_BA_MODE === "1"
   const [traitsVersion, setTraitsVersion] = React.useState(0)
+  const [baFinishing, setBaFinishing] = React.useState(false)
+  const [baFinishError, setBaFinishError] = React.useState("")
+  const [baFinishNotice, setBaFinishNotice] = React.useState("")
+  const baFinishPending = React.useRef(false)
 
   const { playSound } = React.useContext(SoundContext)
   const { isMute } = React.useContext(AudioContext)
@@ -253,6 +258,31 @@ function Appearance() {
     }
   }, [])
   
+
+  // Black Anvil native flow: Done saves the selected character revision and
+  // returns to the launcher with Play enabled. No export/download menu.
+  const finishForBlackAnvil = async () => {
+    if (baFinishPending.current || isLoading) return
+    baFinishPending.current = true
+    setBaFinishing(true)
+    setBaFinishError("")
+    setBaFinishNotice("")
+    try {
+      const { character } = await finishBaCharacterForGame(characterManager)
+      if (typeof onCharacterSaved === "function") {
+        onCharacterSaved(character)
+      } else {
+        setBaFinishNotice("Character saved. Open the Black Anvil launcher to play.")
+      }
+      !isMute && playSound("backNextButton")
+    } catch (error) {
+      console.error("Black Anvil character save failed:", error)
+      setBaFinishError(error?.message || "Could not save this character. Try again.")
+    } finally {
+      baFinishPending.current = false
+      setBaFinishing(false)
+    }
+  }
 
   const back = () => {
     !isMute && playSound('backNextButton');
@@ -949,10 +979,18 @@ function Appearance() {
           </div>
         )}
 
+        {(baFinishError || baFinishNotice) && (
+          <div className={baFinishError ? styles.baFinishError : styles.baFinishNotice}
+            role={baFinishError ? "alert" : "status"}>
+            {baFinishError || baFinishNotice}
+          </div>
+        )}
         <div className={styles.baFooter}>
-          <CustomButton theme="light" text={t("callToAction.back")} size={14} onClick={back} />
+          <CustomButton theme="light" text={t("callToAction.back")} size={14}
+            onClick={() => { if (!baFinishPending.current) back() }} />
           {characterManager.canDownload() && (
-            <CustomButton theme="light" text="Done" size={14} onClick={next} />
+            <CustomButton theme="light" text={baFinishing ? "Saving character…" : "Done"}
+              size={14} onClick={finishForBlackAnvil} />
           )}
         </div>
       </div>
