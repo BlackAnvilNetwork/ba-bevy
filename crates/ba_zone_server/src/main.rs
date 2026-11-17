@@ -395,60 +395,100 @@ async fn handle_connection(
                 match incoming {
                     Some(Ok(Message::Text(text))) => {
                         match ClientMessage::from_json(&text) {
-                            Ok(ClientMessage::Hello { protocol, appearance, pose: _client_pose }) => {
+                            Ok(ClientMessage::Hello { protocol, appearance, pose: _client_pose, ticket, reconnect_token }) => {
                                 if player_id.is_some() {
-                                    let reject = ServerMessage::Reject {
-                                        reason: "duplicate hello".into(),
-                                    };
+                                    let reject = ServerMessage::Reject { reason: "duplicate hello".into() };
                                     write.send(Message::Text(reject.to_json()?.into())).await?;
                                     continue;
                                 }
                                 if protocol != PROTOCOL_VERSION {
                                     let reject = ServerMessage::Reject {
-                                        reason: format!(
-                                            "protocol {protocol} != server {PROTOCOL_VERSION}"
-                                        ),
+                                        reason: format!("protocol {protocol} != server {PROTOCOL_VERSION}"),
                                     };
                                     write.send(Message::Text(reject.to_json()?.into())).await?;
                                     break;
                                 }
-                                if appearance.name.trim().is_empty()
-                                    || !safe_character_id(&appearance.character_id)
-                                {
-                                    let reject = ServerMessage::Reject {
-                                        reason: "name and safe characterId required".into(),
+
+                                // Authenticated mode does not use client-provided name, job,
+                                // spawn, trait map or model hash. All come from a Discord-owned
+                                // character record that one-use gateway redemption resolves.
+                                let (appearance, pose, account_id, character_id, xp, level, hp_stored,
+                                     inventory, state_revision, new_reconnect) =
+                                    if let Some(gateway) = mode.gateway() {
+                                        let admitted = gateway.admit(ticket.as_deref(), reconnect_token.as_deref()).await;
+                                        let profile = match admitted {
+                                            Ok(profile) => profile,
+                                            Err(reason) => {
+                                                let reject = ServerMessage::Reject { reason };
+                                                write.send(Message::Text(reject.to_json()?.into())).await?;
+                                                break;
+                                            }
+                                        };
+                                        if appearance.character_id != profile.character_id {
+                                            let reject = ServerMessage::Reject { reason: "character_ticket_mismatch".into() };
+                                            write.send(Message::Text(reject.to_json()?.into())).await?;
+                                            break;
+                                        }
+                                        (
+                                            profile.appearance,
+                                            clamp_pose(profile.pose),
+                                            Some(profile.account_id),
+                                            profile.character_id,
+                                            profile.xp,
+                                            profile.level.max(1),
+                                            Some(profile.hp),
+                                            profile.inventory,
+                                            profile.state_revision,
+                                            Some(profile.reconnect_token),
+                                        )
+                                    } else {
+                                        if appearance.name.trim().is_empty()
+                                            || !safe_character_id(&appearance.character_id)
+                                        {
+                                            let reject=ServerMessage::Reject { reason: "invalid_dev_character".into() };
+                                            write.send(Message::Text(reject.to_json()?.into())).await?;
+                                            break;
+                                        }
+                                        let mut appearance=appearance;
+                                        appearance.glb_content_hash=appearance.glb_content_hash
+                                            .filter(|h|h.len()==64 && h.chars().all(|c|c.is_ascii_hexdigit()));
+                                        let character_id=appearance.character_id.clone();
+                                        (
+                                            appearance,
+                                            DEFAULT_SPAWN,
+                                            None,
+                                            character_id,
+                                            0_u64,
+                                            1_u32,
+                                            None,
+                                            Value::Array(Vec::new()),
+                                            0_u64,
+                                            None,
+                                        )
                                     };
-                                    write.send(Message::Text(reject.to_json()?.into())).await?;
-                                    break;
-                                }
-                                // Sanitize appearance: drop any path-like fields (wire uses hash only).
-                                let mut appearance = appearance;
-                                appearance.glb_content_hash = appearance
-                                    .glb_content_hash
-                                    .filter(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()));
 
                                 let job = JobId::parse(&appearance.starting_job);
                                 let stats = starter_stats(job);
                                 let max_hp = starter_max_hp(job);
                                 let max_mp = 80 + stats.mnd * 4 + stats.int * 2;
                                 let id = next_id.fetch_add(1, Ordering::Relaxed);
-                                // Server-chosen spawn (ignore client pose for admission).
-                                let pose = DEFAULT_SPAWN;
-                                {
+                                let inserted = {
                                     let mut w = world.write().await;
-                                    w.players.insert(
-                                        id,
-                                        Player {
+                                    if w.players.values().any(|p| p.character_id == character_id) {
+                                        false // single simultaneous character session
+                                    } else {
+                                        w.players.insert(id, Player {
+                                            account_id,
+                                            character_id,
+                                            xp, level, inventory, state_revision,
                                             appearance: appearance.clone(),
                                             pose,
                                             movement: None,
                                             last_input_seq: 0,
-                                            job,
-                                            stats,
-                                            hp: max_hp,
+                                            job, stats,
+                                            hp: hp_stored.unwrap_or(max_hp).clamp(0,max_hp),
                                             max_hp,
-                                            mp: max_mp,
-                                            max_mp,
+                                            mp: max_mp, max_mp,
                                             swing_cd: 0.0,
                                             engage_target: None,
                                             recast_ready: HashMap::new(),
@@ -457,20 +497,25 @@ async fn handle_connection(
                                             atk_mul_until: None,
                                             move_packets_window: 0,
                                             move_window_start: Instant::now(),
-                                        },
-                                    );
+                                        });
+                                        true
+                                    }
+                                };
+                                if !inserted {
+                                    let reject=ServerMessage::Reject { reason: "character_already_online".into() };
+                                    write.send(Message::Text(reject.to_json()?.into())).await?;
+                                    break;
                                 }
                                 player_id = Some(id);
                                 let tick = world.read().await.tick;
                                 let welcome = ServerMessage::Welcome {
                                     protocol: PROTOCOL_VERSION,
-                                    player_id: id,
-                                    tick,
-                                    tick_hz: TICK_HZ,
+                                    player_id: id, tick, tick_hz: TICK_HZ,
                                     spawn: pose,
+                                    reconnect_token: new_reconnect,
                                 };
                                 write.send(Message::Text(welcome.to_json()?.into())).await?;
-                                info!("{peer}: hello as {} ({job:?}) id={id}", appearance.name);
+                                info!("{peer}: admitted {} id={id} (authenticated={})", appearance.name, !mode.dev());
                             }
                             Ok(ClientMessage::MoveIntent { seq, forward, strafe, yaw, sprint }) => {
                                 let Some(id) = player_id else { continue };
