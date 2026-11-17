@@ -50,3 +50,23 @@ jobs:
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           }
+
+  launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Character Studio dependencies
+        working-directory: character-studio
+        run: npm ci --legacy-peer-deps
+      - name: Install launcher dependencies
+        working-directory: launcher
+        run: npm ci
+      - name: Build embedded Black Anvil Studio
+        working-directory: launcher
+        run: npm run studio:build
+      - name: Check native launcher commands
+        run: cargo check --manifest-path launcher/src-tauri/Cargo.toml
