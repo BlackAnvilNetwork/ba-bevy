@@ -1,9 +1,14 @@
 //! Authoritative Greymere zone — move + real-time melee using `ba_combat`.
 //!
-//! **Dev/loopback prototype.** Default bind is `127.0.0.1` only. Discord ticket
-//! admission is deferred (see #14/#15). Do not expose this process on a public NIC.
+//! Bind to loopback behind a WSS TLS reverse proxy. The gateway verifies
+//! Discord account, character, one-use ticket, reconnect, and persistence.
+//! An explicit BA_DEV_ALLOW_UNAUTH=1 is required for local-only smoke tests.
+
+mod auth;
 
 use std::collections::HashMap;
+use auth::{AdmissionMode, WorldSave};
+use serde_json::Value;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
@@ -52,6 +57,12 @@ struct MovementCommand {
 
 #[derive(Clone)]
 struct Player {
+    account_id: Option<String>,
+    character_id: String,
+    xp: u64,
+    level: u32,
+    inventory: Value,
+    state_revision: u64,
     appearance: AppearanceWire,
     pose: Pose,
     movement: Option<MovementCommand>,
@@ -101,6 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         warn!("kits.json missing — using legacy hotbar fallback");
     }
 
+    let mode = AdmissionMode::from_env()?;
     let addr = std::env::var("BA_ZONE_BIND").unwrap_or_else(|_| "127.0.0.1:8787".into());
     // This developer server has NO account authentication. Never permit a
     // public bind, even through an override flag. Discord ticket admission
@@ -121,6 +133,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
     let (snap_tx, _) = broadcast::channel::<String>(256);
     let next_id = Arc::new(AtomicU32::new(1));
+
+    // Flush authoritative state periodically. Writes are revisioned and can be
+    // replayed/retried without accepting stale snapshots. Disconnect flushes
+    // immediately below. This is a durability baseline, not an item ledger.
+    if let Some(gateway) = mode.gateway().cloned() {
+        let players = world.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            interval.tick().await; // no immediate empty save
+            loop {
+                interval.tick().await;
+                let updates: Vec<WorldSave> = {
+                    let mut w = players.write().await;
+                    w.players.values_mut().filter_map(next_world_save).collect()
+                };
+                for state in updates {
+                    if let Err(err) = gateway.save(state).await {
+                        warn!("Failed durable zone state flush: {err}");
+                    }
+                }
+            }
+        });
+    }
 
     {
         let world = world.clone();
@@ -154,12 +189,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let world = world.clone();
         let snap_tx = snap_tx.clone();
         let next_id = next_id.clone();
+        let mode = mode.clone();
         tokio::spawn(async move {
-            if let Err(err) = handle_connection(stream, peer, world, snap_tx, next_id).await {
+            if let Err(err) = handle_connection(stream, peer, world, snap_tx, next_id, mode).await {
                 warn!("{peer}: {err}");
             }
         });
     }
+}
+
+/// Snapshot one player's progression for durable async persistence. The
+/// increasing revision keeps stale delayed writes from overwriting newer ones.
+fn next_world_save(p: &mut Player) -> Option<WorldSave> {
+    let account_id = p.account_id.clone()?;
+    p.state_revision = p.state_revision.saturating_add(1);
+    Some(WorldSave {
+        account_id,
+        character_id: p.character_id.clone(),
+        state_revision: p.state_revision,
+        pose: p.pose,
+        hp: p.hp,
+        xp: p.xp,
+        level: p.level,
+        inventory: p.inventory.clone(),
+    })
 }
 
 fn snapshot_message_for(w: &World, viewer_id: u32) -> ServerMessage {
@@ -178,6 +231,8 @@ fn snapshot_message_for(w: &World, viewer_id: u32) -> ServerMessage {
             appearance: p.appearance.clone(),
             hp: p.hp,
             max_hp: p.max_hp,
+            level: p.level,
+            xp: p.xp,
             last_input_seq: p.last_input_seq,
         })
     }).collect();
@@ -313,6 +368,7 @@ async fn handle_connection(
     world: SharedWorld,
     snap_tx: broadcast::Sender<String>,
     next_id: Arc<AtomicU32>,
+    mode: AdmissionMode,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
     let (mut write, mut read) = ws.split();
@@ -516,7 +572,15 @@ async fn handle_connection(
     }
 
     if let Some(id) = player_id {
-        world.write().await.players.remove(&id);
+        let save = {
+            let mut w = world.write().await;
+            w.players.remove(&id).and_then(|mut p| next_world_save(&mut p))
+        };
+        if let (Some(client),Some(state)) = (mode.gateway(), save) {
+            if let Err(err) = client.save(state).await {
+                warn!("{peer}: last state could not be persisted: {err}");
+            }
+        }
         info!("{peer}: left (id={id})");
     }
     Ok(())
