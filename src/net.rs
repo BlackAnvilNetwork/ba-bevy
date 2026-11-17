@@ -580,6 +580,7 @@ pub fn apply_zone_snapshots(
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
                 net.phase = ZonePhase::Disconnected;
+                prediction.reset(None);
                 net.tx = None;
                 net.rx = None;
                 net.local_player_id = None;
