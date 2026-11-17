@@ -221,7 +221,7 @@ mod character_schema_tests {
 
     #[test]
     fn studio_traits_round_trip_with_mixed_blendshape_selection_types() {
-        let json = r#"{
+        let json = r##"{
             "schemaVersion": 1, "revision": 2, "characterId": "test-id",
             "name": "Chrona", "startingJob": "TimeMage", "pack": "anata",
             "manifestId": "anata/male", "catalogVersion": "anata-2026-11",
@@ -238,7 +238,7 @@ mod character_schema_tests {
                 "relativePath": "character://test-id/revisions/r2/character.glb",
                 "contentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             }
-        }"#;
+        }"##;
         let parsed: BaCharacterV1 = serde_json::from_str(json).unwrap();
         let head = &parsed.body_traits["Head"];
         assert_eq!(head.blendshapes["smile"], "wide-smile");
