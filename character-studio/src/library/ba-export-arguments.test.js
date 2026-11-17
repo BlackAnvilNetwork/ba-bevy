@@ -2,6 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { Bone, Group } from "three"
 
+// VRM exporters initialize WebGL KTX decoders as a module side effect.
+// This GLB unit test does not exercise VRM/KTX; stub them so Node/jsdom
+// never attempts to create a native WebGL compression context.
+vi.mock("./VRMExporter", () => ({ default: class VRMExporter {} }))
+vi.mock("./VRMExporterv0", () => ({ default: class VRMExporterv0 {} }))
+
+
 const mocks = vi.hoisted(() => ({
   combine: vi.fn(async (model) => model),
   combineNoAtlas: vi.fn(async (model) => model),
