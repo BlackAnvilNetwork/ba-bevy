@@ -35,7 +35,10 @@ pub struct TraitRef {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub blendshapes: BTreeMap<String, f32>,
+    // The current Studio stores blendshape trait IDs, booleans and sometimes
+    // numeric values. Do not reject valid edited avatars by assuming weights.
+    // A later canonical editor schema should normalize these to typed controls.
+    pub blendshapes: BTreeMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub colors: BTreeMap<String, String>,
 }
@@ -210,4 +213,39 @@ pub fn partition_trait_key(key: &str) -> TraitKind {
 pub enum TraitKind {
     Body,
     Equipment,
+}
+
+#[cfg(test)]
+mod character_schema_tests {
+    use super::*;
+
+    #[test]
+    fn studio_traits_round_trip_with_mixed_blendshape_selection_types() {
+        let json = r#"{
+            "schemaVersion": 1, "revision": 2, "characterId": "test-id",
+            "name": "Chrona", "startingJob": "TimeMage", "pack": "anata",
+            "manifestId": "anata/male", "catalogVersion": "anata-2026-11",
+            "bodyTraits": {
+                "Head": {
+                    "id": "head_1", "name": "Head",
+                    "blendshapes": {"smile": "wide-smile", "squint": true, "strength": 0.75},
+                    "colors": {"c0": "#dbbea7"}
+                }
+            },
+            "starterEquipment": {},
+            "runtime": {
+                "format": "glb",
+                "relativePath": "character://test-id/revisions/r2/character.glb",
+                "contentHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            }
+        }"#;
+        let parsed: BaCharacterV1 = serde_json::from_str(json).unwrap();
+        let head = &parsed.body_traits["Head"];
+        assert_eq!(head.blendshapes["smile"], "wide-smile");
+        assert_eq!(head.blendshapes["squint"], true);
+        assert_eq!(head.blendshapes["strength"], 0.75);
+        let roundtrip = serde_json::to_string(&parsed).unwrap();
+        let restored: BaCharacterV1 = serde_json::from_str(&roundtrip).unwrap();
+        assert_eq!(parsed, restored);
+    }
 }
