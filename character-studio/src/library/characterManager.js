@@ -683,21 +683,13 @@ export class CharacterManager {
      * Loads initial traits based on manifest data.
      * @returns {Promise<void>} Promise that resolves when traits are loaded
      */
-    loadInitialTraits() {
-      return new Promise(async(resolve, reject) => {
-        // Check if manifest data is available
-        if (this.manifestDataManager.hasExistingManifest()) {
-          // Load initial traits using the _loadTraits method
-          await this._loadTraits(this.manifestDataManager.getInitialTraits());
-
-          resolve();
-        } else {
-          // Manifest data is not available, log an error and reject the Promise
-          const errorMessage = "No manifest was loaded, initial traits cannot be loaded.";
-          console.error(errorMessage);
-          reject(new Error(errorMessage));
-        }
-      });
+    async loadInitialTraits() {
+      // Using an async Promise executor here previously swallowed rejections
+      // from _loadTraits, leaving the creator stuck loading indefinitely.
+      if (!this.manifestDataManager.hasExistingManifest()) {
+        throw new Error("No manifest was loaded, initial traits cannot be loaded.");
+      }
+      await this._loadTraits(this.manifestDataManager.getInitialTraits());
     }
 
     /**
@@ -947,26 +939,19 @@ export class CharacterManager {
 
           // Set the color to child meshes of the model
           model.traverse((mesh) => {
-            if (mesh.isMesh) {
-              if (mesh.material.type === "MeshStandardMaterial") {
-                if (Array.isArray(mesh.material)) {
-                  mesh.material.forEach((mat) => {
-                    mat.color = color;
-                    //mat.emissive = color;
-                  });
-                } else {
-                  mesh.material.color = color;
-                  //mesh.material.emissive = color;
+            if (!mesh.isMesh) return
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+            materials.forEach((mat) => {
+              if (!mat) return
+              if (mat.uniforms?.litFactor) {
+                mat.uniforms.litFactor.value = color
+                if (mat.uniforms.shadeColorFactor) {
+                  mat.uniforms.shadeColorFactor.value = color.clone().multiplyScalar(0.8)
                 }
-              } else {
-                mesh.material[0].uniforms.litFactor.value = color;
-                mesh.material[0].uniforms.shadeColorFactor.value = new THREE.Color(
-                  color.r * 0.8,
-                  color.g * 0.8,
-                  color.b * 0.8
-                );
+              } else if (mat.color?.isColor) {
+                mat.color.copy(color)
               }
-            }
+            })
           });
         } catch (error) {
           console.error("Error setting trait color:", error.message);

@@ -132,6 +132,21 @@ a.ws.send(JSON.stringify({ type: "move_intent", seq: 82, forward: 0, strafe: 0, 
 b.ws.send(JSON.stringify({ type: "move_intent", seq: 1, forward: 0, strafe: 0, yaw: 0, sprint: false }));
 await sleep(100);
 
+// Test Knight's shield skill while both combatants are still alive. The
+// Fighter's Berserk + 10 hits + weapon skill below can otherwise kill the
+// Knight before this assertion, correctly making the server reject casts.
+const beforeBash = b.damages.length;
+b.ws.send(JSON.stringify({ type: "attack", target_id: 0 }));
+b.ws.send(JSON.stringify({ type: "cast", ability_id: "shield_bash" }));
+await waitUntil(
+  () => b.damages.slice(beforeBash).some(
+    (d) => d.attacker_id === b.id && d.target_id === a.id
+  ) || b.rejects.some((r) => r.ability_id === "shield_bash"),
+  5000, "shield_bash outcome"
+);
+const bashReject = b.rejects.find((r) => r.ability_id === "shield_bash");
+if (bashReject) throw new Error(`shield_bash unexpectedly rejected: ${bashReject.reason}`);
+
 a.ws.send(JSON.stringify({ type: "cast", ability_id: "berserk" }));
 await waitUntil(() => a.buffs.some((d) => d.ability_id === "berserk"), 3000, "berserk buff");
 
@@ -164,14 +179,6 @@ await waitUntil(() => {
 const wsHit = a.damages
   .slice(beforeWs)
   .find((d) => d.attacker_id === a.id && d.target_id === b.id && d.hit && d.damage > 0);
-
-const beforeBash = b.damages.length;
-b.ws.send(JSON.stringify({ type: "attack", target_id: 0 }));
-b.ws.send(JSON.stringify({ type: "cast", ability_id: "shield_bash" }));
-await waitUntil(() => {
-  const fresh = b.damages.slice(beforeBash);
-  return fresh.some((d) => d.attacker_id === b.id && d.hit && d.damage > 0);
-}, 5000, "shield_bash");
 
 a.ws.close();
 b.ws.close();

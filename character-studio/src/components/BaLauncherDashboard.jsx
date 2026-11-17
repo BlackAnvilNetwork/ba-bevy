@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react"
 import "./BaLauncherDashboard.css"
+import { rememberBaCharacterDraft } from "../library/ba-character"
 
 /**
  * Black Anvil's native entry surface. Character Studio stays mounted in the
@@ -11,6 +12,7 @@ export default function BaLauncherDashboard({ onCustomize }) {
   const [error, setError] = useState("")
   const [status, setStatus] = useState("Loading local character…")
   const [busy, setBusy] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
   const [multiplayer, setMultiplayer] = useState(false)
   const [account, setAccount] = useState(null)
   const [authPending, setAuthPending] = useState(false)
@@ -29,14 +31,17 @@ export default function BaLauncherDashboard({ onCustomize }) {
       if (!raw) {
         setCharacter(null)
         setStatus("No character saved yet")
+        setDraftReady(true)
         return
       }
       const draft = JSON.parse(raw)
       if (draft.schemaVersion !== 1 || !draft.characterId) {
         throw new Error("Character format is not supported")
       }
+      rememberBaCharacterDraft(draft)
       setCharacter(draft)
-      setStatus("Saved locally · development preview")
+      setDraftReady(true)
+      setStatus("Character ready · Play Black Anvil")
     }).catch((e) => {
       if (active) {
         setError(String(e?.message || e))
@@ -60,39 +65,22 @@ export default function BaLauncherDashboard({ onCustomize }) {
     return () => { active = false }
   }, [invoke])
 
-  useEffect(() => {
-    if (!authPending || typeof invoke !== "function") return
-    let active = true
-    const timer = setInterval(async () => {
-      try {
-        const outcome = await invoke("poll_discord_login")
-        if (!active) return
-        if (outcome?.status === "complete") {
-          setAuthPending(false)
-          setAccount({ connected: true, accountId: outcome.accountId, displayName: outcome.displayName })
-          setAuthMessage("Discord connected — multiplayer ready")
-        }
-      } catch (e) {
-        if (active) {
-          setAuthPending(false)
-          setAuthMessage(String(e?.message || e))
-        }
-      }
-    }, 1400)
-    return () => { active = false; clearInterval(timer) }
-  }, [authPending, invoke])
-
   const signIn = async () => {
     setError("")
+    setAuthPending(true)
     try {
       const result = await invoke("begin_discord_login")
       const open = window.__TAURI__?.shell?.open
       if (typeof open !== "function") throw new Error("System browser opening is unavailable")
       await open(result.authorizationUrl)
-      setAuthPending(true)
-      setAuthMessage("Approve Black Anvil in Discord; this launcher will update automatically.")
+      setAuthMessage("Approve Black Anvil in Discord, then return to this launcher.")
+      const outcome = await invoke("await_discord_login")
+      setAccount({ connected: true, accountId: outcome.accountId, displayName: outcome.displayName })
+      setAuthMessage("Discord connected — multiplayer ready")
     } catch (e) {
       setAuthMessage(String(e?.message || e))
+    } finally {
+      setAuthPending(false)
     }
   }
 
@@ -119,8 +107,9 @@ export default function BaLauncherDashboard({ onCustomize }) {
         const raw = await invoke("get_draft")
         const saved = raw ? JSON.parse(raw) : null
         if (!saved?.characterId) throw new Error("The restored character is not readable")
+        rememberBaCharacterDraft(saved)
         setCharacter(saved)
-        setStatus(result.restored ? "Character restored from your Discord account" : "Account character is already saved on this PC")
+        setStatus(result.restored ? "Character restored · Ready to play" : "Character ready · Play Black Anvil")
       }
     } catch (e) {
       setError(String(e?.message || e))
@@ -180,7 +169,10 @@ export default function BaLauncherDashboard({ onCustomize }) {
             </div>
           </div>
           <div className="ba-actions">
-            <button type="button" className="ba-secondary" onClick={onCustomize}>{character ? "Customize character" : "Create character"}</button>
+            <button type="button" className="ba-secondary"
+              onClick={onCustomize} disabled={!draftReady || busy}>
+              {!draftReady ? "Checking character…" : character ? "Customize character" : "Create character"}
+            </button>
             {account?.connected && !character &&
               <button type="button" className="ba-secondary" onClick={restore} disabled={busy}>
                 Restore saved character

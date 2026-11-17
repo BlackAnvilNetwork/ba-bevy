@@ -20,3 +20,9 @@ Cargo.lock
 
 # Smoke runner
 /scripts/node_modules/
+
+# Local Discord gateway (client secret never belongs in git)
+/gateway.local.env
+/ba-gateway.sqlite
+/ba-gateway.sqlite-*
+/ba-avatars/

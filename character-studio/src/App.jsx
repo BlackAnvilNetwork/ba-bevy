@@ -23,6 +23,7 @@ import Optimizer from "./pages/Optimizer"
 import Save from "./pages/Save"
 import Wallet from "./pages/Wallet"
 import { ingestBaForgeQuery } from "./library/ba-character"
+import { hasLoadedAvatar } from "./library/ba-creator"
 
 // dynamically import the manifest
 const assetImportPath = (import.meta.env.VITE_ASSET_PATH || "") + "/manifest.json"
@@ -111,7 +112,8 @@ export default function App() {
     moveCamera,
     setManifest,
     lookAtManager,
-    showEnvironmentModels
+    showEnvironmentModels,
+    characterManager,
   } = useContext(SceneContext)
   const { viewMode, setViewMode } = useContext(ViewContext)
 
@@ -156,6 +158,11 @@ export default function App() {
     [ViewMode.APPEARANCE]: (
       <Appearance
         confirmDialog={confirmDialog}
+        onCharacterSaved={baMode && window.__TAURI__ ? () => {
+          // The launcher remounts and reads the newly selected native revision.
+          // Play remains an explicit player action after the save succeeds.
+          setLauncherHome(true)
+        } : undefined}
       />
     ),
     [ViewMode.OPTIMIZER]:<Optimizer/>,
@@ -166,7 +173,7 @@ export default function App() {
     [ViewMode.BATCHDOWNLOAD]: <BatchDownload />,
     [ViewMode.LOAD]: <Load />,
     [ViewMode.MINT]: <Mint />,
-    [ViewMode.SAVE]: <Save />,
+    [ViewMode.SAVE]: <Save onCharacterSaved={baMode && window.__TAURI__ ? () => setLauncherHome(true) : undefined} />,
   }
 
   let lastTap = 0
@@ -214,7 +221,11 @@ export default function App() {
 
   if (launcherHome) {
     return <BaLauncherDashboard onCustomize={() => {
-      setViewMode(ViewMode.APPEARANCE)
+      // APPEARANCE only edits an avatar that is already in the Three.js scene.
+      // On first entry the CREATE page must load the selected gender's pack
+      // and initial traits before opening APPEARANCE. Skipping that step
+      // produced a blank character until the player pressed Back.
+      setViewMode(hasLoadedAvatar(characterManager) ? ViewMode.APPEARANCE : ViewMode.CREATE)
       setLauncherHome(false)
     }} />
   }
