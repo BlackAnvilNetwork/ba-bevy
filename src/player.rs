@@ -9,6 +9,8 @@ use bevy::{
 use crate::atmosphere::{self, StickAtmosphere};
 use crate::data::GameData;
 use crate::camera_rig::{CameraView,PlayerCamera};
+use crate::character::CharacterProfile;
+use crate::forge_menu::{Appearance, CharacterAppearance, CharacterName};
 use crate::rpg::Progression;
 
 #[derive(Component)]
@@ -35,6 +37,7 @@ pub fn spawn_player(
     mut commands: Commands,
     atmo: Res<StickAtmosphere>,
     data: Res<GameData>,
+    profile: Res<CharacterProfile>,
     mut view: ResMut<CameraView>,
 ) {
     let at = Vec3::from_array(data.zone.spawn.at);
@@ -60,11 +63,30 @@ pub fn spawn_player(
     let (yaw,pitch,_) = transform.rotation.to_euler(EulerRot::YXZ);
     view.pitch = pitch;
     transform.rotation=Quat::from_rotation_y(yaw);
+    // The launcher skips the old Forge menu. Initialize progression from the
+    // SAME account-selected character used by the avatar/weapon pipeline,
+    // otherwise a saved Knight spawned with Time Mage stats and a staff.
+    let mut progression = Progression::default();
+    let (name, appearance) = if let Some(draft) = profile.draft.as_ref() {
+        progression.job = draft.job_id();
+        progression.sync_sheet();
+        progression.hp = progression.vitals.max_hp;
+        progression.mp = progression.vitals.max_mp;
+        (draft.name.clone(), if draft.is_female() {
+            Appearance::Female
+        } else {
+            Appearance::Male
+        })
+    } else {
+        ("Wanderer".to_string(),Appearance::Male)
+    };
     commands.spawn((
         Player,
-        Progression::default(),
+        progression,
+        CharacterName(name.clone()),
+        CharacterAppearance(appearance),
         CameraSensitivity::default(),
-        Name::new("Player"),
+        Name::new(format!("Player: {name}")),
         transform,
         Visibility::default(),
         children![(
