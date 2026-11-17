@@ -170,6 +170,7 @@ pub fn connect_zone_on_enter(
     profile: Res<CharacterProfile>,
     player: Query<&Transform, With<Player>>,
     mut net: ResMut<ZoneNet>,
+    mut prediction: ResMut<ZonePrediction>,
 ) {
     if !net.enabled || flow.in_menu() {
         return;
