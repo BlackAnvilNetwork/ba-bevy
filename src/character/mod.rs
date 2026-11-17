@@ -5,7 +5,7 @@
 
 mod avatar;
 mod animation;
-pub use animation::{prepare_avatar_animation, update_avatar_animation};
+pub use animation::{prepare_avatar_animation, bind_avatar_animators, update_avatar_animation, pose_legacy_unanimated_avatars, animate_legacy_arm_pose};
 
 pub use avatar::{
     attach_player_avatar, resolve_pending_avatars, HasPlayerAvatar,

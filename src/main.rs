@@ -2,6 +2,7 @@ mod atmosphere;
 mod avatar_delivery;
 mod boss;
 mod cel;
+mod camera_rig;
 mod character;
 mod data;
 mod net;
@@ -30,9 +31,11 @@ use boss::{
     WardenPossessRequest,
 };
 use cel::{cel_shade_figures, CelMaterial};
+use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode, spawn_first_person_rig, animate_first_person_hands};
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
-    update_avatar_animation,
+    bind_avatar_animators, update_avatar_animation,
+    pose_legacy_unanimated_avatars, animate_legacy_arm_pose,
 };
 use data::load_game_data;
 use net::{
@@ -122,6 +125,7 @@ fn main() {
         ))
         .init_resource::<StickAtmosphere>()
         .init_resource::<NoteComposer>()
+        .init_resource::<CameraView>()
         .init_resource::<WellPour>()
         .init_resource::<PossessFx>()
         .init_resource::<GameFlow>()
@@ -140,7 +144,7 @@ fn main() {
                 load_combat_kits,
                 load_character_profile,
                 spawn_opening_scene.after(load_game_data),
-                spawn_player.after(load_game_data),
+                spawn_player.after(load_game_data).after(load_character_profile),
                 attach_pixel_camera.after(spawn_player),
                 spawn_sky_dome.after(spawn_player),
                 spawn_hud,
@@ -157,13 +161,20 @@ fn main() {
             (
                 attach_player_avatar,
                 resolve_pending_avatars.after(attach_player_avatar),
+                spawn_first_person_rig,
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
                 send_local_move.run_if(in_yard).after(look_player),
                 apply_zone_snapshots.run_if(in_yard).after(send_local_move),
                 interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
                 refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
-                update_avatar_animation.run_if(in_yard).after(refresh_remote_avatar_models),
+                bind_avatar_animators.run_if(in_yard).after(refresh_remote_avatar_models),
+                pose_legacy_unanimated_avatars.run_if(in_yard).after(bind_avatar_animators),
+                animate_legacy_arm_pose.run_if(in_yard).after(pose_legacy_unanimated_avatars),
+                update_avatar_animation.run_if(in_yard).after(bind_avatar_animators),
+                toggle_camera_mode,
+                apply_camera_mode.after(toggle_camera_mode).after(attach_player_avatar),
+                animate_first_person_hands.run_if(in_yard),
             ),
         )
         .add_systems(

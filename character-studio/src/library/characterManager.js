@@ -1,6 +1,7 @@
 import * as THREE from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader"
 import { AnimationManager } from "./animationManager"
+import { BaIdlePreview } from "./ba-preview-idle"
 import { ScreenshotManager } from "./screenshotManager";
 import { BlinkManager } from "./blinkManager";
 import { EmotionManager } from "./EmotionManager";
@@ -130,6 +131,19 @@ export class CharacterManager {
      * @param {number} deltaTime - Time elapsed since last update
      */
     update(deltaTime){
+      // In Black Anvil mode the editor must NEVER display its bind/T-pose.
+      // Use the same authored BA_Idle used in exported gameplay GLBs. When a
+      // deliberately selected Studio animation is running, do not compete
+      // with its mixer for ownership of the same bones.
+      if (import.meta.env.VITE_BA_MODE === "1") {
+        if (!this.baIdlePreviewSuspended && !this.animationManager?.currentClip) {
+          this.baIdlePreview ??= new BaIdlePreview()
+          this.baIdlePreview.update(this.avatar,deltaTime)
+        } else if (this.baIdlePreview) {
+          this.baIdlePreview.dispose()
+          this.baIdlePreview = null
+        }
+      }
       if (this.lookAtManager != null){
         this.lookAtManager.update();
       }
@@ -377,7 +391,19 @@ export class CharacterManager {
     async getGLBBlob(exportOptions = null){
       exportOptions = exportOptions || {}
       const finalOptions = {...this.manifestDataManager.getExportOptions(), ...exportOptions};
-      return getGLBBlobData(this.characterModel, this.avatar, finalOptions);
+      const hadIdlePreview = Boolean(this.baIdlePreview)
+      if (hadIdlePreview) {
+        // Export from the original VRM bind pose, not the transient preview
+        // frame. The GLB gets its own authored BA_Idle and BA_Walk clips.
+        this.baIdlePreviewSuspended = true
+        this.baIdlePreview.dispose()
+        this.baIdlePreview = null
+      }
+      try {
+        return await getGLBBlobData(this.characterModel, this.avatar, finalOptions);
+      } finally {
+        this.baIdlePreviewSuspended = false
+      }
     }
     /**
      * Gets the current avatar selection.
