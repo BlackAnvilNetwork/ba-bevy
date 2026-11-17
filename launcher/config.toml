@@ -1,0 +1,5 @@
+# Public launcher settings. The Discord client secret stays on the gateway.
+# Register discord_redirect_uri exactly in the Discord application's OAuth2 redirects.
+discord_client_id = "1572122072019378326"
+discord_redirect_uri = "http://127.0.0.1:17384/callback"
+gateway_url = "http://127.0.0.1:8790"
