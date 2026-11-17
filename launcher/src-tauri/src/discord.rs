@@ -150,6 +150,51 @@ pub(crate) async fn sync_character(json:&str,glb:&[u8])->Result<Value,String> {
     res.json().await.map_err(|_|"Invalid character sync receipt".into())
 }
 
+/// Recover a finalized character on a different machine using the verified
+/// Discord account session. The returned model is SHA-256 checked before any
+/// local Bevy scene can load it; no local file-path claims are trusted.
+pub(crate) async fn retrieve_character()->Result<Option<(Value,Vec<u8>)>,String> {
+    let token=session_token()?;
+    let base=gateway_base()?;
+    let response=client()?.get(format!("{base}/v1/characters/selected"))
+        .bearer_auth(&token).send().await
+        .map_err(|_|"Unable to access saved Black Anvil character".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("Account-owned character lookup rejected ({})",response.status()));
+    }
+    let data:Value=response.json().await.map_err(|_|"Malformed character restore response")?;
+    let Some(definition)=data.get("character").filter(|v|!v.is_null()) else {
+        return Ok(None);
+    };
+    let id=definition.get("characterId").and_then(Value::as_str)
+        .ok_or("Character ID missing from trusted response")?;
+    if id.is_empty() || id.len()>64 || !id.chars().all(|c| c.is_ascii_alphanumeric()||c=='-'||c=='_') {
+        return Err("Gateway character ID unsafe".into());
+    }
+    let hash=data.get("contentHash").and_then(Value::as_str)
+        .ok_or("Character model content hash missing")?;
+    if hash.len()!=64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("Character model hash malformed".into());
+    }
+    let response=client()?.get(format!("{base}/v1/assets/{hash}")).send().await
+        .map_err(|_|"Avatar model download unavailable".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("Character model unavailable ({})",response.status()));
+    }
+    if response.content_length().is_some_and(|v|v>32*1024*1024) {
+        return Err("Character model exceeds 32MiB limit".into());
+    }
+    let bytes=response.bytes().await.map_err(|_|"Could not retrieve saved avatar model")?;
+    if bytes.len()>32*1024*1024 {
+        return Err("Character model exceeds 32MiB limit".into());
+    }
+    let actual=format!("{:x}",sha2::Sha256::digest(&bytes));
+    if !actual.eq_ignore_ascii_case(hash) {
+        return Err("Saved avatar content hash mismatch; refusing restore".into());
+    }
+    Ok(Some((definition.clone(),bytes.to_vec())))
+}
+
 pub(crate) async fn issue_game_ticket(character_id:&str)->Result<String,String> {
     let token=session_token()?;
     let url=format!("{}/v1/tickets",gateway_base()?);
