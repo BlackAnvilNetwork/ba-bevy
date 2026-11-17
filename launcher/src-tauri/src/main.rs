@@ -3,12 +3,14 @@
     windows_subsystem = "windows"
 )]
 
-//! Black Anvil local launcher: explicit versioned character save and native
+//! Black Anvil launcher: explicit versioned character save and native
 //! Bevy handoff. Production requires Discord tickets and signed game packs.
 //! No game login or AA ownership is inferred from local filesystem contents.
 
+mod discord;
+
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Read,Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
@@ -21,6 +23,63 @@ use tauri::Manager;
 
 static RUNNING_GAME: Mutex<Option<Child>> = Mutex::new(None);
 static SAVE_LOCK: Mutex<()> = Mutex::new(());
+static VERIFIED_GAME: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+#[derive(Deserialize)]
+#[serde(rename_all="camelCase")]
+struct GameManifest {
+    schema_version: u32,
+    files: Vec<GameManifestFile>,
+}
+
+#[derive(Deserialize)]
+struct GameManifestFile {
+    path: String,
+    bytes: u64,
+    sha256: String,
+}
+
+/// Verify every packaged game asset before first launch. The release pipeline
+/// signs the EXE and installer; this manifest detects broken/corrupt installs.
+/// An unsigned staging MSI is NOT a secure production update.
+fn verify_game_bundle(root:&Path) -> Result<(),String> {
+    let mut verified=VERIFIED_GAME.lock().map_err(|_|"Game verification lock poisoned")?;
+    if verified.as_ref().is_some_and(|path| path==root) {return Ok(());}
+    let raw=fs::read_to_string(root.join("manifest.json"))
+        .map_err(|_|"Game manifest missing; repair or reinstall Black Anvil")?;
+    let manifest: GameManifest=serde_json::from_str(&raw)
+        .map_err(|_|"Malformed game content manifest")?;
+    if manifest.schema_version!=1 || manifest.files.len()<2 || manifest.files.len()>50_000 {
+        return Err("Invalid game content manifest".into());
+    }
+    for item in manifest.files {
+        let rel=Path::new(&item.path);
+        if !rel.components().all(|part| matches!(part,std::path::Component::Normal(_)))
+            || item.path.contains(':') || item.sha256.len()!=64 {
+            return Err("Manifest contains an unsafe file path or hash".into());
+        }
+        let path=root.join(rel);
+        let mut file=fs::File::open(&path)
+            .map_err(|_|format!("Game file missing: {}",item.path))?;
+        let metadata=file.metadata().map_err(|_|"Cannot inspect game file")?;
+        if !metadata.is_file() || metadata.len()!=item.bytes {
+            return Err(format!("Game file size mismatch: {}",item.path));
+        }
+        let mut checksum=Sha256::new();
+        let mut buffer=[0_u8;65536];
+        loop {
+            let n=file.read(&mut buffer).map_err(|_|"Cannot validate game file")?;
+            if n==0 {break;}
+            checksum.update(&buffer[..n]);
+        }
+        if !format!("{:x}",checksum.finalize()).eq_ignore_ascii_case(&item.sha256) {
+            return Err(format!("Game file hash mismatch: {}",item.path));
+        }
+    }
+    *verified=Some(root.to_path_buf());
+    Ok(())
+}
+
 
 const MAX_GLB: usize = 32 * 1024 * 1024;
 const MAX_JSON: usize = 128 * 1024;
@@ -333,11 +392,26 @@ fn get_draft() -> Result<Option<String>, String> {
 /// The selected revision is verified before game launch. This is a local preview,
 /// not a Discord-authenticated or signed-production game session.
 #[tauri::command]
-fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::Value, String> {
+async fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::Value, String> {
     let root = app_characters_dir()?;
-    let (selected, _, glb) = read_selected_character(&root)?
+    let (selected, json, glb) = read_selected_character(&root)?
         .ok_or("Create and save your character in Studio before playing")?;
     let draft_path = revision_folder(&root, &selected)?.join("character.json");
+
+    // Only the online game path requires a Discord-authenticated account.
+    // Syncing happens before a ticket is issued; a rejected account/character
+    // mapping cannot launch multiplayer. Local preview remains available.
+    let game_ticket = if multiplayer {
+        let bytes = fs::read(&glb).map_err(|e| format!("Cannot read saved avatar: {e}"))?;
+        let synced = discord::sync_character(&json, &bytes).await?;
+        if synced["characterId"].as_str() != Some(selected.character_id.as_str())
+            || synced["contentHash"].as_str() != Some(selected.content_hash.as_str()) {
+            return Err("Gateway returned a mismatched character sync receipt".into());
+        }
+        Some(discord::issue_game_ticket(&selected.character_id).await?)
+    } else {
+        None
+    };
 
     let mut running = RUNNING_GAME.lock().map_err(|_| "game process lock poisoned")?;
     if let Some(child) = running.as_mut() {
@@ -367,23 +441,42 @@ fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::V
     let _ = &app;
 
     #[cfg(debug_assertions)]
-    if multiplayer {
+    if multiplayer && std::env::var_os("BA_ZONE_URL").is_none() {
         let address = std::net::SocketAddr::from(([127, 0, 0, 1], 8787));
         std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_millis(350))
-            .map_err(|_| "Local zone is unavailable; start cargo run -p ba_zone_server".to_string())?;
+            .map_err(|_| "Local zone unavailable. Start authenticated ba_zone_server or configure BA_ZONE_URL for WSS".to_string())?;
     }
 
     if !binary.is_file() {
         return Err(format!("Bevy game executable not installed: {}", binary.display()));
     }
+    #[cfg(not(debug_assertions))]
+    verify_game_bundle(&working_dir)?;
+
     let mut command = Command::new(&binary);
     command.current_dir(&working_dir);
     command.env("BA_LAUNCH_MODE", "game");
     command.env("BA_CHARACTER_ROOT", &root);
     command.env("BA_CHARACTER_DRAFT_PATH", &draft_path);
     command.env("BA_CHARACTER_GLB_PATH", &glb);
+    // Bevy's installed AssetServer reads the packaged resources, never the
+    // original developer checkout from CARGO_MANIFEST_DIR.
+    command.env("BA_GAME_ASSET_ROOT", working_dir.join("assets"));
+    if let Some(ticket) = game_ticket {
+        // One-use, short-lived zone ticket. No Discord token, no wallet signer,
+        // and no long-lived game account token are passed to Bevy.
+        command.env("BA_GAME_TICKET", ticket);
+        command.env("BA_GATEWAY_PUBLIC_URL", discord::gateway_base()?);
+    }
     if multiplayer {
         command.env("BA_ZONE", "1");
+        if let Ok(url)=std::env::var("BA_ZONE_URL") {
+            command.env("BA_ZONE_URL",url);
+        } else if let Some(url)=option_env!("BA_ZONE_PUBLIC_URL") {
+            command.env("BA_ZONE_URL",url);
+        } else if !cfg!(debug_assertions) {
+            return Err("Game server WSS URL is not configured for this release".into());
+        }
     } else {
         command.env_remove("BA_ZONE");
         command.env_remove("BA_ZONE_URL");
@@ -401,7 +494,11 @@ fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::V
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![save_draft, get_draft, launch_game])
+        .invoke_handler(tauri::generate_handler![
+            save_draft, get_draft, launch_game,
+            discord::begin_discord_login, discord::poll_discord_login,
+            discord::discord_account, discord::discord_logout,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Black Anvil launcher");
 }

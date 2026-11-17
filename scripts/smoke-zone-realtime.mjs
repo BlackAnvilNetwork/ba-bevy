@@ -1,11 +1,11 @@
 /**
  * Smoke: kits buff + realtime swings + WS + negative cases (dup hello, flood move, cast reject).
- * Requires ba_zone_server on ws://127.0.0.1:8787 (protocol v4).
+ * Requires ba_zone_server on ws://127.0.0.1:8787 (protocol v5).
  */
 import WebSocket from "ws";
 
 const URL = process.env.BA_ZONE_URL || "ws://127.0.0.1:8787";
-const PROTOCOL = 4;
+const PROTOCOL = 5;
 
 function appearance(name, job = "Fighter", characterId) {
   return {
@@ -176,6 +176,6 @@ await waitUntil(() => {
 a.ws.close();
 b.ws.close();
 console.log(
-  `PASS zone kits smoke v4: dup-hello reject, tick-bound movement, buff+wsDmg=${wsHit.damage}+shield_bash`
+  `PASS zone kits smoke v5: dup-hello reject, tick-bound movement, buff+wsDmg=${wsHit.damage}+shield_bash`
 );
 process.exit(0);

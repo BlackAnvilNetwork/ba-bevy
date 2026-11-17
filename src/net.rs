@@ -45,6 +45,9 @@ pub struct ZoneNet {
     pub last_error: Option<String>,
     pub retry_at: Option<Instant>,
     pub connect_started_at: Option<Instant>,
+    // One-time scoped character reconnect credential, rotated each Welcome.
+    // It is not a Discord token or a wallet signer.
+    pub reconnect_token: Option<String>,
     tx: Option<Sender<ClientMessage>>,
     rx: Option<Arc<Mutex<Receiver<ServerMessage>>>>,
 }
@@ -60,7 +63,13 @@ pub struct RemotePlayer {
     pub player_id: u32,
     pub target: Vec3,
     pub target_yaw: f32,
+    pub avatar_hash: Option<String>,
+    pub pending_avatar: Option<Handle<WorldAsset>>,
+    pub has_avatar: bool,
 }
+
+#[derive(Component)]
+struct RemoteAvatarPlaceholder;
 
 const MAX_UNACKED_PREDICTIONS: usize = 128;
 
@@ -192,8 +201,8 @@ pub fn connect_zone_on_enter(
         return;
     }
     if net.phase == ZonePhase::Rejected {
-        net.phase = ZonePhase::Disconnected;
-        net.retry_at = Some(Instant::now() + Duration::from_secs(5));
+        // Admission failure is a terminal result: a fresh Discord-authorized
+        // game ticket must come from the launcher. No silent retry loop.
         return;
     }
     if net.phase == ZonePhase::WelcomeVerified {
@@ -221,6 +230,12 @@ pub fn connect_zone_on_enter(
     };
 
     let url = std::env::var("BA_ZONE_URL").unwrap_or_else(|_| DEFAULT_WS_URL.to_string());
+    let reconnect_token = net.reconnect_token.clone();
+    let ticket = if reconnect_token.is_some() {
+        None
+    } else {
+        std::env::var("BA_GAME_TICKET").ok()
+    };
     let (out_tx, out_rx) = mpsc::channel::<ClientMessage>();
     let (in_tx, in_rx) = mpsc::channel::<ServerMessage>();
     let url_thread = url.clone();
@@ -228,7 +243,7 @@ pub fn connect_zone_on_enter(
     thread::Builder::new()
         .name("ba-zone-ws".into())
         .spawn(move || {
-            if let Err(err) = zone_ws_thread(&url_thread, appearance, pose, out_rx, in_tx) {
+            if let Err(err) = zone_ws_thread(&url_thread, appearance, pose, ticket, reconnect_token, out_rx, in_tx) {
                 eprintln!("zone ws ended: {err}");
             }
         })
@@ -317,9 +332,17 @@ fn zone_ws_thread(
     url: &str,
     appearance: AppearanceWire,
     pose: Pose,
+    ticket: Option<String>,
+    reconnect_token: Option<String>,
     out_rx: Receiver<ClientMessage>,
     in_tx: Sender<ServerMessage>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if url.starts_with("ws://") &&
+        !(url.starts_with("ws://127.0.0.1:") || url.starts_with("ws://localhost:")
+            || url.starts_with("ws://[::1]:"))
+    {
+        return Err("Unencrypted WebSocket connections are allowed only on loopback".into());
+    }
     let (mut socket, _resp) = connect(url)?;
     if let MaybeTlsStream::Plain(stream) = socket.get_mut() {
         stream.set_read_timeout(Some(Duration::from_millis(50)))?;
@@ -329,6 +352,8 @@ fn zone_ws_thread(
         protocol: PROTOCOL_VERSION,
         appearance,
         pose,
+        ticket,
+        reconnect_token,
     };
     socket.send(Message::Text(hello.to_json()?.into()))?;
 
@@ -478,50 +503,95 @@ fn spawn_remote_player(
     asset_server: &AssetServer,
     state: &PlayerState,
 ) {
-    let root = commands
-        .spawn((
-            RemotePlayer {
-                player_id: state.player_id,
-                target: Vec3::new(state.pose.x, state.pose.y, state.pose.z),
-                target_yaw: state.pose.yaw,
-            },
-            Name::new(format!("Remote:{}", state.appearance.name)),
-            Transform::from_translation(Vec3::new(state.pose.x, state.pose.y, state.pose.z))
-                .with_rotation(Quat::from_euler(EulerRot::YXZ, state.pose.yaw, 0.0, 0.0)),
-            Visibility::default(),
-        ))
-        .id();
-
-    // Same-host prototype only: both client processes can share the launcher
-    // content-addressed cache. Production requires authenticated asset delivery
-    // and a trusted catalog before loading downloaded user-created models.
-    if let Some(uri) = state.appearance.glb_content_hash.as_deref().and_then(verified_cache_uri) {
-        let handle: Handle<WorldAsset> =
-            asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri.clone()));
-        let model = commands.spawn((
-            Name::new(format!("RemoteAvatar:{}", state.appearance.name)),
-            WorldAssetRoot(handle),
-            Transform::from_xyz(0.0, -1.65, 0.0),
-            Visibility::default(),
-        )).id();
-        commands.entity(root).add_child(model);
-        info!("Queued verified same-host remote avatar {uri}");
-        return;
+    let hash = state.appearance.glb_content_hash.clone();
+    if let Some(hash) = hash.as_deref() {
+        crate::avatar_delivery::prefetch(hash);
     }
-
-    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.75, 0.55, 0.35),
-        ..default()
-    });
-    let body = commands.spawn((
-        Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
-        Mesh3d(mesh),
-        MeshMaterial3d(mat),
-        Transform::default(),
+    let uri = hash.as_deref().and_then(verified_cache_uri);
+    let handle: Option<Handle<WorldAsset>> = uri.as_ref().map(|uri|
+        asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri.clone()))
+    );
+    let root = commands.spawn((
+        RemotePlayer {
+            player_id: state.player_id,
+            target: Vec3::new(state.pose.x,state.pose.y,state.pose.z),
+            target_yaw: state.pose.yaw,
+            avatar_hash: hash,
+            pending_avatar: handle.clone(),
+            has_avatar: false,
+        },
+        Name::new(format!("Remote:{}",state.appearance.name)),
+        Transform::from_translation(Vec3::new(state.pose.x,state.pose.y,state.pose.z))
+            .with_rotation(Quat::from_euler(EulerRot::YXZ,state.pose.yaw,0.0,0.0)),
         Visibility::default(),
     )).id();
-    commands.entity(root).add_child(body);
+
+    // Leave capsule visible until all glTF dependencies have loaded. A failed
+    // download/model does not make other players invisible.
+    let mesh = meshes.add(Capsule3d::new(0.35,1.0));
+    let mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.75,0.55,0.35), ..default()
+    });
+    let capsule = commands.spawn((
+        RemoteAvatarPlaceholder,
+        Name::new(format!("RemoteCapsule:{}",state.appearance.name)),
+        Mesh3d(mesh), MeshMaterial3d(mat), Transform::default(),
+        Visibility::default(),
+    )).id();
+    commands.entity(root).add_child(capsule);
+
+    if let Some(handle) = handle {
+        let scene = commands.spawn((
+            Name::new(format!("RemoteAvatar:{}",state.appearance.name)),
+            WorldAssetRoot(handle),
+            Transform::from_xyz(0.0,-1.65,0.0),
+            Visibility::default(),
+        )).id();
+        commands.entity(root).add_child(scene);
+    }
+}
+
+/// Once the cross-machine download completes, queue its verified GLB without
+/// recreating player entities. Remove the fallback only after the scene AND
+/// its dependencies are loaded by Bevy.
+pub fn refresh_remote_avatar_models(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut remotes: Query<(Entity,&mut RemotePlayer,&Children)>,
+    placeholders: Query<(),With<RemoteAvatarPlaceholder>>,
+) {
+    use bevy::asset::LoadState;
+    for (entity,mut remote,children) in &mut remotes {
+        if remote.has_avatar {continue;}
+        if let Some(handle) = remote.pending_avatar.as_ref() {
+            if asset_server.is_loaded_with_dependencies(handle.id()) {
+                for child in children.iter() {
+                    if placeholders.get(child).is_ok() {
+                        commands.entity(child).despawn();
+                    }
+                }
+                remote.pending_avatar=None;
+                remote.has_avatar=true;
+            } else if matches!(asset_server.load_state(handle.id()),LoadState::Failed(_)) {
+                // Explicit fallback; no silent infinite retries in renderer.
+                warn!("Remote avatar scene load failed; retaining capsule");
+                remote.pending_avatar=None;
+                remote.avatar_hash=None;
+            }
+            continue;
+        }
+        if let Some(uri) = remote.avatar_hash.as_deref().and_then(verified_cache_uri) {
+            let handle: Handle<WorldAsset>=asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri));
+            let scene=commands.spawn((
+                Name::new("RemoteVerifiedAvatar"),
+                WorldAssetRoot(handle.clone()),
+                Transform::from_xyz(0.0,-1.65,0.0),
+                Visibility::default(),
+            )).id();
+            commands.entity(entity).add_child(scene);
+            remote.pending_avatar=Some(handle);
+        }
+    }
 }
 
 pub fn apply_zone_snapshots(
@@ -545,14 +615,16 @@ pub fn apply_zone_snapshots(
 
     let mut latest: Option<Vec<PlayerState>> = None;
     let mut local_hp: Option<(i32, i32)> = None;
+    let mut local_progression: Option<(u32,u64)> = None;
     let mut local_authoritative: Option<(Pose, u64, u64)> = None;
     let mut spawn: Option<Pose> = None;
     loop {
         match rx.try_recv() {
             Ok(ServerMessage::Welcome {
-                player_id, spawn: s, ..
+                player_id, spawn: s, reconnect_token, ..
             }) => {
                 prediction.reset(Some(s));
+                net.reconnect_token = reconnect_token;
                 net.local_player_id = Some(player_id);
                 net.phase = ZonePhase::WelcomeVerified;
                 net.connect_started_at = None;
@@ -563,6 +635,7 @@ pub fn apply_zone_snapshots(
                 if let Some(id) = net.local_player_id {
                     if let Some(me) = players.iter().find(|p| p.player_id == id) {
                         local_hp = Some((me.hp, me.max_hp));
+                        local_progression = Some((me.level, me.xp));
                         local_authoritative = Some((me.pose, me.last_input_seq, tick));
                     }
                 }
@@ -624,6 +697,7 @@ pub fn apply_zone_snapshots(
                 warn!("Zone rejected: {reason}");
                 net.phase = ZonePhase::Rejected;
                 prediction.reset(None);
+                net.reconnect_token = None;
                 net.connect_started_at = None;
                 net.tx = None;
                 net.rx = None;
@@ -674,6 +748,15 @@ pub fn apply_zone_snapshots(
         }
     }
 
+    if let Some((level,xp)) = local_progression {
+        if let Ok(mut prog) = local_prog.single_mut() {
+            let level = level.max(1);
+            let changed = prog.level != level;
+            prog.level = level;
+            prog.xp = xp.min(u32::MAX as u64) as u32;
+            if changed { prog.sync_sheet(); }
+        }
+    }
     if let Some((hp, max_hp)) = local_hp {
         if let Ok(mut prog) = local_prog.single_mut() {
             prog.hp = hp;
@@ -696,8 +779,17 @@ pub fn apply_zone_snapshots(
 
     for (entity, mut remote, _transform) in &mut remotes {
         if let Some(state) = seen.remove(&remote.player_id) {
+            if remote.avatar_hash != state.appearance.glb_content_hash {
+                commands.entity(entity).despawn();
+                // Rebuild changed appearance with a fresh fallback/model.
+                seen.insert(state.player_id,state);
+                continue;
+            }
             remote.target = Vec3::new(state.pose.x, state.pose.y, state.pose.z);
             remote.target_yaw = state.pose.yaw;
+            if let Some(hash)=remote.avatar_hash.as_deref() {
+                crate::avatar_delivery::prefetch(hash);
+            }
         } else {
             commands.entity(entity).despawn();
         }

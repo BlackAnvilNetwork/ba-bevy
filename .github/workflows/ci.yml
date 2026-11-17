@@ -20,6 +20,16 @@ jobs:
       - name: Shared protocol & zone unit tests
         run: cargo test -p ba_protocol -p ba_zone_server
 
+  gateway:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile Discord gateway
+        run: cargo check -p ba_gateway
+      - name: Gateway API, security and persistence unit tests
+        run: cargo test -p ba_gateway
+
   zone-smoke:
     runs-on: windows-latest
     needs: rust
@@ -37,6 +47,7 @@ jobs:
       - name: Run zone smoke
         shell: pwsh
         run: |
+          $env:BA_DEV_ALLOW_UNAUTH = "1" # explicit localhost-only legacy smoke
           $p = Start-Process -FilePath "target\debug\ba_zone_server.exe" -PassThru -NoNewWindow
           try {
             $ok = $false
@@ -54,6 +65,28 @@ jobs:
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           }
+
+  authenticated-zone-smoke:
+    runs-on: windows-latest
+    needs: [gateway, rust]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build Discord gateway and zone server
+        run: cargo build -p ba_gateway -p ba_zone_server
+      - name: Install smoke dependencies
+        working-directory: scripts
+        run: npm ci
+      - name: Test account isolation, character ownership, tickets, avatars and reconnect
+        shell: pwsh
+        run: ./scripts/run-authenticated-smoke.ps1
 
   launcher:
     runs-on: windows-latest
