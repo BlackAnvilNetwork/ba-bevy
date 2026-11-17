@@ -14,10 +14,10 @@ pub struct AvatarAnimationGraph {
 }
 
 #[derive(Component)]
-struct LegacyRigPoseApplied;
+pub(crate) struct LegacyRigPoseApplied;
 
 #[derive(Component)]
-struct LegacyArmPose {
+pub(crate) struct LegacyArmPose {
     rest: Quat,
     direction: f32,
 }
