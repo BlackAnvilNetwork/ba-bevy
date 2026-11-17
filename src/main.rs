@@ -2,6 +2,7 @@ mod atmosphere;
 mod avatar_delivery;
 mod boss;
 mod cel;
+mod camera_rig;
 mod character;
 mod data;
 mod net;
@@ -30,6 +31,7 @@ use boss::{
     WardenPossessRequest,
 };
 use cel::{cel_shade_figures, CelMaterial};
+use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode, spawn_first_person_rig, animate_first_person_hands};
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
     update_avatar_animation,
@@ -122,6 +124,7 @@ fn main() {
         ))
         .init_resource::<StickAtmosphere>()
         .init_resource::<NoteComposer>()
+        .init_resource::<CameraView>()
         .init_resource::<WellPour>()
         .init_resource::<PossessFx>()
         .init_resource::<GameFlow>()
@@ -157,6 +160,7 @@ fn main() {
             (
                 attach_player_avatar,
                 resolve_pending_avatars.after(attach_player_avatar),
+                spawn_first_person_rig,
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
                 send_local_move.run_if(in_yard).after(look_player),
@@ -164,6 +168,9 @@ fn main() {
                 interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
                 refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
                 update_avatar_animation.run_if(in_yard).after(refresh_remote_avatar_models),
+                toggle_camera_mode,
+                apply_camera_mode.after(toggle_camera_mode).after(attach_player_avatar),
+                animate_first_person_hands.run_if(in_yard),
             ),
         )
         .add_systems(
