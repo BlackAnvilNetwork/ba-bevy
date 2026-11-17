@@ -23,6 +23,7 @@ import Optimizer from "./pages/Optimizer"
 import Save from "./pages/Save"
 import Wallet from "./pages/Wallet"
 import { ingestBaForgeQuery } from "./library/ba-character"
+import { hasLoadedAvatar } from "./library/ba-creator"
 
 // dynamically import the manifest
 const assetImportPath = (import.meta.env.VITE_ASSET_PATH || "") + "/manifest.json"
@@ -218,10 +219,7 @@ export default function App() {
       // On first entry the CREATE page must load the selected gender's pack
       // and initial traits before opening APPEARANCE. Skipping that step
       // produced a blank character until the player pressed Back.
-      const hasLoadedAvatar =
-        characterManager?.manifestDataManager?.hasExistingManifest?.() &&
-        Object.values(characterManager.avatar || {}).some((trait) => trait?.vrm)
-      setViewMode(hasLoadedAvatar ? ViewMode.APPEARANCE : ViewMode.CREATE)
+      setViewMode(hasLoadedAvatar(characterManager) ? ViewMode.APPEARANCE : ViewMode.CREATE)
       setLauncherHome(false)
     }} />
   }
