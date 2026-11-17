@@ -10,6 +10,7 @@ import { SoundContext } from "../context/SoundContext"
 import { AudioContext } from "../context/AudioContext"
 
 import { getAsArray } from "../library/utils"
+import { hasLoadedAvatar, loadCreatorAvatar } from "../library/ba-creator"
 
 function Create() {
   
@@ -94,22 +95,13 @@ function Create() {
       } catch (_) { /* storage can be disabled */ }
 
       const manifestId = gender === "female" ? "ba-female" : "ba-male"
-      await characterManager.loadManifest(
-        selectedClass.manifest,
+      // The editor can only open after the manifest and visible VRM are ready.
+      await loadCreatorAvatar(
+        characterManager,
+        selectedClass,
         baMode ? manifestId : selectedClass.name,
+        baMode,
       )
-
-      // Do not open the appearance editor before the model exists.
-      await Promise.all(
-        selectedClass.manifestAppend.map((append) =>
-          characterManager.loadManifest(append.manifest, append.name),
-        ),
-      )
-      await characterManager.loadInitialTraits()
-
-      if (baMode && !Object.values(characterManager.avatar || {}).some((trait) => trait?.vrm)) {
-        throw new Error("The character model did not finish loading.")
-      }
 
       setViewMode(ViewMode.APPEARANCE)
       !isMute && playSound("classSelect")
@@ -128,8 +120,7 @@ function Create() {
         initializationStarted.current) return
     // A returning player may already have a fully loaded model from an earlier
     // editor visit. Reuse it, but never treat a manifest alone as an avatar.
-    if (characterManager.manifestDataManager?.hasExistingManifest?.() &&
-        Object.values(characterManager.avatar || {}).some((trait) => trait?.vrm)) {
+    if (hasLoadedAvatar(characterManager)) {
       setViewMode(ViewMode.APPEARANCE)
       return
     }
@@ -160,9 +151,14 @@ function Create() {
           <button
             type="button"
             onClick={() => {
-              setCreationError("")
-              const index = classes.findIndex((c) => c.baGender === "female" &&
-                sessionStorage.getItem("ba_gender") === "female")
+              let gender = "male"
+              try {
+                const stored = sessionStorage.getItem("ba_gender")
+                if (stored === "female") gender = "female"
+              } catch (_) { /* storage can be disabled */ }
+              const index = classes.findIndex(
+                (c) => c.baGender === gender || c.name?.toLowerCase() === gender,
+              )
               selectClass(index >= 0 ? index : 0)
             }}
           >
