@@ -275,6 +275,13 @@ fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::V
     };
     let _ = &app; // Debug builds do not need the production resource resolver.
 
+    #[cfg(debug_assertions)]
+    if multiplayer {
+        let zone = std::net::SocketAddr::from(([127, 0, 0, 1], 8787));
+        std::net::TcpStream::connect_timeout(&zone, std::time::Duration::from_millis(350))
+            .map_err(|_| "Local zone server is not running. Start cargo run -p ba_zone_server, or uncheck multiplayer.".to_string())?;
+    }
+
     if !binary.is_file() {
         return Err(format!(
             "Bevy game executable not installed at {}. Development: run cargo build --bin black_anvil first.",
