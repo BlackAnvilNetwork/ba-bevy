@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 
-use atomicwrites::{AllowOverwrite, AtomicFile};
+use atomicwrites::{AllowOverwrite, AtomicFile, DisallowOverwrite};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -258,6 +258,26 @@ fn save_revision(
             let _ = fs::remove_dir_all(&stage);
         }
         write_result?;
+    }
+
+    // Publish an immutable content-addressed local cache asset for same-host
+    // multiplayer previews. A later authenticated character service will
+    // distribute approved hashes across machines; this local cache is not that.
+    let cache_dir = root.join("cache");
+    fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+    let cache_path = cache_dir.join(format!("{hash}.glb"));
+    if cache_path.exists() {
+        let existing_bytes = fs::read(&cache_path).map_err(|e| e.to_string())?;
+        if glb_hash(&existing_bytes) != hash || assert_glb(&existing_bytes).is_err() {
+            return Err("Conflicting or corrupted avatar content cache".into());
+        }
+    } else {
+        AtomicFile::new(&cache_path, DisallowOverwrite)
+            .write(|f| {
+                f.write_all(glb)?;
+                f.sync_all()
+            })
+            .map_err(|e| format!("Could not publish immutable avatar cache: {e}"))?;
     }
 
     // This is the sole active-selection mutation. Atomic on Windows and POSIX.
