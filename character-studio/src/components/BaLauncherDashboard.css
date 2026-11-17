@@ -29,3 +29,6 @@
 .ba-note p {font-size:13px;color:#a7a09a;line-height:1.7;margin:0;}
 .ba-footer {display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:18px clamp(20px,5vw,80px);border-top:1px solid #ffffff14;color:#85715c;}
 @media(max-width:600px){.ba-panel{padding:18px;}.ba-player-row{gap:12px;}.ba-avatar{width:70px;height:70px}.ba-actions button{flex:1}.ba-build{display:none}}
+
+.ba-back-to-launcher {position:fixed;top:12px;right:20px;z-index:999;border:1px solid #b48a53;background:#16110df2;color:#f5daae;border-radius:5px;padding:10px 15px;font:700 13px system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 15px #0008;}
+.ba-back-to-launcher:hover {background:#392718;}
