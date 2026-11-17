@@ -61,10 +61,11 @@ pub fn prepare_avatar_animation(
 /// runs only for newly spawned AnimationPlayers.
 pub fn bind_avatar_animators(
     mut commands: Commands,
-    roots: Query<(Entity, &AvatarAnimationGraph, &Children)>,
+    roots: Query<(Entity, &AvatarAnimationGraph)>,
+    children: Query<&Children>,
     mut players: Query<&mut AnimationPlayer, Without<AvatarAnimationDrive>>,
 ) {
-    for (root, graph, children) in &roots {
+    for (root, graph) in &roots {
         for descendant in children.iter_descendants(root) {
             if let Ok(mut player) = players.get_mut(descendant) {
                 let mut transitions = AnimationTransitions::new();
@@ -92,11 +93,12 @@ pub fn bind_avatar_animators(
 pub fn pose_legacy_unanimated_avatars(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    roots: Query<(Entity,&AvatarAnimationGraph,&Children), Without<LegacyRigPoseApplied>>,
+    roots: Query<(Entity,&AvatarAnimationGraph), Without<LegacyRigPoseApplied>>,
+    children: Query<&Children>,
     names: Query<(&Name,&Transform)>,
 ) {
     use bevy::asset::LoadState;
-    for (root,graph,children) in &roots {
+    for (root,graph) in &roots {
         if !matches!(asset_server.load_state(graph.idle_clip.id()), LoadState::Failed(_)) {
             continue;
         }
