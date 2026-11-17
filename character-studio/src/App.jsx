@@ -214,7 +214,14 @@ export default function App() {
 
   if (launcherHome) {
     return <BaLauncherDashboard onCustomize={() => {
-      setViewMode(ViewMode.APPEARANCE)
+      // APPEARANCE only edits an avatar that is already in the Three.js scene.
+      // On first entry the CREATE page must load the selected gender's pack
+      // and initial traits before opening APPEARANCE. Skipping that step
+      // produced a blank character until the player pressed Back.
+      const hasLoadedAvatar =
+        characterManager?.manifestDataManager?.hasExistingManifest?.() &&
+        Object.values(characterManager.avatar || {}).some((trait) => trait?.vrm)
+      setViewMode(hasLoadedAvatar ? ViewMode.APPEARANCE : ViewMode.CREATE)
       setLauncherHome(false)
     }} />
   }
