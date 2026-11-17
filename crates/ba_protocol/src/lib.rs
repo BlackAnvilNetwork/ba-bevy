@@ -62,6 +62,104 @@ impl Pose {
     }
 }
 
+
+/**
+ * Shared deterministic-ish movement kernel used by server authority and
+ * client presentation prediction. These are dev-zone bounds until zones
+ * provide versioned navigation/collision manifests.
+ */
+pub const WALK_SPEED: f32 = 3.5;
+pub const SPRINT_SPEED: f32 = 6.5;
+pub const DEV_ZONE_MIN_X: f32 = -20.0;
+pub const DEV_ZONE_MAX_X: f32 = 20.0;
+pub const DEV_ZONE_MIN_Z: f32 = -20.0;
+pub const DEV_ZONE_MAX_Z: f32 = 20.0;
+pub const PLAYER_HEIGHT: f32 = 1.65;
+pub const TICK_DT: f32 = 1.0 / TICK_HZ as f32;
+
+/// One authoritative movement sample, *not* a client position.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MoveAxes {
+    pub forward: f32,
+    pub strafe: f32,
+    pub yaw: f32,
+    pub sprint: bool,
+}
+
+impl MoveAxes {
+    pub fn valid(self) -> bool {
+        self.forward.is_finite()
+            && self.strafe.is_finite()
+            && self.yaw.is_finite()
+            && self.forward.abs() <= 1.0
+            && self.strafe.abs() <= 1.0
+    }
+}
+
+/// Integrate exactly one bounded simulation step. The server remains authoritative;
+/// the client uses this function only to predict and replay unacknowledged inputs.
+pub fn integrate_movement(pose: Pose, axes: MoveAxes, dt: f32) -> Pose {
+    if !pose.is_finite() || !axes.valid() || !dt.is_finite() || !(0.0..=TICK_DT).contains(&dt) {
+        return pose;
+    }
+    let (s, c) = axes.yaw.sin_cos();
+    let mut dx = -s * axes.forward + c * axes.strafe;
+    let mut dz = -c * axes.forward - s * axes.strafe;
+    let magnitude = (dx * dx + dz * dz).sqrt();
+    if magnitude > 1.0 {
+        dx /= magnitude;
+        dz /= magnitude;
+    }
+    let speed = if axes.sprint { SPRINT_SPEED } else { WALK_SPEED };
+    Pose {
+        x: (pose.x + dx * speed * dt).clamp(DEV_ZONE_MIN_X, DEV_ZONE_MAX_X),
+        y: PLAYER_HEIGHT,
+        z: (pose.z + dz * speed * dt).clamp(DEV_ZONE_MIN_Z, DEV_ZONE_MAX_Z),
+        yaw: axes.yaw,
+    }
+}
+
+#[cfg(test)]
+mod movement_tests {
+    use super::*;
+
+    fn origin() -> Pose { Pose::default() }
+    fn axes(forward: f32, strafe: f32) -> MoveAxes {
+        MoveAxes { forward, strafe, yaw: 0.0, sprint: true }
+    }
+
+    #[test]
+    fn forward_and_diagonal_move_at_same_max_speed() {
+        let forward = integrate_movement(origin(), axes(1.0, 0.0), TICK_DT);
+        let diagonal = integrate_movement(origin(), axes(1.0, 1.0), TICK_DT);
+        let d = (diagonal.x.powi(2) + diagonal.z.powi(2)).sqrt();
+        assert!((forward.z.abs() - SPRINT_SPEED * TICK_DT).abs() < 0.00001);
+        assert!((d - SPRINT_SPEED * TICK_DT).abs() < 0.00001);
+    }
+
+    #[test]
+    fn invalid_inputs_do_not_advance_position() {
+        for a in [axes(f32::NAN, 0.0), axes(2.0, 0.0), axes(0.0, f32::INFINITY)] {
+            assert_eq!(integrate_movement(origin(), a, TICK_DT), origin());
+        }
+        assert_eq!(integrate_movement(origin(), axes(1.0, 0.0), 100.0), origin());
+    }
+
+    #[test]
+    fn never_exits_zone_and_is_repeatable() {
+        let sample = axes(1.0, 1.0);
+        let mut a = origin();
+        let mut b = origin();
+        for _ in 0..1000 {
+            a = integrate_movement(a, sample, TICK_DT);
+            b = integrate_movement(b, sample, TICK_DT);
+        }
+        assert_eq!(a,b);
+        assert!((DEV_ZONE_MIN_X..=DEV_ZONE_MAX_X).contains(&a.x));
+        assert!((DEV_ZONE_MIN_Z..=DEV_ZONE_MAX_Z).contains(&a.z));
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerState {
