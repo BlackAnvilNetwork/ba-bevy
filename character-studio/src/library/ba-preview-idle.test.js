@@ -24,6 +24,10 @@ describe("Black Anvil Character Studio idle preview", () => {
     expect(Math.abs(left.quaternion.z)).toBeGreaterThan(0.2)
     expect(Math.abs(right.quaternion.z)).toBeGreaterThan(0.2)
     preview.dispose()
+    // The editor may serialize the avatar immediately after Done. Neutral
+    // bind-pose values must be restored so exported clips do not double-pose.
+    expect(left.quaternion.z).toBeCloseTo(0, 5)
+    expect(right.quaternion.z).toBeCloseTo(0, 5)
   })
 
   it("does not create duplicate mixers on rerender and cleans up when a body changes", () => {
