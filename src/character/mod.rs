@@ -45,6 +45,8 @@ pub struct TraitRef {
 pub struct RuntimeAsset {
     pub format: String,
     pub relative_path: String,
+    #[serde(default)]
+    pub content_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Resource)]
@@ -142,7 +144,10 @@ fn valid_character_asset(draft: &BaCharacterV1) -> bool {
             "character://{}/revisions/r{}/character.glb",
             draft.character_id, draft.revision
         );
-        return draft.runtime.relative_path == expected;
+        let valid_hash = draft.runtime.content_hash.as_ref().is_some_and(|hash| {
+            hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
+        });
+        return draft.runtime.relative_path == expected && valid_hash;
     }
     true // standalone developer forge keeps its historical local export path
 }
