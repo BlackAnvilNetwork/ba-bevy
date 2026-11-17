@@ -387,11 +387,29 @@ export class CharacterManager {
       var result = {};
       for (const prop in this.avatar) {
         const trait = this.avatar[prop];
+        // Applied morph weights (not just trait ids) for reconstruction.
         const blendshapes = {};
         const info = trait.blendShapeTraitsInfo || {};
         for (const k in info) {
           const bs = info[k];
-          blendshapes[k] = typeof bs?.getId === "function" ? bs.getId() : (bs?.id || bs?.name || true);
+          const id =
+            typeof bs?.getId === "function"
+              ? bs.getId()
+              : bs?.id || (typeof bs?.getGroupId === "function" ? bs.getGroupId() : k);
+          let weight = null;
+          if (trait.model && bs?.id != null) {
+            trait.model.traverse?.((child) => {
+              if (weight != null) return;
+              const dict = child.morphTargetDictionary;
+              const infl = child.morphTargetInfluences;
+              if (!dict || !infl) return;
+              const idx = dict[bs.id];
+              if (idx != null) weight = infl[idx];
+            });
+          }
+          // Schema stores morph id → applied weight (0..1).
+          const key = String(id || k);
+          blendshapes[key] = typeof weight === "number" ? weight : 1;
         }
         const colors = {};
         if (trait.colorTrait?.value != null) {
@@ -401,15 +419,22 @@ export class CharacterManager {
           vals.forEach((v, i) => {
             colors[`c${i}`] = typeof v === "string" ? v : String(v);
           });
-        } else if (trait.model) {
-          // Sample first mesh lit/base color when no explicit traitColor.
+        }
+        // Collect distinct material colors (hair/skin channels), not only the first mesh.
+        if (trait.model) {
+          let n = 0;
           trait.model.traverse?.((child) => {
-            if (colors.c0) return;
-            const mat = child.material;
-            const m = Array.isArray(mat) ? mat[0] : mat;
-            if (m?.color?.getHexString) colors.c0 = `#${m.color.getHexString()}`;
-            else if (m?.uniforms?.litFactor?.value?.getHexString) {
-              colors.c0 = `#${m.uniforms.litFactor.value.getHexString()}`;
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            for (const m of mats) {
+              if (!m || n >= 8) continue;
+              let hex = null;
+              if (m.color?.getHexString) hex = `#${m.color.getHexString()}`;
+              else if (m.uniforms?.litFactor?.value?.getHexString) {
+                hex = `#${m.uniforms.litFactor.value.getHexString()}`;
+              }
+              if (hex && !Object.values(colors).includes(hex)) {
+                colors[`mat${n++}`] = hex;
+              }
             }
           });
         }

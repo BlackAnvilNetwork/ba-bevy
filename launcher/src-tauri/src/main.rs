@@ -9,6 +9,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde::Deserialize;
@@ -34,6 +35,40 @@ fn app_characters_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("BlackAnvil")
         .join("characters")
+}
+
+fn assert_safe_character_id(id: &str) -> Result<(), String> {
+    if id.is_empty() || id.len() > 64 {
+        return Err("characterId length".into());
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err("characterId must be alphanumeric/[_-] only".into());
+    }
+    if id == "." || id == ".." {
+        return Err("characterId reserved".into());
+    }
+    Ok(())
+}
+
+fn scoped_under(root: &Path, id: &str) -> Result<PathBuf, String> {
+    assert_safe_character_id(id)?;
+    let root = root
+        .canonicalize()
+        .unwrap_or_else(|_| root.to_path_buf());
+    fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    let candidate = root.join(id);
+    let resolved = if candidate.exists() {
+        candidate.canonicalize().map_err(|e| e.to_string())?
+    } else {
+        candidate
+    };
+    if !resolved.starts_with(&root) {
+        return Err("characterId path escape blocked".into());
+    }
+    Ok(resolved)
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,13 +102,7 @@ fn validate_character(json: &str) -> Result<BaCharacterV1, String> {
     if c.revision < 1 {
         return Err("revision must be >= 1".into());
     }
-    if c.character_id.trim().is_empty() {
-        return Err("characterId required".into());
-    }
-    if c.character_id.contains('/') || c.character_id.contains('\\') || c.character_id.contains("..")
-    {
-        return Err("characterId path-like".into());
-    }
+    assert_safe_character_id(&c.character_id)?;
     if c.name.is_empty() || c.name.len() > 24 {
         return Err("name length".into());
     }
@@ -92,7 +121,7 @@ fn validate_character(json: &str) -> Result<BaCharacterV1, String> {
     if c.runtime.format != "glb" {
         return Err("runtime.format".into());
     }
-    let _ = c.runtime.relative_path; // ignored — server owns path
+    let _ = c.runtime.relative_path;
     Ok(c)
 }
 
@@ -119,6 +148,40 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Write JSON+GLB into a staging directory with a COMMIT marker, then promote.
+fn transactional_character_write(
+    scoped: &Path,
+    json: &str,
+    glb: &[u8],
+    active_json: &Path,
+    active_glb: &Path,
+) -> Result<(), String> {
+    fs::create_dir_all(scoped).map_err(|e| e.to_string())?;
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let staging = scoped.join(format!(".staging-{}-{}", std::process::id(), stamp));
+    fs::create_dir_all(&staging).map_err(|e| e.to_string())?;
+    fs::write(staging.join("character.json"), json.as_bytes()).map_err(|e| e.to_string())?;
+    fs::write(staging.join("character.glb"), glb).map_err(|e| e.to_string())?;
+    // COMMIT last — incomplete staging is discarded.
+    fs::write(staging.join("COMMIT"), b"ok\n").map_err(|e| e.to_string())?;
+
+    atomic_write(&scoped.join("character.json"), json.as_bytes())?;
+    atomic_write(&scoped.join("character.glb"), glb)?;
+    fs::write(scoped.join("COMMIT"), format!("{stamp}\n")).map_err(|e| e.to_string())?;
+
+    if let Some(parent) = active_json.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    atomic_write(active_json, json.as_bytes())?;
+    atomic_write(active_glb, glb)?;
+
+    let _ = fs::remove_dir_all(&staging);
+    Ok(())
+}
+
 /// Persist BaCharacterV1 JSON + GLB (validated) for Bevy.
 #[tauri::command]
 fn save_draft(character_json: String, glb_base64: String) -> Result<serde_json::Value, String> {
@@ -128,7 +191,6 @@ fn save_draft(character_json: String, glb_base64: String) -> Result<serde_json::
         .map_err(|e| format!("invalid glb base64: {e}"))?;
     assert_glb(&glb)?;
 
-    // Force authoritative runtime path in stored JSON.
     let mut value: serde_json::Value =
         serde_json::from_str(&character_json).map_err(|e| e.to_string())?;
     if let Some(runtime) = value.get_mut("runtime") {
@@ -137,16 +199,15 @@ fn save_draft(character_json: String, glb_base64: String) -> Result<serde_json::
     }
     let normalized = serde_json::to_string_pretty(&value).map_err(|e| e.to_string())?;
 
-    let scoped = app_characters_dir().join(&c.character_id);
-    fs::create_dir_all(&scoped).map_err(|e| e.to_string())?;
-    atomic_write(&scoped.join("character.json"), normalized.as_bytes())?;
-    atomic_write(&scoped.join("character.glb"), &glb)?;
-
-    // Dev Bevy pointer (repo exports) — prototype only.
+    let scoped = scoped_under(&app_characters_dir(), &c.character_id)?;
     let exports = exports_dir();
-    fs::create_dir_all(&exports).map_err(|e| e.to_string())?;
-    atomic_write(&exports.join("active.json"), normalized.as_bytes())?;
-    atomic_write(&exports.join("active.glb"), &glb)?;
+    transactional_character_write(
+        &scoped,
+        &normalized,
+        &glb,
+        &exports.join("active.json"),
+        &exports.join("active.glb"),
+    )?;
 
     Ok(serde_json::json!({
         "ok": true,

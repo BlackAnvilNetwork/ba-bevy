@@ -147,12 +147,20 @@ export async function saveBaCharacterDraft(character, glbBlob) {
     })
   }
 
+  const tokenRes = await fetch("/ba/save-token", { method: "GET", cache: "no-store" })
+  if (!tokenRes.ok) {
+    throw new Error(`save-token failed (${tokenRes.status})`)
+  }
+  const { token } = await tokenRes.json()
+  if (!token) throw new Error("save-token missing token")
+
   const form = new FormData()
   form.append("character", JSON.stringify(character))
   form.append("glb", glbBlob, "active.glb")
 
   const res = await fetch("/ba/save-draft", {
     method: "POST",
+    headers: { "X-BA-Save-Token": token },
     body: form,
   })
   if (!res.ok) {

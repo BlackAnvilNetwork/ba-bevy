@@ -41,6 +41,7 @@ pub struct ZoneNet {
     pub local_player_id: Option<u32>,
     pub last_error: Option<String>,
     pub retry_at: Option<Instant>,
+    pub connect_started_at: Option<Instant>,
     tx: Option<Sender<ClientMessage>>,
     rx: Option<Arc<Mutex<Receiver<ServerMessage>>>>,
 }
@@ -77,9 +78,32 @@ pub fn connect_zone_on_enter(
     if !net.enabled || flow.in_menu() {
         return;
     }
+    // Welcome timeout / rejected → schedule retry instead of staying stuck.
+    if net.phase == ZonePhase::Connecting {
+        if let Some(started) = net.connect_started_at {
+            if started.elapsed() > Duration::from_secs(8) {
+                warn!("Zone Welcome timeout — resetting to Disconnected");
+                net.phase = ZonePhase::Disconnected;
+                net.tx = None;
+                net.rx = None;
+                net.connect_started_at = None;
+                net.retry_at = Some(Instant::now() + Duration::from_secs(3));
+                net.last_error = Some("welcome_timeout".into());
+            }
+        }
+        return;
+    }
+    if net.phase == ZonePhase::Rejected {
+        net.phase = ZonePhase::Disconnected;
+        net.retry_at = Some(Instant::now() + Duration::from_secs(5));
+        return;
+    }
+    if net.phase == ZonePhase::WelcomeVerified {
+        return;
+    }
     match net.phase {
         ZonePhase::Idle | ZonePhase::Disconnected => {}
-        ZonePhase::Connecting | ZonePhase::WelcomeVerified | ZonePhase::Rejected => return,
+        _ => return,
     }
     if let Some(at) = net.retry_at {
         if Instant::now() < at {
@@ -115,6 +139,7 @@ pub fn connect_zone_on_enter(
     net.tx = Some(out_tx);
     net.rx = Some(Arc::new(Mutex::new(in_rx)));
     net.phase = ZonePhase::Connecting;
+    net.connect_started_at = Some(Instant::now());
     net.last_error = None;
     info!("Zone ConnectRequested → {url}");
 }
@@ -372,6 +397,7 @@ pub fn apply_zone_snapshots(
             }) => {
                 net.local_player_id = Some(player_id);
                 net.phase = ZonePhase::WelcomeVerified;
+                net.connect_started_at = None;
                 spawn = Some(s);
                 info!("Zone WelcomeVerified player_id={player_id}");
             }
@@ -438,7 +464,12 @@ pub fn apply_zone_snapshots(
             Ok(ServerMessage::Reject { reason }) => {
                 warn!("Zone rejected: {reason}");
                 net.phase = ZonePhase::Rejected;
+                net.connect_started_at = None;
+                net.tx = None;
+                net.rx = None;
+                net.local_player_id = None;
                 net.last_error = Some(reason);
+                net.retry_at = Some(Instant::now() + Duration::from_secs(5));
             }
             Ok(_) => {}
             Err(TryRecvError::Empty) => break,

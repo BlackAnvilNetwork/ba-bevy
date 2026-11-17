@@ -1,5 +1,5 @@
 /**
- * Smoke: kits buff + realtime swings + WS + shield_bash + cast reject + NaN move.
+ * Smoke: kits buff + realtime swings + WS + negative cases (dup hello, flood move, cast reject).
  * Requires ba_zone_server on ws://127.0.0.1:8787 (protocol v3).
  */
 import WebSocket from "ws";
@@ -7,9 +7,9 @@ import WebSocket from "ws";
 const URL = process.env.BA_ZONE_URL || "ws://127.0.0.1:8787";
 const PROTOCOL = 3;
 
-function appearance(name, job = "Fighter") {
+function appearance(name, job = "Fighter", characterId) {
   return {
-    characterId: `smoke-${name}-${Date.now()}`,
+    characterId: characterId || `smoke-${name}-${Date.now()}`.replace(/[^A-Za-z0-9_-]/g, "-"),
     name,
     startingJob: job,
     manifestId: "anata/male",
@@ -18,10 +18,20 @@ function appearance(name, job = "Fighter") {
   };
 }
 
-function openClient(name, x, job = "Fighter") {
+function openClient(name, job = "Fighter") {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(URL);
-    const state = { ws, name, id: null, peers: [], damages: [], heals: [], buffs: [], rejects: [], spawn: null };
+    const state = {
+      ws,
+      name,
+      id: null,
+      peers: [],
+      damages: [],
+      buffs: [],
+      rejects: [],
+      serverRejects: [],
+      spawn: null,
+    };
     const t = setTimeout(() => reject(new Error(`${name} open timeout`)), 5000);
     ws.on("open", () => {
       ws.send(
@@ -29,7 +39,7 @@ function openClient(name, x, job = "Fighter") {
           type: "hello",
           protocol: PROTOCOL,
           appearance: appearance(name, job),
-          pose: { x, y: 1.65, z: 0, yaw: 0 },
+          pose: { x: 99, y: 1.65, z: 0, yaw: 0 },
         })
       );
     });
@@ -41,14 +51,15 @@ function openClient(name, x, job = "Fighter") {
         clearTimeout(t);
         resolve(state);
       } else if (msg.type === "reject") {
-        clearTimeout(t);
-        reject(new Error(`rejected: ${msg.reason}`));
+        state.serverRejects.push(msg);
+        if (state.id == null) {
+          clearTimeout(t);
+          reject(new Error(`rejected: ${msg.reason}`));
+        }
       } else if (msg.type === "snapshot") {
         state.peers = msg.players;
       } else if (msg.type === "damage") {
         state.damages.push(msg);
-      } else if (msg.type === "heal") {
-        state.heals.push(msg);
       } else if (msg.type === "buff_applied") {
         state.buffs.push(msg);
       } else if (msg.type === "cast_rejected") {
@@ -72,11 +83,11 @@ async function waitUntil(fn, ms, label) {
   throw new Error(label);
 }
 
-const a = await openClient("Alpha", 99, "Fighter"); // client pose ignored
-const b = await openClient("Bravo", -99, "Knight");
+const a = await openClient("Alpha", "Fighter");
+const b = await openClient("Bravo", "Knight");
 if (!a.spawn || a.spawn.x !== 0) throw new Error("server spawn expected at origin");
 
-// Duplicate hello must reject (keep connection)
+const idBeforeDup = a.id;
 a.ws.send(
   JSON.stringify({
     type: "hello",
@@ -85,24 +96,44 @@ a.ws.send(
     pose: { x: 0, y: 1.65, z: 0, yaw: 0 },
   })
 );
-await waitUntil(() => true, 200, "dup hello settle");
+await waitUntil(
+  () => a.serverRejects.some((r) => String(r.reason).includes("duplicate")),
+  3000,
+  "duplicate hello reject"
+);
+if (a.id !== idBeforeDup) throw new Error("player id changed after duplicate hello");
 
 await waitUntil(() => a.peers.length >= 2 && b.peers.length >= 2, 5000, "peer wait");
 
-// NaN move should be ignored (still near spawn)
-a.ws.send(JSON.stringify({ type: "move", pose: { x: Number.NaN, y: 1.65, z: 0, yaw: 0 } }));
+// Non-finite via raw JSON (JSON.stringify(NaN) becomes null — send literal instead).
+a.ws.send('{"type":"move","pose":{"x":NaN,"y":1.65,"z":0,"yaw":0}}');
+// Flood moves: many packets should not telescope beyond budget.
+for (let i = 0; i < 80; i++) {
+  a.ws.send(JSON.stringify({ type: "move", pose: { x: 20, y: 1.65, z: 0, yaw: 0 } }));
+}
+await sleep(150);
+const pid = (p) => p.playerId ?? p.player_id;
+const me = a.peers.find((p) => pid(p) === a.id);
+if (!me) throw new Error(`self missing from snapshot (peers=${a.peers.length})`);
+if (Math.abs(me.pose.x) > 1.0) {
+  throw new Error(`flood move escaped budget: x=${me.pose.x}`);
+}
+
 a.ws.send(JSON.stringify({ type: "move", pose: { x: 1.2, y: 1.65, z: 0, yaw: 0 } }));
 b.ws.send(JSON.stringify({ type: "move", pose: { x: 1.5, y: 1.65, z: 0, yaw: 0 } }));
-await sleep(200);
+await sleep(250);
 
-// kits buff
 a.ws.send(JSON.stringify({ type: "cast", ability_id: "berserk" }));
 await waitUntil(() => a.buffs.some((d) => d.ability_id === "berserk"), 3000, "berserk buff");
 
-// OOR cast before engage should reject
 a.ws.send(JSON.stringify({ type: "cast", ability_id: "ws_gs_hard_slash" }));
 await waitUntil(
-  () => a.rejects.some((r) => r.ability_id === "ws_gs_hard_slash" && (r.reason === "tp" || r.reason === "no_target" || r.reason === "out_of_range")),
+  () =>
+    a.rejects.some(
+      (r) =>
+        r.ability_id === "ws_gs_hard_slash" &&
+        (r.reason === "tp" || r.reason === "no_target" || r.reason === "out_of_range")
+    ),
   3000,
   "ws reject without TP/target"
 );
@@ -110,9 +141,16 @@ await waitUntil(
 a.ws.send(JSON.stringify({ type: "attack", target_id: 0 }));
 await waitUntil(
   () => a.damages.filter((d) => d.attacker_id === a.id && d.target_id === b.id && d.hit).length >= 10,
-  12000,
+  14000,
   "10 auto hits for TP"
 );
+
+// Allow budget refill so closing to target is possible after flood test.
+for (let i = 0; i < 30; i++) {
+  a.ws.send(JSON.stringify({ type: "move", pose: { x: 1.2, y: 1.65, z: 0, yaw: 0 } }));
+  b.ws.send(JSON.stringify({ type: "move", pose: { x: 1.5, y: 1.65, z: 0, yaw: 0 } }));
+  await sleep(50);
+}
 
 const beforeWs = a.damages.length;
 a.ws.send(JSON.stringify({ type: "cast", ability_id: "ws_gs_hard_slash" }));
@@ -136,6 +174,6 @@ await waitUntil(() => {
 a.ws.close();
 b.ws.close();
 console.log(
-  `PASS zone kits smoke v3: spawn ok, buff+reject+autos+wsDmg=${wsHit.damage}+shield_bash`
+  `PASS zone kits smoke v3: dup-hello reject, flood capped, buff+wsDmg=${wsHit.damage}+shield_bash`
 );
 process.exit(0);

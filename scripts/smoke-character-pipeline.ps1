@@ -45,7 +45,11 @@ try {
   W "Content-Type: model/gltf-binary`r`n`r`n"
   $ms.Write($glbBytes, 0, $glbBytes.Length)
   W "`r`n--$boundary--`r`n"
+  $tokenResp = Invoke-WebRequest -Uri "http://127.0.0.1:5173/ba/save-token" -Method GET -UseBasicParsing -TimeoutSec 5
+  $token = ($tokenResp.Content | ConvertFrom-Json).token
+  if (-not $token) { throw "save-token missing" }
   $resp = Invoke-WebRequest -Uri "http://127.0.0.1:5173/ba/save-draft" -Method POST `
+    -Headers @{ "X-BA-Save-Token" = $token } `
     -ContentType "multipart/form-data; boundary=$boundary" -Body $ms.ToArray() -UseBasicParsing -TimeoutSec 5
   Write-Host "save-draft OK: $($resp.Content)"
 } catch {
@@ -73,5 +77,9 @@ if (-not $queued) { throw "FAIL: avatar load not queued" }
 # AssetEvent may land after the short smoke window on cold caches — require queue at minimum.
 if ($missingActive) { throw "FAIL: active.glb missing from asset server" }
 
-Write-Host "SMOKE PASS (prototype): draft loaded + avatar queued$(if ($ready) { ' + ready' } else { ' (ready event not observed in window — use Studio humanoid fixture in CI)' })"
-Write-Host "NOTE: stand-in tower GLB is not a milestone acceptance fixture; keep M1 issues open."
+if (-not $ready) {
+  Write-Host "PROTOTYPE CHECK: draft loaded + avatar queued (AssetEvent ready not observed in window)"
+  Write-Host "NOTE: tower GLB stand-in is not M1 acceptance evidence — keep milestone issues open."
+} else {
+  Write-Host "PROTOTYPE CHECK: draft loaded + avatar queued + ready"
+}

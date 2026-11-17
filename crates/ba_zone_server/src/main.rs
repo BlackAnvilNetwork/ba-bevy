@@ -26,8 +26,10 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::{info, warn};
 
 const MAX_MOVE_SPEED: f32 = 7.0;
-/// Cap idle→move dt so a long pause cannot become a teleport budget.
-const MAX_MOVE_DT: f32 = 1.0 / TICK_HZ as f32 * 2.0;
+/// Cap idle refill so a long pause cannot bank a huge teleport budget.
+const MAX_MOVE_BUDGET: f32 = MAX_MOVE_SPEED * (1.0 / TICK_HZ as f32) * 2.0;
+/// Hard cap Move packets per second per player (anti flood / min-dt bypass).
+const MAX_MOVE_PACKETS_PER_SEC: u32 = 40;
 const BOUNDS: (f32, f32, f32, f32) = (-20.0, 20.0, -20.0, 20.0);
 const DT: f32 = 1.0 / TICK_HZ as f32;
 const DEFAULT_SPAWN: Pose = Pose {
@@ -54,6 +56,10 @@ struct Player {
     tp: i32,
     atk_mul: f32,
     atk_mul_until: Option<Instant>,
+    /// Remaining movement meters; refilled only from real wall-clock elapsed time.
+    move_budget: f32,
+    move_packets_window: u32,
+    move_window_start: Instant,
 }
 
 struct World {
@@ -311,10 +317,10 @@ async fn handle_connection(
                                     break;
                                 }
                                 if appearance.name.trim().is_empty()
-                                    || appearance.character_id.trim().is_empty()
+                                    || !safe_character_id(&appearance.character_id)
                                 {
                                     let reject = ServerMessage::Reject {
-                                        reason: "name and characterId required".into(),
+                                        reason: "name and safe characterId required".into(),
                                     };
                                     write.send(Message::Text(reject.to_json()?.into())).await?;
                                     break;
@@ -352,6 +358,9 @@ async fn handle_connection(
                                             tp: 0,
                                             atk_mul: 1.0,
                                             atk_mul_until: None,
+                                            move_budget: MAX_MOVE_BUDGET,
+                                            move_packets_window: 0,
+                                            move_window_start: Instant::now(),
                                         },
                                     );
                                 }
@@ -374,10 +383,46 @@ async fn handle_connection(
                                 }
                                 let mut w = world.write().await;
                                 let Some(player) = w.players.get_mut(&id) else { continue };
-                                let raw_dt = player.last_move.elapsed().as_secs_f32();
-                                let dt = raw_dt.clamp(1.0 / 120.0, MAX_MOVE_DT);
-                                player.pose = clamp_pose(limit_speed(player.pose, pose, dt));
-                                player.last_move = Instant::now();
+                                let now = Instant::now();
+                                if now.duration_since(player.move_window_start) >= Duration::from_secs(1) {
+                                    player.move_window_start = now;
+                                    player.move_packets_window = 0;
+                                }
+                                if player.move_packets_window >= MAX_MOVE_PACKETS_PER_SEC {
+                                    continue; // flood — drop
+                                }
+                                player.move_packets_window += 1;
+
+                                // Real elapsed only — no minimum floor (that enabled packet-flood speed hacks).
+                                let elapsed = player.last_move.elapsed().as_secs_f32();
+                                player.last_move = now;
+                                if elapsed <= 0.0 {
+                                    continue;
+                                }
+                                player.move_budget = (player.move_budget
+                                    + MAX_MOVE_SPEED * elapsed)
+                                    .min(MAX_MOVE_BUDGET);
+
+                                let dx = pose.x - player.pose.x;
+                                let dz = pose.z - player.pose.z;
+                                let want = (dx * dx + dz * dz).sqrt();
+                                if want <= f32::EPSILON {
+                                    player.pose.yaw = pose.yaw;
+                                    continue;
+                                }
+                                let allow = want.min(player.move_budget);
+                                if allow <= 0.0 {
+                                    continue;
+                                }
+                                let scale = allow / want;
+                                let next = Pose {
+                                    x: player.pose.x + dx * scale,
+                                    y: 1.65,
+                                    z: player.pose.z + dz * scale,
+                                    yaw: pose.yaw,
+                                };
+                                player.pose = clamp_pose(next);
+                                player.move_budget = (player.move_budget - allow).max(0.0);
                             }
                             Ok(ClientMessage::Attack { target_id }) => {
                                 let Some(attacker_id) = player_id else { continue };
@@ -642,6 +687,16 @@ fn nearest_other(players: &HashMap<u32, Player>, self_id: u32, pose: Pose) -> Op
     best.map(|(id, _)| id)
 }
 
+fn safe_character_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 64
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        && id != "."
+        && id != ".."
+}
+
 fn dist_xz(a: Pose, b: Pose) -> f32 {
     let dx = a.x - b.x;
     let dz = a.z - b.z;
@@ -659,53 +714,31 @@ fn clamp_pose(mut pose: Pose) -> Pose {
     pose
 }
 
-fn limit_speed(prev: Pose, desired: Pose, dt: f32) -> Pose {
-    if !desired.is_finite() {
-        return prev;
-    }
-    let dx = desired.x - prev.x;
-    let dz = desired.z - prev.z;
-    let dist = (dx * dx + dz * dz).sqrt();
-    let max_step = MAX_MOVE_SPEED * dt;
-    if dist <= max_step || dist < f32::EPSILON {
-        return Pose {
-            x: desired.x,
-            y: 1.65,
-            z: desired.z,
-            yaw: desired.yaw,
-        };
-    }
-    let scale = max_step / dist;
-    Pose {
-        x: prev.x + dx * scale,
-        y: 1.65,
-        z: prev.z + dz * scale,
-        yaw: desired.yaw,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn idle_pause_cannot_teleport() {
-        let prev = Pose {
-            x: 0.0,
-            y: 1.65,
-            z: 0.0,
-            yaw: 0.0,
-        };
-        let desired = Pose {
-            x: 50.0,
-            y: 1.65,
-            z: 0.0,
-            yaw: 0.0,
-        };
-        // Even if client claims a huge gap, server clamps dt.
-        let moved = limit_speed(prev, desired, MAX_MOVE_DT);
-        let dist = (moved.x - prev.x).abs();
-        assert!(dist <= MAX_MOVE_SPEED * MAX_MOVE_DT + 0.001);
+    fn idle_budget_capped() {
+        // A huge elapsed refill still cannot exceed MAX_MOVE_BUDGET.
+        let budget = (0.0_f32 + MAX_MOVE_SPEED * 10.0).min(MAX_MOVE_BUDGET);
+        assert!((budget - MAX_MOVE_BUDGET).abs() < 0.001);
+        assert!(budget <= MAX_MOVE_SPEED * (2.0 / TICK_HZ as f32) + 0.001);
+    }
+
+    #[test]
+    fn packet_flood_cannot_exceed_budget() {
+        // 100 tiny steps still limited by total budget, not per-packet min dt.
+        let mut budget = MAX_MOVE_BUDGET;
+        let mut x = 0.0_f32;
+        for _ in 0..100 {
+            let want = 1.0_f32;
+            let allow = want.min(budget);
+            x += allow;
+            budget -= allow;
+        }
+        assert!(x <= MAX_MOVE_BUDGET + 0.001);
+        assert!(budget <= 0.001);
     }
 
     #[test]

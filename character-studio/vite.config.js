@@ -21,6 +21,8 @@ const JOBS = new Set([
   'Druid',
 ])
 const MANIFESTS = new Set(['anata/male', 'anata/female'])
+/** UUID or safe slug only — never path segments. */
+const SAFE_CHARACTER_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 
 function isLoopback(req) {
   const host = String(req.headers.host || '')
@@ -34,11 +36,30 @@ function isLoopback(req) {
   )
 }
 
+function assertSafeCharacterId(id) {
+  if (typeof id !== 'string' || !SAFE_CHARACTER_ID.test(id)) {
+    throw new Error('characterId must be alphanumeric/[_-] only (no path separators)')
+  }
+  if (id === '.' || id === '..') throw new Error('characterId reserved')
+}
+
+/** Resolve scoped dir and ensure it stays under exports/by-id. */
+function scopedCharacterDir(characterId) {
+  assertSafeCharacterId(characterId)
+  const byIdRoot = path.resolve(exportsDir, 'by-id')
+  const charDir = path.resolve(byIdRoot, characterId)
+  const rel = path.relative(byIdRoot, charDir)
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error('characterId path escape blocked')
+  }
+  return charDir
+}
+
 function validateBaCharacter(raw) {
   const c = JSON.parse(raw)
   if (c.schemaVersion !== 1) throw new Error('schemaVersion must be 1')
   if (!Number.isInteger(c.revision) || c.revision < 1) throw new Error('revision')
-  if (typeof c.characterId !== 'string' || !c.characterId.trim()) throw new Error('characterId')
+  assertSafeCharacterId(c.characterId)
   if (typeof c.name !== 'string' || c.name.length < 1 || c.name.length > 24) {
     throw new Error('name')
   }
@@ -46,7 +67,6 @@ function validateBaCharacter(raw) {
   if (!MANIFESTS.has(c.manifestId)) throw new Error('manifestId')
   if (c.pack !== 'anata') throw new Error('pack')
   if (!c.runtime || c.runtime.format !== 'glb') throw new Error('runtime.format')
-  // Server/Bevy owns asset path — ignore client relativePath.
   c.runtime.relativePath = 'character/exports/active.glb'
   return c
 }
@@ -58,14 +78,62 @@ function assertGlb(buf) {
   if (magic !== 'glTF') throw new Error('glb magic must be glTF')
 }
 
-/** Dev-only save bridge — loopback, size-capped, schema+GLB checks. Disabled in build. */
+function writeTransactionalPair(charDir, jsonText, glbBuf, activeJson, activeGlb) {
+  fs.mkdirSync(charDir, { recursive: true })
+  const staging = path.join(charDir, `.staging-${process.pid}-${Date.now()}`)
+  fs.mkdirSync(staging, { recursive: true })
+  const jsonPath = path.join(staging, 'character.json')
+  const glbPath = path.join(staging, 'character.glb')
+  const markerPath = path.join(staging, 'COMMIT')
+  fs.writeFileSync(jsonPath, jsonText)
+  fs.writeFileSync(glbPath, glbBuf)
+  // Marker last — incomplete staging dirs without COMMIT are ignored/cleaned.
+  fs.writeFileSync(markerPath, 'ok\n')
+
+  const liveJson = path.join(charDir, 'character.json')
+  const liveGlb = path.join(charDir, 'character.glb')
+  const tmpJson = `${liveJson}.${process.pid}.tmp`
+  const tmpGlb = `${liveGlb}.${process.pid}.tmp`
+  fs.copyFileSync(jsonPath, tmpJson)
+  fs.copyFileSync(glbPath, tmpGlb)
+  fs.renameSync(tmpJson, liveJson)
+  fs.renameSync(tmpGlb, liveGlb)
+  fs.writeFileSync(path.join(charDir, 'COMMIT'), `${Date.now()}\n`)
+
+  // Active pointer: write both to staging names then rename (best-effort pair).
+  const aJsonTmp = `${activeJson}.${process.pid}.tmp`
+  const aGlbTmp = `${activeGlb}.${process.pid}.tmp`
+  fs.copyFileSync(liveJson, aJsonTmp)
+  fs.copyFileSync(liveGlb, aGlbTmp)
+  fs.renameSync(aJsonTmp, activeJson)
+  fs.renameSync(aGlbTmp, activeGlb)
+
+  fs.rmSync(staging, { recursive: true, force: true })
+}
+
+/** Dev-only save bridge — loopback + CSRF token + size/schema/path checks. */
 function baSaveDraftPlugin() {
+  const csrfToken = crypto.randomBytes(32).toString('hex')
   return {
     name: 'ba-save-draft',
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (req.method !== 'POST' || req.url?.split('?')[0] !== '/ba/save-draft') {
+        const urlPath = req.url?.split('?')[0]
+
+        if (req.method === 'GET' && urlPath === '/ba/save-token') {
+          if (!isLoopback(req)) {
+            res.statusCode = 403
+            res.end('loopback only')
+            return
+          }
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'no-store')
+          res.end(JSON.stringify({ token: csrfToken }))
+          return
+        }
+
+        if (req.method !== 'POST' || urlPath !== '/ba/save-draft') {
           next()
           return
         }
@@ -75,6 +143,19 @@ function baSaveDraftPlugin() {
             res.end('loopback only')
             return
           }
+          const origin = req.headers.origin
+          if (origin && origin !== 'http://127.0.0.1:5173' && origin !== 'http://localhost:5173') {
+            res.statusCode = 403
+            res.end('origin not allowed')
+            return
+          }
+          const token = req.headers['x-ba-save-token']
+          if (token !== csrfToken) {
+            res.statusCode = 403
+            res.end('missing or invalid X-BA-Save-Token (GET /ba/save-token first)')
+            return
+          }
+
           const chunks = []
           let total = 0
           for await (const chunk of req) {
@@ -109,18 +190,15 @@ function baSaveDraftPlugin() {
           character.runtime.contentHash = hash
 
           fs.mkdirSync(exportsDir, { recursive: true })
-          const charDir = path.join(exportsDir, 'by-id', character.characterId)
-          fs.mkdirSync(charDir, { recursive: true })
+          const charDir = scopedCharacterDir(character.characterId)
           const jsonText = JSON.stringify(character, null, 2)
-          const tmpJson = path.join(charDir, `.active.json.${process.pid}.tmp`)
-          const tmpGlb = path.join(charDir, `.active.glb.${process.pid}.tmp`)
-          fs.writeFileSync(tmpJson, jsonText)
-          fs.writeFileSync(tmpGlb, glbPart.data)
-          fs.renameSync(tmpJson, path.join(charDir, 'character.json'))
-          fs.renameSync(tmpGlb, path.join(charDir, 'character.glb'))
-          // Dev pointer for Bevy AssetServer (prototype — not installed-release storage).
-          fs.copyFileSync(path.join(charDir, 'character.json'), path.join(exportsDir, 'active.json'))
-          fs.copyFileSync(path.join(charDir, 'character.glb'), path.join(exportsDir, 'active.glb'))
+          writeTransactionalPair(
+            charDir,
+            jsonText,
+            glbPart.data,
+            path.join(exportsDir, 'active.json'),
+            path.join(exportsDir, 'active.glb'),
+          )
 
           res.setHeader('Content-Type', 'application/json')
           res.end(
@@ -148,11 +226,11 @@ function parseMultipart(buffer, boundary) {
   const parts = []
   let start = buffer.indexOf(sep) + sep.length
   while (start < buffer.length) {
-    if (buffer[start] === 45 && buffer[start + 1] === 45) break // --
+    if (buffer[start] === 45 && buffer[start + 1] === 45) break
     if (buffer[start] === 13 && buffer[start + 1] === 10) start += 2
     const next = buffer.indexOf(sep, start)
     if (next < 0) break
-    let partBuf = buffer.subarray(start, next - 2) // trim CRLF before boundary
+    let partBuf = buffer.subarray(start, next - 2)
     const headerEnd = partBuf.indexOf('\r\n\r\n')
     if (headerEnd >= 0) {
       const header = partBuf.subarray(0, headerEnd).toString('utf8')
@@ -170,7 +248,6 @@ function parseMultipart(buffer, boundary) {
   return parts
 }
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), baSaveDraftPlugin()],
   server: {
@@ -178,7 +255,6 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
-  //  base: '/CharacterStudio/', NOTE: For Github pages, you need to add the base URL (name of the repo)
   build: {
     outDir: './build',
   },
