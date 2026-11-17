@@ -35,6 +35,7 @@ use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode, spawn_first_
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
     bind_avatar_animators, update_avatar_animation,
+    pose_legacy_unanimated_avatars, animate_legacy_arm_pose,
 };
 use data::load_game_data;
 use net::{
