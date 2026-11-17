@@ -35,7 +35,7 @@ pub struct CameraView {
 pub struct FirstPersonRig;
 
 #[derive(Component)]
-struct FirstPersonHand {
+pub(crate) struct FirstPersonHand {
     left: bool,
     rest: Transform,
 }
