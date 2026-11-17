@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference = "Stop"
-$root = "C:\Users\raxac\OneDrive\Desktop\apps\black-anvil"
+$root = Split-Path -Parent $PSScriptRoot
 $studio = Join-Path $root "character-studio"
 $loot = Join-Path $studio "public\loot-assets"
 $assets = Join-Path $root "assets\character"
