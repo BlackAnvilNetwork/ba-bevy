@@ -27,7 +27,12 @@ struct StartResponse {
 
 pub(crate) fn gateway_base() -> Result<String,String> {
     let base=std::env::var("BA_GATEWAY_PUBLIC_URL")
+        .or_else(|_| option_env!("BA_GATEWAY_PUBLIC_URL").map(str::to_owned)
+            .ok_or(std::env::VarError::NotPresent))
         .unwrap_or_else(|_| "http://127.0.0.1:8790".into());
+    if !cfg!(debug_assertions) && base=="http://127.0.0.1:8790" {
+        return Err("Release missing BA_GATEWAY_PUBLIC_URL compiled configuration".into());
+    }
     let url=reqwest::Url::parse(&base).map_err(|_|"Invalid BA_GATEWAY_PUBLIC_URL")?;
     let local=url.host_str().is_some_and(|h|h=="localhost" || h=="127.0.0.1" || h=="::1");
     if url.scheme()!="https" && !(url.scheme()=="http" && local) {
