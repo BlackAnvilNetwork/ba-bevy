@@ -144,6 +144,14 @@ export function rememberBaCharacterDraft(character) {
   if (character.manifestId === "anata/female" || character.manifestId === "anata/male") {
     const gender = character.manifestId.split("/")[1]
     sessionStorage.setItem("ba_gender", gender)
+    // The editor's gender selector reads the URL before sessionStorage.
+    // Restore the selected gender in both so an old query parameter cannot
+    // silently swap the character's body on a future Customize visit.
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set("ba_gender", gender)
+      window.history.replaceState({}, "", url.toString())
+    } catch (_) { /* No browser history in isolated tests. */ }
   }
 }
 
