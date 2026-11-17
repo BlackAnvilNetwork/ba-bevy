@@ -1,3 +1,4 @@
+mod ashworks;
 mod atmosphere;
 mod avatar_delivery;
 mod boss;
@@ -252,6 +253,8 @@ fn main() {
                     .run_if(in_yard),
             ),
         )
+        .add_systems(Startup, ashworks::spawn)
+        .add_systems(Update, (ashworks::display, ashworks::gallery_visibility).after(apply_zone_snapshots))
         .run();
 }
 

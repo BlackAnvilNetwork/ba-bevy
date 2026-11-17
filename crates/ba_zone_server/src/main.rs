@@ -5,6 +5,8 @@
 //! An explicit BA_DEV_ALLOW_UNAUTH=1 is required for local-only smoke tests.
 
 mod auth;
+mod ashworks;
+use ashworks::Kiln;
 
 use std::collections::HashMap;
 use auth::{AdmissionMode, WorldSave};
@@ -84,6 +86,7 @@ struct Player {
 }
 
 struct World {
+    kilns: Vec<Kiln>,
     players: HashMap<u32, Player>,
     tick: u64,
     rng: SmallRng,
@@ -128,6 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let world: SharedWorld = Arc::new(RwLock::new(World {
         players: HashMap::new(),
+        kilns: ba_protocol::ashworks::CONSTRUCTS.iter().map(Kiln::new).collect(),
         tick: 0,
         rng: SmallRng::from_os_rng(),
     }));
@@ -236,7 +240,7 @@ fn snapshot_message_for(w: &World, viewer_id: u32) -> ServerMessage {
             last_input_seq: p.last_input_seq,
         })
     }).collect();
-    ServerMessage::Snapshot { tick: w.tick, players }
+    ServerMessage::Snapshot { tick: w.tick, players, ashworks: ashworks::view(w, viewer_id) }
 }
 
 /// Integrate player intent exactly once per authoritative zone tick.
@@ -252,6 +256,7 @@ fn tick_movement(w: &mut World, now: Instant) {
 }
 
 fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
+    ashworks::tick(w);
     let now = Instant::now();
     let ids: Vec<u32> = w.players.keys().copied().collect();
     for id in &ids {
@@ -283,7 +288,7 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
         {
             continue;
         }
-        if w.players.get(&engage).map(|p| p.hp <= 0).unwrap_or(true) {
+        if !w.kilns.iter().any(|k| k.spec.id == engage && k.hp > 0) {
             if let Some(p) = w.players.get_mut(&attacker_id) {
                 p.engage_target = None;
             }
@@ -295,14 +300,14 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
                 Some(p) => p,
                 None => continue,
             };
-            (a.pose, a.job, a.stats, a.atk_mul)
+            (a.pose, a.job, a.stats, a.atk_mul * ashworks::edge_bonus(a))
         };
         let (pose_t, def_stats) = {
-            let t = match w.players.get(&engage) {
+            let t = match w.kilns.iter().find(|k| k.spec.id == engage) {
                 Some(p) => p,
                 None => continue,
             };
-            (t.pose, t.stats)
+            (t.pose(), starter_stats(JobId::Knight))
         };
         let dist = dist_xz(pose_a, pose_t);
         if dist > AUTO_REACH {
@@ -326,19 +331,14 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
         let (damage, hit, crit, target_hp) = match outcome {
             SwingOutcome::OutOfRange => continue,
             SwingOutcome::Miss => {
-                let hp = w.players.get(&engage).map(|p| p.hp).unwrap_or(0);
+                let hp = w.kilns.iter().find(|k| k.spec.id == engage).map(|k| k.hp).unwrap_or(0);
                 (0, false, false, hp)
             }
             SwingOutcome::Hit { damage, crit } => {
                 if let Some(a) = w.players.get_mut(&attacker_id) {
                     a.tp = (a.tp + if crit { 150 } else { 100 }).min(3000);
                 }
-                let hp = if let Some(t) = w.players.get_mut(&engage) {
-                    t.hp = (t.hp - damage).max(0);
-                    t.hp
-                } else {
-                    0
-                };
+                let hp = ashworks::damage(w, engage, attacker_id, damage).unwrap_or(0);
                 (damage, true, crit, hp)
             }
         };
@@ -557,8 +557,8 @@ async fn handle_connection(
                                     None => continue,
                                 };
                                 let target = if target_id == 0 {
-                                    nearest_other(&w.players, attacker_id, pose)
-                                } else if target_id != attacker_id && w.players.get(&target_id).is_some_and(|p| p.hp > 0) {
+                                    ashworks::nearest(&w, pose)
+                                } else if w.kilns.iter().any(|k| k.spec.id == target_id && k.hp > 0) {
                                     Some(target_id)
                                 } else {
                                     None
@@ -577,6 +577,11 @@ async fn handle_connection(
                                     if let Ok(json) = msg.to_json() {
                                         let _ = snap_tx.send(json);
                                     }
+                                }
+                            }
+                            Ok(ClientMessage::Forge { recipe }) => {
+                                if let Some(id) = player_id {
+                                    if let Some(p) = world.write().await.players.get_mut(&id) { ashworks::forge(p, recipe); }
                                 }
                             }
                             Ok(ClientMessage::Ping { client_time_ms }) => {
@@ -716,16 +721,16 @@ async fn resolve_cast(
         return apply_ability_outcome(&mut w, caster_id, caster_id, &spec, outcome, now, tick);
     }
 
-    let Some(tid) = engage.or_else(|| nearest_other(&w.players, caster_id, pose)) else {
+    let Some(tid) = engage.or_else(|| ashworks::nearest(&w, pose)) else {
         return Some(ServerMessage::CastRejected {
             tick,
             ability_id: spec.id.clone(),
             reason: "no_target".into(),
         });
     };
-    let tpose = w.players.get(&tid)?.pose;
+    let tpose = w.kilns.iter().find(|k| k.spec.id == tid && k.hp > 0)?.pose();
     let dist = dist_xz(pose, tpose);
-    let tstats = w.players.get(&tid)?.stats;
+    let tstats = starter_stats(JobId::Knight);
     let outcome =
         resolve_ability_potency(&stats, &spec, Some(TargetRef::from_defender(&tstats, dist)));
     if matches!(outcome, SwingOutcome::OutOfRange) {
@@ -777,7 +782,7 @@ fn apply_ability_outcome(
             damage: 0,
             hit: false,
             crit: false,
-            target_hp: w.players.get(&target_id).map(|p| p.hp).unwrap_or(0),
+            target_hp: w.kilns.iter().find(|k| k.spec.id == target_id).map(|k| k.hp).unwrap_or(0),
         }),
         SwingOutcome::Hit { damage, crit: _ } if damage < 0 => {
             let amount = (-damage).max(0);
@@ -796,12 +801,7 @@ fn apply_ability_outcome(
             })
         }
         SwingOutcome::Hit { damage, crit } => {
-            let hp = if let Some(t) = w.players.get_mut(&target_id) {
-                t.hp = (t.hp - damage).max(0);
-                t.hp
-            } else {
-                0
-            };
+            let hp = ashworks::damage(w, target_id, caster_id, damage)?;
             Some(ServerMessage::Damage {
                 tick,
                 attacker_id: caster_id,
@@ -813,20 +813,6 @@ fn apply_ability_outcome(
             })
         }
     }
-}
-
-fn nearest_other(players: &HashMap<u32, Player>, self_id: u32, pose: Pose) -> Option<u32> {
-    let mut best: Option<(u32, f32)> = None;
-    for (id, p) in players {
-        if *id == self_id || p.hp <= 0 {
-            continue;
-        }
-        let d = dist_xz(pose, p.pose);
-        if best.map(|(_, bd)| d < bd).unwrap_or(true) {
-            best = Some((*id, d));
-        }
-    }
-    best.map(|(id, _)| id)
 }
 
 fn safe_character_id(id: &str) -> bool {

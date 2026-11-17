@@ -36,6 +36,15 @@ Combat math: `crates/ba_combat` + `assets/combat/kits.json`. Protocol v3: `crate
 Remotes render as capsules until a signed content-hash asset cache exists (never load network filesystem paths).  
 Autos grant TP; `ws_*` casts spend it. Kits buffs raise server `atk_mul`. Local boss/XP sim is disabled while zone Welcome is verified.
 
+### Greymere Ashworks (zone playtest)
+
+Enter the yard with the zone server and client running as above. The forge order appears in the upper right. Engage the **Clinker Imp** near the well with F or left click. Use your job hotbar and step beyond its ring of gold sparks before the kiln pulse lands. Players who damage the construct and are alive nearby when it breaks share XP and raw cinder.
+
+* **Kiln ward** — bring two raw cinder to the fire basket beside the well and press G. The equipped ward reduces incoming kiln pulse damage to one third (rounded down).
+* **Tempered edge** — follow the east road under the firing gallery, defeat the Kiln Warden, and return to the basket with one kiln heart and two raw cinder. Press G to temper the edge for 25% more auto-attack power.
+
+Both constructs rekindle after six seconds. A defeated player returns to the yard entrance. Character XP, level, materials, and crafted upgrades use the gateway's existing character save when playing with authenticated zone admission. The unauthenticated loopback playtest starts fresh on reconnect.
+
 ## Launcher (Studio-host prototype)
 
 ```powershell

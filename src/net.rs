@@ -39,6 +39,7 @@ pub enum ZonePhase {
 
 #[derive(Resource, Default)]
 pub struct ZoneNet {
+    pub ashworks: ba_protocol::ashworks::AshworksView,
     pub enabled: bool,
     pub phase: ZonePhase,
     pub local_player_id: Option<u32>,
@@ -221,7 +222,7 @@ pub fn connect_zone_on_enter(
         return;
     };
     let appearance = appearance_from_local(&draft, &profile);
-    let (_, yaw, _) = transform.rotation.to_euler(EulerRot::YXZ);
+    let (yaw, _, _) = transform.rotation.to_euler(EulerRot::YXZ);
     let pose = Pose {
         x: transform.translation.x,
         y: transform.translation.y,
@@ -437,6 +438,11 @@ pub fn send_local_move(
         return;
     }
     let Some(tx) = net.tx.as_ref() else { return };
+    if keys.just_pressed(KeyCode::KeyG) {
+        use ba_protocol::ashworks::Recipe;
+        let recipe = if net.ashworks.ward { Recipe::TemperedEdge } else { Recipe::KilnWard };
+        let _ = tx.send(ClientMessage::Forge { recipe });
+    }
     if mouse.just_pressed(MouseButton::Left) || keys.just_pressed(KeyCode::KeyF) {
         let _ = tx.send(ClientMessage::Attack { target_id: 0 });
     }
@@ -451,7 +457,7 @@ pub fn send_local_move(
     *elapsed -= TICK_DT;
 
     let Ok(transform) = player.single() else { return };
-    let (_, yaw, _) = transform.rotation.to_euler(EulerRot::YXZ);
+    let (yaw, _, _) = transform.rotation.to_euler(EulerRot::YXZ);
     let axes = MoveAxes {
         forward: (keys.pressed(KeyCode::KeyW) as i8 - keys.pressed(KeyCode::KeyS) as i8) as f32,
         strafe: (keys.pressed(KeyCode::KeyD) as i8 - keys.pressed(KeyCode::KeyA) as i8) as f32,
@@ -634,11 +640,13 @@ pub fn apply_zone_snapshots(
                 net.reconnect_token = reconnect_token;
                 net.local_player_id = Some(player_id);
                 net.phase = ZonePhase::WelcomeVerified;
+                net.ashworks = Default::default();
                 net.connect_started_at = None;
                 spawn = Some(s);
                 info!("Zone WelcomeVerified player_id={player_id}");
             }
-            Ok(ServerMessage::Snapshot { tick, players }) => {
+            Ok(ServerMessage::Snapshot { tick, players, ashworks }) => {
+                net.ashworks = ashworks;
                 if let Some(id) = net.local_player_id {
                     if let Some(me) = players.iter().find(|p| p.player_id == id) {
                         local_hp = Some((me.hp, me.max_hp));
