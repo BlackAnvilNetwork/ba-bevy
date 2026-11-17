@@ -8,6 +8,7 @@ use bevy::{
 
 use crate::atmosphere::{self, StickAtmosphere};
 use crate::data::GameData;
+use crate::camera_rig::{CameraView,PlayerCamera};
 use crate::rpg::Progression;
 
 #[derive(Component)]
@@ -30,7 +31,12 @@ impl Default for CameraSensitivity {
     }
 }
 
-pub fn spawn_player(mut commands: Commands, atmo: Res<StickAtmosphere>, data: Res<GameData>) {
+pub fn spawn_player(
+    mut commands: Commands,
+    atmo: Res<StickAtmosphere>,
+    data: Res<GameData>,
+    mut view: ResMut<CameraView>,
+) {
     let at = Vec3::from_array(data.zone.spawn.at);
     let look = Vec3::from_array(data.zone.spawn.look_at);
     let mut transform = Transform::from_translation(at).looking_at(look, Vec3::Y);
@@ -49,6 +55,11 @@ pub fn spawn_player(mut commands: Commands, atmo: Res<StickAtmosphere>, data: Re
                 ));
         }
     }
+    // The networked player and third-person rig own yaw only. Pitch belongs
+    // to the child camera, so the body never bends when the mouse looks up.
+    let (yaw,pitch,_) = transform.rotation.to_euler(EulerRot::YXZ);
+    view.pitch = pitch;
+    transform.rotation=Quat::from_rotation_y(yaw);
     commands.spawn((
         Player,
         Progression::default(),
@@ -56,7 +67,11 @@ pub fn spawn_player(mut commands: Commands, atmo: Res<StickAtmosphere>, data: Re
         Name::new("Player"),
         transform,
         Visibility::default(),
-        children![atmosphere::camera_bundle(&atmo)],
+        children![(
+            atmosphere::camera_bundle(&atmo),
+            PlayerCamera,
+            Transform::from_rotation(Quat::from_rotation_x(pitch)),
+        )],
     ));
 }
 
@@ -83,6 +98,7 @@ pub fn look_player(
     mouse: Res<AccumulatedMouseMotion>,
     cursor: Single<&CursorOptions>,
     note: Res<NoteComposer>,
+    mut view: ResMut<CameraView>,
     player: Single<(&mut Transform, &CameraSensitivity), With<Player>>,
 ) {
     if note.active || cursor.grab_mode == CursorGrabMode::None {
@@ -95,11 +111,10 @@ pub fn look_player(
     }
     let delta_yaw = -delta.x * sensitivity.x;
     let delta_pitch = -delta.y * sensitivity.y;
-    let (yaw, pitch, roll) = transform.rotation.to_euler(EulerRot::YXZ);
-    let yaw = yaw + delta_yaw;
-    const PITCH_LIMIT: f32 = FRAC_PI_2 - 0.01;
-    let pitch = (pitch + delta_pitch).clamp(-PITCH_LIMIT, PITCH_LIMIT);
-    transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, pitch, roll);
+    let (yaw, _, _) = transform.rotation.to_euler(EulerRot::YXZ);
+    const PITCH_LIMIT: f32 = FRAC_PI_2 - 0.08;
+    view.pitch = (view.pitch + delta_pitch).clamp(-PITCH_LIMIT,PITCH_LIMIT);
+    transform.rotation = Quat::from_rotation_y(yaw + delta_yaw);
 }
 
 pub fn move_player(
