@@ -20,6 +20,8 @@ mod well;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use bevy::asset::AssetApp;
+use bevy::asset::io::{file::FileAssetReader, AssetSourceBuilder};
 
 use atmosphere::{flicker_well_fire, tick_atmosphere, StickAtmosphere};
 use boss::{
@@ -70,7 +72,22 @@ fn main() {
         }
     };
 
-    App::new()
+    // User-customized character assets live in a separate, read-only Bevy
+    // asset source. Launcher-managed revisions are never copied into the
+    // game's installed assets or source tree.
+    let mut app = App::new();
+    if let Some(root) = std::env::var_os("BA_CHARACTER_ROOT") {
+        let root = PathBuf::from(root);
+        if root.is_dir() {
+            app.register_asset_source(
+                "character",
+                AssetSourceBuilder::new(move || Box::new(FileAssetReader::new(root.clone()))),
+            );
+        } else {
+            eprintln!("Character asset root is missing: {}", root.display());
+        }
+    }
+    app
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
