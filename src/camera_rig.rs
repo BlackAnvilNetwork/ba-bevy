@@ -100,7 +100,12 @@ pub fn apply_camera_mode(
     camera.translation = camera.translation.lerp(target.translation, blend);
     camera.rotation = camera.rotation.slerp(target.rotation, blend);
 
-    let third = view.mode == CameraMode::ThirdPerson && !flow.in_menu();
+    // A camera moving away from the eye must clear the skull before the
+    // third-person mesh becomes visible; otherwise hair flashes across the
+    // whole screen for a few frames during the transition.
+    let third = view.mode == CameraMode::ThirdPerson
+        && camera.translation.z > 1.15
+        && !flow.in_menu();
     for mut visibility in &mut avatars {
         *visibility = if third { Visibility::Inherited } else { Visibility::Hidden };
     }
