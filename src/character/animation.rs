@@ -17,7 +17,7 @@ pub struct AvatarAnimationGraph {
 }
 
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]
-enum JointKind { UpperArm, UpperLeg }
+enum JointKind { UpperArm, LowerArm, UpperLeg }
 
 /// Rest/bind rotation captured *before* Bevy applies the first animation.
 /// The model is never replaced by a primitive viewmodel in first person.
@@ -117,7 +117,9 @@ fn simplified_bone_name(name: &str) -> String {
 /// naming systems; missing bones meant every old GLB stayed in a T-pose.
 fn joint_from_name(name: &str) -> Option<(JointKind,f32)> {
     let key = simplified_bone_name(name);
-    let part = if key.contains("upperarm")
+    let part = if key.contains("lowerarm") || key.contains("forearm") {
+        JointKind::LowerArm
+    } else if key.contains("upperarm")
         || (key.ends_with("leftarm") || key.ends_with("rightarm"))
     {
         JointKind::UpperArm
@@ -126,7 +128,11 @@ fn joint_from_name(name: &str) -> Option<(JointKind,f32)> {
     } else {
         return None;
     };
-    let part_key = if part == JointKind::UpperArm { "upperarm" } else { "upperleg" };
+    let part_key = match part {
+        JointKind::UpperArm => "upperarm",
+        JointKind::LowerArm => if key.contains("forearm") { "forearm" } else { "lowerarm" },
+        JointKind::UpperLeg => "upperleg",
+    };
     let is_left = key.contains("left") || key.contains(&format!("bipl{part_key}"))
         || key.ends_with(&format!("{part_key}l"))
         || (part==JointKind::UpperLeg && key.contains("biplthigh"));
@@ -195,11 +201,19 @@ pub fn pose_humanoid_bones(
             JointKind::UpperArm if is_local && view.mode==CameraMode::FirstPerson => {
                 // Upper arms extend forward from the character's actual
                 // shoulders. Pitch drives the real rig, not a white capsule.
-                let reach=(1.12+view.pitch*0.36).clamp(0.65,1.5);
+                let reach=(1.27+view.pitch*0.3).clamp(0.80,1.5);
                 xf.rotation=joint.rest
                     * Quat::from_rotation_y(-joint.sign*reach)
-                    * Quat::from_rotation_z(joint.sign*(0.17+breathe))
+                    * Quat::from_rotation_z(joint.sign*(0.06+breathe))
                     * Quat::from_rotation_x(joint.sign*sway*0.2);
+            }
+            JointKind::LowerArm if is_local && view.mode==CameraMode::FirstPerson => {
+                // Bend the player's OWN skinned forearms inward toward the
+                // middle of the view (no detached replacement viewmodel).
+                xf.rotation=joint.rest * Quat::from_rotation_y(-joint.sign*0.68);
+            }
+            JointKind::LowerArm => {
+                xf.rotation=joint.rest;
             }
             JointKind::UpperArm => {
                 xf.rotation=joint.rest
@@ -232,7 +246,8 @@ mod pose_tests {
         assert_eq!(joint_from_name("J_Bip_L_UpperLeg"),Some((JointKind::UpperLeg,1.0)));
         assert_eq!(joint_from_name("J_Bip_R_UpperLeg"),Some((JointKind::UpperLeg,-1.0)));
         assert_eq!(joint_from_name("Head"),None);
-        assert_eq!(joint_from_name("LeftForeArm"),None);
+        assert_eq!(joint_from_name("LeftForeArm"),Some((JointKind::LowerArm,1.0)));
+        assert_eq!(joint_from_name("J_Bip_R_LowerArm"),Some((JointKind::LowerArm,-1.0)));
     }
 
     #[test]
