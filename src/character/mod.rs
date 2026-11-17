@@ -4,6 +4,8 @@
 //! read by the forge menu and Bevy avatar spawn.
 
 mod avatar;
+mod animation;
+pub use animation::{prepare_avatar_animation, update_avatar_animation};
 
 pub use avatar::{
     attach_player_avatar, resolve_pending_avatars, HasPlayerAvatar,
