@@ -380,6 +380,10 @@ async fn handle_connection(
 
     info!("{peer}: connected");
 
+    // Always execute disconnect cleanup, including when sending a WebSocket
+    // frame fails. Early '?' propagation previously left ghost characters
+    // occupying the account's one-active-session slot indefinitely.
+    let session_result: Result<(), Box<dyn std::error::Error + Send + Sync>> = async {
     loop {
         tokio::select! {
             _ = snapshot_interval.tick(), if player_id.is_some() => {
@@ -615,6 +619,8 @@ async fn handle_connection(
             }
         }
     }
+    Ok(())
+    }.await;
 
     if let Some(id) = player_id {
         let save = {
@@ -628,7 +634,7 @@ async fn handle_connection(
         }
         info!("{peer}: left (id={id})");
     }
-    Ok(())
+    session_result
 }
 
 async fn resolve_cast(
