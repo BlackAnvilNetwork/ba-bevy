@@ -70,10 +70,10 @@ impl Pose {
  */
 pub const WALK_SPEED: f32 = 3.5;
 pub const SPRINT_SPEED: f32 = 6.5;
-pub const DEV_ZONE_MIN_X: f32 = -20.0;
-pub const DEV_ZONE_MAX_X: f32 = 20.0;
-pub const DEV_ZONE_MIN_Z: f32 = -20.0;
-pub const DEV_ZONE_MAX_Z: f32 = 20.0;
+pub const DEV_ZONE_MIN_X: f32 = -13.0;
+pub const DEV_ZONE_MAX_X: f32 = 30.0;
+pub const DEV_ZONE_MIN_Z: f32 = -6.6;
+pub const DEV_ZONE_MAX_Z: f32 = 9.0;
 pub const PLAYER_HEIGHT: f32 = 1.65;
 pub const TICK_DT: f32 = 1.0 / TICK_HZ as f32;
 
@@ -143,6 +143,20 @@ mod movement_tests {
             assert_eq!(integrate_movement(origin(), a, TICK_DT), origin());
         }
         assert_eq!(integrate_movement(origin(), axes(1.0, 0.0), 100.0), origin());
+    }
+
+    #[test]
+    fn movement_bounds_match_actual_greymere_zone_data() {
+        // A shared hardcoded preview bounds constant is temporary. This guard
+        // ensures the server/client kernel stays aligned with the real zone
+        // until authoritative zone descriptors are sent in Welcome.
+        let raw = include_str!("../../../assets/data/Zones/Zone_GreymereYard.json");
+        let zone: serde_json::Value = serde_json::from_str(raw).unwrap();
+        let bounds = &zone["bounds"];
+        assert_eq!(bounds["minX"].as_f64().unwrap() as f32, DEV_ZONE_MIN_X);
+        assert_eq!(bounds["maxX"].as_f64().unwrap() as f32, DEV_ZONE_MAX_X);
+        assert_eq!(bounds["minZ"].as_f64().unwrap() as f32, DEV_ZONE_MIN_Z);
+        assert_eq!(bounds["maxZ"].as_f64().unwrap() as f32, DEV_ZONE_MAX_Z);
     }
 
     #[test]
