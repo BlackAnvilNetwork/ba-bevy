@@ -29,7 +29,7 @@ pub struct CameraView {
 // The player origin is at standing eye height (1.65m). Looking from slightly
 // forward of the face keeps nose/hair behind the view frustum without hiding
 // the customized model or replacing its genuine arms.
-pub const FIRST_PERSON_FACE_CLEARANCE: f32 = 0.56;
+pub const FIRST_PERSON_FACE_CLEARANCE: f32 = 0.42;
 pub const THIRD_PERSON_DISTANCE: f32 = 3.5;
 pub const THIRD_PERSON_HEIGHT: f32 = 0.45;
 
@@ -37,7 +37,7 @@ pub fn target_camera_transform(mode: CameraMode, pitch: f32) -> Transform {
     let pitch = pitch.clamp(-1.48, 1.48);
     match mode {
         CameraMode::FirstPerson => Transform {
-            translation: Vec3::new(0.0, -0.07, -FIRST_PERSON_FACE_CLEARANCE),
+            translation: Vec3::new(0.0, -0.18, -FIRST_PERSON_FACE_CLEARANCE),
             rotation: Quat::from_rotation_x(pitch),
             ..default()
         },
@@ -70,11 +70,16 @@ pub fn toggle_camera_mode(
 pub fn apply_camera_mode(
     time: Res<Time>,
     view: Res<CameraView>,
-    mut camera: Query<&mut Transform, With<PlayerCamera>>,
+    mut camera: Query<(&mut Transform,&mut Projection), With<PlayerCamera>>,
     mut avatars: Query<&mut Visibility, With<PlayerAvatarMesh>>,
 ) {
-    let Ok(mut camera) = camera.single_mut() else { return };
+    let Ok((mut camera,mut projection)) = camera.single_mut() else { return };
     let target = target_camera_transform(view.mode, view.pitch);
+    if let Projection::Perspective(ref mut perspective) = *projection {
+        // Fingers on the actual skinned model can be closer to the eyes than
+        // Bevy's default 10cm clipping plane. Do not clip the real hands.
+        perspective.near = if view.mode == CameraMode::FirstPerson { 0.025 } else { 0.1 };
+    }
 
     // Never interpolate camera translation THROUGH the avatar's head. That
     // caused the original hair-on-screen glitch at mode changes. A camera
@@ -98,7 +103,7 @@ mod tests {
     #[test]
     fn first_person_camera_clears_hair_without_hiding_real_avatar() {
         let fp = target_camera_transform(CameraMode::FirstPerson, 0.0);
-        assert!(fp.translation.z < -0.45);
+        assert!(fp.translation.z < -0.35);
         assert!(fp.translation.y < 0.0);
         let tp = target_camera_transform(CameraMode::ThirdPerson, 0.0);
         assert!(tp.translation.z > 3.0);
