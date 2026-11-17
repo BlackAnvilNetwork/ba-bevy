@@ -1,11 +1,11 @@
 /**
  * Smoke: kits buff + realtime swings + WS + negative cases (dup hello, flood move, cast reject).
- * Requires ba_zone_server on ws://127.0.0.1:8787 (protocol v3).
+ * Requires ba_zone_server on ws://127.0.0.1:8787 (protocol v4).
  */
 import WebSocket from "ws";
 
 const URL = process.env.BA_ZONE_URL || "ws://127.0.0.1:8787";
-const PROTOCOL = 3;
+const PROTOCOL = 4;
 
 function appearance(name, job = "Fighter", characterId) {
   return {
@@ -105,23 +105,32 @@ if (a.id !== idBeforeDup) throw new Error("player id changed after duplicate hel
 
 await waitUntil(() => a.peers.length >= 2 && b.peers.length >= 2, 5000, "peer wait");
 
-// Non-finite via raw JSON (JSON.stringify(NaN) becomes null — send literal instead).
-a.ws.send('{"type":"move","pose":{"x":NaN,"y":1.65,"z":0,"yaw":0}}');
-// Flood moves: many packets should not telescope beyond budget.
-for (let i = 0; i < 80; i++) {
-  a.ws.send(JSON.stringify({ type: "move", pose: { x: 20, y: 1.65, z: 0, yaw: 0 } }));
+// A forged destination is no longer a valid protocol message.
+a.ws.send('{"type":"move","pose":{"x":20,"y":1.65,"z":0,"yaw":0}}');
+// NaN is not a valid JSON number and must never mutate the player.
+a.ws.send('{"type":"move_intent","seq":1,"forward":NaN,"strafe":0,"yaw":0,"sprint":true}');
+// The next 80 intents arrive in a burst. The server must not integrate 80 moves.
+for (let i = 2; i <= 81; i++) {
+  a.ws.send(JSON.stringify({
+    type: "move_intent", seq: i, forward: 1, strafe: 0, yaw: 0, sprint: true,
+  }));
 }
-await sleep(150);
+await sleep(220);
 const pid = (p) => p.playerId ?? p.player_id;
 const me = a.peers.find((p) => pid(p) === a.id);
 if (!me) throw new Error(`self missing from snapshot (peers=${a.peers.length})`);
-if (Math.abs(me.pose.x) > 1.0) {
-  throw new Error(`flood move escaped budget: x=${me.pose.x}`);
+const distance = Math.hypot(me.pose.x - a.spawn.x, me.pose.z - a.spawn.z);
+if (distance > 1.9) {
+  throw new Error(`packet burst advanced too far: ${distance.toFixed(3)}m`);
 }
-
-a.ws.send(JSON.stringify({ type: "move", pose: { x: 1.2, y: 1.65, z: 0, yaw: 0 } }));
-b.ws.send(JSON.stringify({ type: "move", pose: { x: 1.5, y: 1.65, z: 0, yaw: 0 } }));
-await sleep(250);
+const ack = me.lastInputSeq ?? me.last_input_seq;
+if (!(ack >= 2 && ack <= 81)) {
+  throw new Error(`input acknowledgement missing or invalid: ${ack}`);
+}
+// Stop moving with an explicit neutral command; late duplicate commands are ignored.
+a.ws.send(JSON.stringify({ type: "move_intent", seq: 82, forward: 0, strafe: 0, yaw: 0, sprint: false }));
+b.ws.send(JSON.stringify({ type: "move_intent", seq: 1, forward: 0, strafe: 0, yaw: 0, sprint: false }));
+await sleep(100);
 
 a.ws.send(JSON.stringify({ type: "cast", ability_id: "berserk" }));
 await waitUntil(() => a.buffs.some((d) => d.ability_id === "berserk"), 3000, "berserk buff");
@@ -145,13 +154,6 @@ await waitUntil(
   "10 auto hits for TP"
 );
 
-// Allow budget refill so closing to target is possible after flood test.
-for (let i = 0; i < 30; i++) {
-  a.ws.send(JSON.stringify({ type: "move", pose: { x: 1.2, y: 1.65, z: 0, yaw: 0 } }));
-  b.ws.send(JSON.stringify({ type: "move", pose: { x: 1.5, y: 1.65, z: 0, yaw: 0 } }));
-  await sleep(50);
-}
-
 const beforeWs = a.damages.length;
 a.ws.send(JSON.stringify({ type: "cast", ability_id: "ws_gs_hard_slash" }));
 await waitUntil(() => {
@@ -174,6 +176,6 @@ await waitUntil(() => {
 a.ws.close();
 b.ws.close();
 console.log(
-  `PASS zone kits smoke v3: dup-hello reject, flood capped, buff+wsDmg=${wsHit.damage}+shield_bash`
+  `PASS zone kits smoke v4: dup-hello reject, tick-bound movement, buff+wsDmg=${wsHit.damage}+shield_bash`
 );
 process.exit(0);
