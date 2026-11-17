@@ -1,0 +1,34 @@
+.ba-shell { position:fixed;inset:0;z-index:900;background:radial-gradient(ellipse at 70% 15%,#34241d 0%,transparent 53%),linear-gradient(160deg,#15100e,#080a0c 65%);color:#f0e8dd;font:400 16px/1.5 system-ui,sans-serif;overflow-y:auto;display:flex;flex-direction:column; }
+.ba-top { padding:20px clamp(20px,5vw,80px);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff16;background:#080a0ca6;}
+.ba-brand {font-weight:850;letter-spacing:.18em;font-size:17px;display:flex;align-items:center;gap:12px;}
+.ba-emblem {color:#d4a561;font-size:25px;}
+.ba-build,.ba-eyebrow,.ba-panel-header,.ba-footer {color:#c29b66;letter-spacing:.14em;font-size:11px;font-weight:700;}
+.ba-content {width:min(960px,calc(100% - 44px));margin: min(9vh,86px) auto 56px;flex:1;}
+.ba-content h1 {font-size:clamp(36px,6vw,67px);font-family:Georgia,serif;font-weight:600;line-height:1.08;margin:14px 0;color:#ffe4b4;}
+.ba-intro {max-width:650px;color:#bdb3aa;font-size:17px;line-height:1.7;margin:0 0 45px;}
+.ba-panel {background:#1b1918eb;border:1px solid #98744d77;border-radius:12px;box-shadow:0 22px 60px #0008;padding:28px;}
+.ba-panel-header {display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap;border-bottom:1px solid #ffffff1b;padding-bottom:16px;}
+.ba-state {color:#aaa4a0;letter-spacing:normal;font-weight:400;}
+.ba-player-row {display:flex;align-items:center;gap:22px;margin:29px 0;}
+.ba-avatar {height:98px;width:98px;background:radial-gradient(circle at 50% 20%,#5b3a24,#161110);display:grid;place-items:center;border:1px solid #896236;border-radius:9px;font-size:47px;color:#e1b46d;flex-shrink:0;}
+.ba-player-details h2 {margin:0 0 4px;font-size:26px;color:#f6e8d3;}
+.ba-player-details p {margin:0;color:#a6a09d;}
+.ba-actions {display:flex;flex-wrap:wrap;gap:12px;}
+.ba-actions button {appearance:none;border-radius:5px;padding:14px 23px;min-width:196px;cursor:pointer;font:700 14px system-ui,sans-serif;transition:background .2s,transform .2s;}
+.ba-actions button:hover:not(:disabled){transform:translateY(-1px);}
+.ba-primary {background:#caa267;border:1px solid #e3bb82;color:#22150c;}
+.ba-primary:hover:not(:disabled){background:#ecd0a0;}
+.ba-primary:disabled {cursor:not-allowed;opacity:.44;}
+.ba-secondary {background:#28211d;border:1px solid #99764b;color:#f5ddbe;}
+.ba-secondary:hover {background:#3c3025;}
+.ba-multi {display:flex;align-items:center;gap:11px;margin-top:22px;color:#bcb4aa;font-size:13px;}
+.ba-multi input {accent-color:#d9b27d;width:17px;height:17px;}
+.ba-error {background:#6e242433;color:#ffc3b9;border:1px solid #9c4f4f;padding:13px;border-radius:4px;margin:18px 0 0;overflow-wrap:anywhere;}
+.ba-note {max-width:780px;margin-top:29px;border-left:2px solid #906c43;padding:5px 0 4px 18px;}
+.ba-note h3 {font-size:14px;color:#dfbc83;margin:0 0 5px;}
+.ba-note p {font-size:13px;color:#a7a09a;line-height:1.7;margin:0;}
+.ba-footer {display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:18px clamp(20px,5vw,80px);border-top:1px solid #ffffff14;color:#85715c;}
+@media(max-width:600px){.ba-panel{padding:18px;}.ba-player-row{gap:12px;}.ba-avatar{width:70px;height:70px}.ba-actions button{flex:1}.ba-build{display:none}}
+
+.ba-back-to-launcher {position:fixed;top:12px;right:20px;z-index:999;border:1px solid #b48a53;background:#16110df2;color:#f5daae;border-radius:5px;padding:10px 15px;font:700 13px system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 15px #0008;}
+.ba-back-to-launcher:hover {background:#392718;}

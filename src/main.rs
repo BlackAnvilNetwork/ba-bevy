@@ -20,6 +20,8 @@ mod well;
 use std::path::PathBuf;
 
 use bevy::prelude::*;
+use bevy::asset::AssetApp;
+use bevy::asset::io::{file::FileAssetReader, AssetSourceBuilder};
 
 use atmosphere::{flicker_well_fire, tick_atmosphere, StickAtmosphere};
 use boss::{
@@ -28,11 +30,12 @@ use boss::{
 };
 use cel::{cel_shade_figures, CelMaterial};
 use character::{
-    attach_player_avatar, despawn_stale_avatars, load_character_profile, resolve_pending_avatars,
+    attach_player_avatar, load_character_profile, resolve_pending_avatars,
 };
 use data::load_game_data;
 use net::{
-    apply_zone_snapshots, connect_zone_on_enter, maybe_enable_zone_net, send_local_move, ZoneNet,
+    apply_zone_snapshots, connect_zone_on_enter, interpolate_remote_players, maybe_enable_zone_net,
+    send_local_move, ZoneNet, ZonePrediction,
 };
 use debug_shot::{
     capture_debug_shot, spawn_debug_hud, toggle_debug_hud, type_note, update_debug_hud,
@@ -69,7 +72,22 @@ fn main() {
         }
     };
 
-    App::new()
+    // User-customized character assets live in a separate, read-only Bevy
+    // asset source. Launcher-managed revisions are never copied into the
+    // game's installed assets or source tree.
+    let mut app = App::new();
+    if let Some(root) = std::env::var_os("BA_CHARACTER_ROOT") {
+        let root = PathBuf::from(root);
+        if root.is_dir() {
+            app.register_asset_source(
+                "character",
+                AssetSourceBuilder::new(move || Box::new(FileAssetReader::new(root.clone()))),
+            );
+        } else {
+            eprintln!("Character asset root is missing: {}", root.display());
+        }
+    }
+    app
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
@@ -94,6 +112,7 @@ fn main() {
         .init_resource::<GameFlow>()
         .init_resource::<CharacterDraft>()
         .init_resource::<ZoneNet>()
+        .init_resource::<ZonePrediction>()
         .insert_resource(ClearColor(atmosphere::hex_rgb(atmosphere::SKY_TOP)))
         .add_message::<DeathDissolveRequest>()
         .add_message::<WardenPossessRequest>()
@@ -121,13 +140,13 @@ fn main() {
         .add_systems(
             Update,
             (
-                despawn_stale_avatars,
-                attach_player_avatar.after(despawn_stale_avatars),
+                attach_player_avatar,
                 resolve_pending_avatars.after(attach_player_avatar),
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
-                send_local_move.run_if(in_yard),
-                apply_zone_snapshots.run_if(in_yard),
+                send_local_move.run_if(in_yard).after(look_player),
+                apply_zone_snapshots.run_if(in_yard).after(send_local_move),
+                interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
             ),
         )
         .add_systems(
@@ -153,7 +172,9 @@ fn main() {
             (
                 grab_cursor.run_if(in_yard),
                 look_player.run_if(in_yard),
-                move_player.run_if(in_yard),
+                // Online movement has exactly one writer: net prediction.
+                // Offline developer mode retains the original Bevy locomotion.
+                move_player.run_if(offline_yard),
                 update_proximity.run_if(in_yard),
                 handle_interact.run_if(in_yard),
                 on_possess_request.after(handle_interact).run_if(in_yard),
@@ -166,7 +187,7 @@ fn main() {
         .add_systems(
             Update,
             (
-                cycle_job.run_if(in_yard),
+                cycle_job.run_if(offline_yard),
                 // Local boss/XP sim is offline-only; zone WelcomeVerified owns combat HP.
                 boss_fight
                     .after(tick_possession)
@@ -211,5 +232,6 @@ fn in_yard(flow: Res<GameFlow>) -> bool {
 }
 
 fn offline_yard(flow: Res<GameFlow>, net: Res<ZoneNet>) -> bool {
-    !flow.in_menu() && !net.online()
+    // Never execute local-authoritative combat/XP while waiting for a zone handshake.
+    !flow.in_menu() && !net.enabled
 }

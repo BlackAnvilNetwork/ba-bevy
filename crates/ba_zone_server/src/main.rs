@@ -15,7 +15,9 @@ use ba_combat::{
     SwingOutcome, TargetRef, AUTO_REACH,
 };
 use ba_protocol::{
-    AppearanceWire, ClientMessage, PlayerState, Pose, ServerMessage, PROTOCOL_VERSION, TICK_HZ,
+    integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage,
+    DEV_ZONE_MAX_X, DEV_ZONE_MAX_Z, DEV_ZONE_MIN_X, DEV_ZONE_MIN_Z,
+    PROTOCOL_VERSION, SPRINT_SPEED, TICK_HZ,
 };
 use futures_util::{SinkExt, StreamExt};
 use rand::rngs::SmallRng;
@@ -25,25 +27,35 @@ use tokio::sync::{broadcast, RwLock};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{info, warn};
 
-const MAX_MOVE_SPEED: f32 = 7.0;
-/// Cap idle refill so a long pause cannot bank a huge teleport budget.
-const MAX_MOVE_BUDGET: f32 = MAX_MOVE_SPEED * (1.0 / TICK_HZ as f32) * 2.0;
-/// Hard cap Move packets per second per player (anti flood / min-dt bypass).
-const MAX_MOVE_PACKETS_PER_SEC: u32 = 40;
-const BOUNDS: (f32, f32, f32, f32) = (-20.0, 20.0, -20.0, 20.0);
+/// Input is applied at fixed simulation cadence, never when packets arrive.
+const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
+const INTEREST_RADIUS_METERS: f32 = 96.0;
+const MAX_MOVE_PACKETS_PER_SEC: u32 = 80;
+const BOUNDS: (f32, f32, f32, f32) = (DEV_ZONE_MIN_X, DEV_ZONE_MAX_X, DEV_ZONE_MIN_Z, DEV_ZONE_MAX_Z);
 const DT: f32 = 1.0 / TICK_HZ as f32;
 const DEFAULT_SPAWN: Pose = Pose {
-    x: 0.0,
+    x: 0.2,
     y: 1.65,
-    z: 0.0,
+    z: 6.4,
     yaw: 0.0,
 };
+
+#[derive(Clone, Copy)]
+struct MovementCommand {
+    seq: u64,
+    forward: f32,
+    strafe: f32,
+    yaw: f32,
+    sprint: bool,
+    received_at: Instant,
+}
 
 #[derive(Clone)]
 struct Player {
     appearance: AppearanceWire,
     pose: Pose,
-    last_move: Instant,
+    movement: Option<MovementCommand>,
+    last_input_seq: u64,
     job: JobId,
     stats: CombatStats,
     hp: i32,
@@ -56,8 +68,6 @@ struct Player {
     tp: i32,
     atk_mul: f32,
     atk_mul_until: Option<Instant>,
-    /// Remaining movement meters; refilled only from real wall-clock elapsed time.
-    move_budget: f32,
     move_packets_window: u32,
     move_window_start: Instant,
 }
@@ -92,12 +102,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let addr = std::env::var("BA_ZONE_BIND").unwrap_or_else(|_| "127.0.0.1:8787".into());
-    if !addr.starts_with("127.0.0.1") && !addr.starts_with("localhost") && std::env::var_os("BA_ZONE_ALLOW_NONLOCAL").is_none()
-    {
-        eprintln!(
-            "refusing non-loopback bind `{addr}` — set BA_ZONE_ALLOW_NONLOCAL=1 to override (unsafe)"
-        );
-        std::process::exit(2);
+    // This developer server has NO account authentication. Never permit a
+    // public bind, even through an override flag. Discord ticket admission
+    // is a prerequisite for an Internet-facing game server.
+    let parsed: SocketAddr = addr.parse().map_err(|_| "BA_ZONE_BIND must be a numeric loopback socket address")?;
+    if !parsed.ip().is_loopback() {
+        return Err("Unauthenticated zone server may only bind to loopback".into());
     }
     let listener = TcpListener::bind(&addr).await?;
     info!(
@@ -122,6 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let events = {
                     let mut w = world.write().await;
                     w.tick = w.tick.wrapping_add(1);
+                    tick_movement(&mut w, Instant::now());
                     tick_combat(&mut w)
                 };
                 for msg in events {
@@ -129,20 +140,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let _ = snap_tx.send(json);
                     }
                 }
-                let snap = {
-                    let w = world.read().await;
-                    snapshot_message(&w)
-                };
-                if let Ok(json) = snap.to_json() {
-                    let _ = snap_tx.send(json);
-                }
+
             }
         });
     }
 
     loop {
         let (stream, peer) = listener.accept().await?;
-        if !peer.ip().is_loopback() && std::env::var_os("BA_ZONE_ALLOW_NONLOCAL").is_none() {
+        if !peer.ip().is_loopback() {
             warn!("rejecting non-loopback peer {peer}");
             continue;
         }
@@ -157,21 +162,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn snapshot_message(w: &World) -> ServerMessage {
-    let players: Vec<PlayerState> = w
-        .players
-        .iter()
-        .map(|(id, p)| PlayerState {
+fn snapshot_message_for(w: &World, viewer_id: u32) -> ServerMessage {
+    let origin = w.players.get(&viewer_id).map(|p| p.pose);
+    let players: Vec<PlayerState> = w.players.iter().filter_map(|(id, p)| {
+        if let Some(origin) = origin {
+            if *id != viewer_id && dist_xz(origin, p.pose) > INTEREST_RADIUS_METERS {
+                return None;
+            }
+        } else {
+            return None;
+        }
+        Some(PlayerState {
             player_id: *id,
             pose: p.pose,
             appearance: p.appearance.clone(),
             hp: p.hp,
             max_hp: p.max_hp,
+            last_input_seq: p.last_input_seq,
         })
-        .collect();
-    ServerMessage::Snapshot {
-        tick: w.tick,
-        players,
+    }).collect();
+    ServerMessage::Snapshot { tick: w.tick, players }
+}
+
+/// Integrate player intent exactly once per authoritative zone tick.
+fn tick_movement(w: &mut World, now: Instant) {
+    for player in w.players.values_mut() {
+        let Some(cmd) = player.movement else { continue };
+        if player.hp <= 0 || now.duration_since(cmd.received_at) > INPUT_TIMEOUT {
+            continue;
+        }
+        player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        player.last_input_seq = cmd.seq;
     }
 }
 
@@ -190,6 +211,13 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
 
     let mut events = Vec::new();
     for attacker_id in ids {
+        // Dead attackers must not continue their queued auto-attack swings.
+        if w.players.get(&attacker_id).is_some_and(|p| p.hp <= 0) {
+            if let Some(p) = w.players.get_mut(&attacker_id) {
+                p.engage_target = None;
+            }
+            continue;
+        }
         let Some(engage) = w.players.get(&attacker_id).and_then(|p| p.engage_target) else {
             continue;
         };
@@ -290,11 +318,23 @@ async fn handle_connection(
     let (mut write, mut read) = ws.split();
     let mut snap_rx = snap_tx.subscribe();
     let mut player_id: Option<u32> = None;
+    // Per-viewer snapshots: remote actors outside AOI are never replicated.
+    let mut snapshot_interval = tokio::time::interval(Duration::from_secs_f32(DT));
+    snapshot_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     info!("{peer}: connected");
 
     loop {
         tokio::select! {
+            _ = snapshot_interval.tick(), if player_id.is_some() => {
+                if let Some(viewer_id) = player_id {
+                    let snap = {
+                        let w = world.read().await;
+                        snapshot_message_for(&w, viewer_id)
+                    };
+                    write.send(Message::Text(snap.to_json()?.into())).await?;
+                }
+            }
             incoming = read.next() => {
                 match incoming {
                     Some(Ok(Message::Text(text))) => {
@@ -345,7 +385,8 @@ async fn handle_connection(
                                         Player {
                                             appearance: appearance.clone(),
                                             pose,
-                                            last_move: Instant::now(),
+                                            movement: None,
+                                            last_input_seq: 0,
                                             job,
                                             stats,
                                             hp: max_hp,
@@ -358,7 +399,6 @@ async fn handle_connection(
                                             tp: 0,
                                             atk_mul: 1.0,
                                             atk_mul_until: None,
-                                            move_budget: MAX_MOVE_BUDGET,
                                             move_packets_window: 0,
                                             move_window_start: Instant::now(),
                                         },
@@ -376,53 +416,33 @@ async fn handle_connection(
                                 write.send(Message::Text(welcome.to_json()?.into())).await?;
                                 info!("{peer}: hello as {} ({job:?}) id={id}", appearance.name);
                             }
-                            Ok(ClientMessage::Move { pose }) => {
+                            Ok(ClientMessage::MoveIntent { seq, forward, strafe, yaw, sprint }) => {
                                 let Some(id) = player_id else { continue };
-                                if !pose.is_finite() {
+                                if !forward.is_finite() || !strafe.is_finite() || !yaw.is_finite()
+                                    || forward.abs() > 1.0 || strafe.abs() > 1.0
+                                {
                                     continue;
                                 }
-                                let mut w = world.write().await;
-                                let Some(player) = w.players.get_mut(&id) else { continue };
                                 let now = Instant::now();
-                                if now.duration_since(player.move_window_start) >= Duration::from_secs(1) {
-                                    player.move_window_start = now;
-                                    player.move_packets_window = 0;
+                                let mut w = world.write().await;
+                                let Some(p) = w.players.get_mut(&id) else { continue };
+                                if now.duration_since(p.move_window_start) >= Duration::from_secs(1) {
+                                    p.move_window_start = now;
+                                    p.move_packets_window = 0;
                                 }
-                                if player.move_packets_window >= MAX_MOVE_PACKETS_PER_SEC {
-                                    continue; // flood — drop
-                                }
-                                player.move_packets_window += 1;
-
-                                // Real elapsed only — no minimum floor (that enabled packet-flood speed hacks).
-                                let elapsed = player.last_move.elapsed().as_secs_f32();
-                                player.last_move = now;
-                                if elapsed <= 0.0 {
+                                if p.move_packets_window >= MAX_MOVE_PACKETS_PER_SEC {
                                     continue;
                                 }
-                                player.move_budget = (player.move_budget
-                                    + MAX_MOVE_SPEED * elapsed)
-                                    .min(MAX_MOVE_BUDGET);
-
-                                let dx = pose.x - player.pose.x;
-                                let dz = pose.z - player.pose.z;
-                                let want = (dx * dx + dz * dz).sqrt();
-                                if want <= f32::EPSILON {
-                                    player.pose.yaw = pose.yaw;
-                                    continue;
+                                p.move_packets_window += 1;
+                                if seq <= p.last_input_seq
+                                    || p.movement.as_ref().is_some_and(|previous| seq <= previous.seq)
+                                {
+                                    continue; // reject duplicate / out-of-order input
                                 }
-                                let allow = want.min(player.move_budget);
-                                if allow <= 0.0 {
-                                    continue;
-                                }
-                                let scale = allow / want;
-                                let next = Pose {
-                                    x: player.pose.x + dx * scale,
-                                    y: 1.65,
-                                    z: player.pose.z + dz * scale,
-                                    yaw: pose.yaw,
-                                };
-                                player.pose = clamp_pose(next);
-                                player.move_budget = (player.move_budget - allow).max(0.0);
+                                // Keep only the most recent validated input; no movement here.
+                                p.movement = Some(MovementCommand {
+                                    seq, forward, strafe, yaw, sprint, received_at: now,
+                                });
                             }
                             Ok(ClientMessage::Attack { target_id }) => {
                                 let Some(attacker_id) = player_id else { continue };
@@ -433,7 +453,7 @@ async fn handle_connection(
                                 };
                                 let target = if target_id == 0 {
                                     nearest_other(&w.players, attacker_id, pose)
-                                } else if w.players.contains_key(&target_id) {
+                                } else if target_id != attacker_id && w.players.get(&target_id).is_some_and(|p| p.hp > 0) {
                                     Some(target_id)
                                 } else {
                                     None
@@ -515,6 +535,13 @@ async fn resolve_cast(
         let p = w.players.get(&caster_id)?;
         (p.job, p.stats, p.mp, p.tp, p.pose, p.engage_target)
     };
+    if w.players.get(&caster_id).is_some_and(|p| p.hp <= 0) {
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: ability_id.to_string(),
+            reason: "dead".into(),
+        });
+    }
     let Some(spec) = find_ability(job, ability_id) else {
         return Some(ServerMessage::CastRejected {
             tick,
@@ -718,27 +745,37 @@ fn clamp_pose(mut pose: Pose) -> Pose {
 mod tests {
     use super::*;
 
-    #[test]
-    fn idle_budget_capped() {
-        // A huge elapsed refill still cannot exceed MAX_MOVE_BUDGET.
-        let budget = (0.0_f32 + MAX_MOVE_SPEED * 10.0).min(MAX_MOVE_BUDGET);
-        assert!((budget - MAX_MOVE_BUDGET).abs() < 0.001);
-        assert!(budget <= MAX_MOVE_SPEED * (2.0 / TICK_HZ as f32) + 0.001);
+    fn test_command(now: Instant, seq: u64) -> MovementCommand {
+        MovementCommand { seq, forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: true, received_at: now }
     }
 
     #[test]
-    fn packet_flood_cannot_exceed_budget() {
-        // 100 tiny steps still limited by total budget, not per-packet min dt.
-        let mut budget = MAX_MOVE_BUDGET;
-        let mut x = 0.0_f32;
-        for _ in 0..100 {
-            let want = 1.0_f32;
-            let allow = want.min(budget);
-            x += allow;
-            budget -= allow;
-        }
-        assert!(x <= MAX_MOVE_BUDGET + 0.001);
-        assert!(budget <= 0.001);
+    fn movement_is_bound_to_tick_not_packet_count() {
+        let now = Instant::now();
+        let cmd = test_command(now, 5000);
+        let a = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        assert!((a.z - DEFAULT_SPAWN.z).abs() <= SPRINT_SPEED * DT + 0.0001);
+        let b = integrate_movement(a, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        assert!((b.z - DEFAULT_SPAWN.z).abs() <= SPRINT_SPEED * DT * 2.0 + 0.0001);
+        // 5000 inbound packets still correspond to just one latest input per tick.
+    }
+
+    #[test]
+    fn interest_filter_rejects_out_of_range_players() {
+        let origin = DEFAULT_SPAWN;
+        let near = Pose { x: origin.x + 20.0, ..origin };
+        let far = Pose { x: origin.x + INTEREST_RADIUS_METERS + 1.0, ..origin };
+        assert!(dist_xz(origin, near) < INTEREST_RADIUS_METERS);
+        assert!(dist_xz(origin, far) > INTEREST_RADIUS_METERS);
+    }
+
+    #[test]
+    fn diagonal_input_is_normalized() {
+        let mut cmd = test_command(Instant::now(), 1);
+        cmd.strafe = 1.0;
+        let next = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        let d = ((next.x - DEFAULT_SPAWN.x).powi(2) + (next.z - DEFAULT_SPAWN.z).powi(2)).sqrt();
+        assert!(d <= SPRINT_SPEED * DT + 0.0001);
     }
 
     #[test]

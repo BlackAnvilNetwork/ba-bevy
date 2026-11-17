@@ -28,6 +28,7 @@ ba_pixel_sim = { path = "crates/ba_pixel_sim" }
 ba_protocol = { path = "crates/ba_protocol" }
 ba_combat = { path = "crates/ba_combat" }
 tungstenite = { version = "0.26", default-features = true }
+sha2 = "0.10"
 
 [profile.dev]
 opt-level = 1

@@ -5,6 +5,10 @@ on:
   push:
     branches: [master, main]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   rust:
     runs-on: windows-latest
@@ -13,8 +17,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Check crates + client
         run: cargo check -p ba_protocol -p ba_combat -p ba_zone_server -p black_anvil
-      - name: Zone unit tests
-        run: cargo test -p ba_zone_server
+      - name: Shared protocol & zone unit tests
+        run: cargo test -p ba_protocol -p ba_zone_server
 
   zone-smoke:
     runs-on: windows-latest
@@ -50,3 +54,25 @@ jobs:
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           }
+
+  launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Character Studio dependencies
+        working-directory: character-studio
+        run: npm ci --legacy-peer-deps
+      - name: Install launcher dependencies
+        working-directory: launcher
+        run: npm ci
+      - name: Build embedded Black Anvil Studio
+        working-directory: launcher
+        run: npm run studio:build
+      - name: Check native launcher commands
+        run: cargo check --manifest-path launcher/src-tauri/Cargo.toml
+      - name: Test launcher character validation and revision logic
+        run: cargo test --manifest-path launcher/src-tauri/Cargo.toml

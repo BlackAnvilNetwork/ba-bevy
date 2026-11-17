@@ -10,23 +10,13 @@ pub struct PlayerAvatarMesh;
 #[derive(Component)]
 pub struct HasPlayerAvatar;
 
+/// Prevent an invalid model from being re-queued every frame.
+#[derive(Component)]
+pub struct AvatarLoadFailed;
+
 #[derive(Component)]
 pub struct PendingPlayerAvatar {
     pub handle: Handle<WorldAsset>,
-}
-
-/// Despawn prior Studio mesh when the player is ready for a fresh attach.
-pub fn despawn_stale_avatars(
-    mut commands: Commands,
-    meshes: Query<Entity, With<PlayerAvatarMesh>>,
-    waiting: Query<(), (With<crate::player::Player>, Without<HasPlayerAvatar>)>,
-) {
-    if waiting.is_empty() {
-        return;
-    }
-    for entity in &meshes {
-        commands.entity(entity).despawn();
-    }
 }
 
 /// Queue the active Studio GLB as a player child when a draft exists.
@@ -40,6 +30,7 @@ pub fn attach_player_avatar(
             With<crate::player::Player>,
             Without<HasPlayerAvatar>,
             Without<PendingPlayerAvatar>,
+            Without<AvatarLoadFailed>,
         ),
     >,
 ) {
@@ -79,36 +70,25 @@ pub fn attach_player_avatar(
     info!("Queued Studio avatar load from {glb} (fallback path {ACTIVE_GLB})");
 }
 
-/// Promote Pending → HasPlayerAvatar only after the WorldAsset loads (or log failure).
+/// Promote only after the scene *and all dependencies* have loaded.
+/// An Added event is not enough: skins/materials may still be pending.
 pub fn resolve_pending_avatars(
     mut commands: Commands,
-    mut events: MessageReader<AssetEvent<WorldAsset>>,
+    asset_server: Res<AssetServer>,
     pending: Query<(Entity, &PendingPlayerAvatar)>,
-    assets: Res<Assets<WorldAsset>>,
 ) {
-    let mut loaded = Vec::new();
-    let mut failed = Vec::new();
-    for ev in events.read() {
-        match ev {
-            AssetEvent::LoadedWithDependencies { id } | AssetEvent::Added { id } => {
-                loaded.push(*id);
-            }
-            AssetEvent::Removed { id } => failed.push(*id),
-            _ => {}
-        }
-    }
+    use bevy::asset::LoadState;
 
-    for (entity, pending) in &pending {
-        let id = pending.handle.id();
-        if failed.iter().any(|f| *f == id) {
-            warn!("Studio avatar asset failed/removed for {entity:?}");
-            commands.entity(entity).remove::<PendingPlayerAvatar>();
-            continue;
-        }
-        if loaded.iter().any(|l| *l == id) || assets.get(&pending.handle).is_some() {
+    for (entity, waiting) in &pending {
+        let id = waiting.handle.id();
+        if asset_server.is_loaded_with_dependencies(id) {
             commands.entity(entity).remove::<PendingPlayerAvatar>();
             commands.entity(entity).insert(HasPlayerAvatar);
-            info!("Studio avatar ready (AssetEvent) for {entity:?}");
+            info!("Studio avatar ready with dependencies for {entity:?}");
+        } else if matches!(asset_server.load_state(id), LoadState::Failed(_)) {
+            warn!("Studio avatar failed to load for {entity:?}; keeping explicit failure marker");
+            commands.entity(entity).remove::<PendingPlayerAvatar>();
+            commands.entity(entity).insert(AvatarLoadFailed);
         }
     }
 }

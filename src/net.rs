@@ -3,7 +3,10 @@
 //!
 //! Connection phases are explicit — never treat channel creation as Welcome.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::path::PathBuf;
+use sha2::{Digest, Sha256};
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
@@ -15,8 +18,8 @@ use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message};
 
 use ba_protocol::{
-    AppearanceWire, ClientMessage, PlayerState, Pose, ServerMessage, TraitRefWire, DEFAULT_WS_URL,
-    PROTOCOL_VERSION,
+    integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage,
+    TraitRefWire, DEFAULT_WS_URL, PROTOCOL_VERSION, TICK_DT,
 };
 
 use crate::character::CharacterProfile;
@@ -55,7 +58,100 @@ impl ZoneNet {
 #[derive(Component)]
 pub struct RemotePlayer {
     pub player_id: u32,
+    pub target: Vec3,
+    pub target_yaw: f32,
 }
+
+const MAX_UNACKED_PREDICTIONS: usize = 128;
+
+#[derive(Clone, Copy, Debug)]
+struct PredictedInput {
+    seq: u64,
+    axes: MoveAxes,
+}
+
+/// Single source of truth for local speculative movement in zone mode.
+/// Bevy's player Transform is presentation; only snapshots can reconcile it.
+#[derive(Resource, Default, Debug)]
+pub struct ZonePrediction {
+    next_seq: u64,
+    pending: VecDeque<PredictedInput>,
+    pub predicted: Option<Pose>,
+    last_server_tick: Option<u64>,
+}
+
+impl ZonePrediction {
+    fn reset(&mut self, pose: Option<Pose>) {
+        self.pending.clear();
+        self.next_seq = 0;
+        self.last_server_tick = None;
+        self.predicted = pose;
+    }
+
+    fn send(&mut self, axes: MoveAxes) -> (u64, Pose) {
+        self.next_seq = self.next_seq.saturating_add(1);
+        let seq = self.next_seq;
+        let base = self.predicted.unwrap_or_default();
+        let next = integrate_movement(base, axes, TICK_DT);
+        self.predicted = Some(next);
+        self.pending.push_back(PredictedInput { seq, axes });
+        while self.pending.len() > MAX_UNACKED_PREDICTIONS {
+            self.pending.pop_front();
+        }
+        (seq, next)
+    }
+
+    fn reconcile(&mut self, authoritative: Pose, ack: u64, tick: u64) {
+        if self.last_server_tick.is_some_and(|last| tick <= last) {
+            return; // delayed/out-of-order snapshots cannot rewind local simulation
+        }
+        self.last_server_tick = Some(tick);
+        self.pending.retain(|entry| entry.seq > ack);
+        let mut predicted = authoritative;
+        for input in &self.pending {
+            predicted = integrate_movement(predicted, input.axes, TICK_DT);
+        }
+        self.predicted = Some(predicted);
+    }
+}
+
+#[cfg(test)]
+mod prediction_tests {
+    use super::*;
+
+    #[test]
+    fn ack_prunes_history_and_replays_only_unacknowledged_input() {
+        let spawn = Pose::default();
+        let mut p = ZonePrediction::default();
+        p.reset(Some(spawn));
+        let forward = MoveAxes { forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: false };
+        for _ in 0..4 {
+            p.send(forward);
+        }
+        let server = integrate_movement(integrate_movement(spawn, forward, TICK_DT), forward, TICK_DT);
+        p.reconcile(server, 2, 50);
+        assert_eq!(p.pending.len(), 2);
+        assert_eq!(p.pending.front().unwrap().seq, 3);
+        let expected = integrate_movement(integrate_movement(server, forward, TICK_DT), forward, TICK_DT);
+        assert_eq!(p.predicted, Some(expected));
+        p.reconcile(spawn, 0, 49); // old snapshot must not rewind prediction
+        assert_eq!(p.predicted, Some(expected));
+    }
+
+    #[test]
+    fn reconnect_clears_input_history_and_uses_new_spawn() {
+        let mut p = ZonePrediction::default();
+        p.reset(Some(Pose::default()));
+        let input = MoveAxes { forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: true };
+        p.send(input);
+        let new_spawn = Pose { x: 9.0, ..Pose::default() };
+        p.reset(Some(new_spawn));
+        assert!(p.pending.is_empty());
+        assert_eq!(p.next_seq, 0);
+        assert_eq!(p.predicted, Some(new_spawn));
+    }
+}
+
 
 pub fn maybe_enable_zone_net(mut net: ResMut<ZoneNet>) {
     if net.enabled {
@@ -74,6 +170,7 @@ pub fn connect_zone_on_enter(
     profile: Res<CharacterProfile>,
     player: Query<&Transform, With<Player>>,
     mut net: ResMut<ZoneNet>,
+    mut prediction: ResMut<ZonePrediction>,
 ) {
     if !net.enabled || flow.in_menu() {
         return;
@@ -84,6 +181,7 @@ pub fn connect_zone_on_enter(
             if started.elapsed() > Duration::from_secs(8) {
                 warn!("Zone Welcome timeout — resetting to Disconnected");
                 net.phase = ZonePhase::Disconnected;
+                prediction.reset(None);
                 net.tx = None;
                 net.rx = None;
                 net.connect_started_at = None;
@@ -193,8 +291,11 @@ fn appearance_from_local(draft: &CharacterDraft, profile: &CharacterProfile) -> 
             manifest_id: ba.manifest_id.clone(),
             body_traits: body,
             starter_equipment: equip,
-            // Hash lookup for remotes is future work; never send filesystem paths.
-            glb_content_hash: None,
+            // A content hash, never a file path. Receiver verifies bytes before
+            // permitting the renderer to load a cached model.
+            glb_content_hash: ba.runtime.content_hash.clone().filter(|hash| {
+                hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
+            }),
         };
     }
     AppearanceWire {
@@ -302,56 +403,87 @@ pub fn send_local_move(
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     player: Query<&Transform, With<Player>>,
-    mut last: Local<Option<(Vec3, f32)>>,
+    time: Res<Time>,
+    mut elapsed: Local<f32>,
+    mut prediction: ResMut<ZonePrediction>,
 ) {
     if !net.online() || flow.in_menu() {
+        *elapsed = 0.0;
         return;
     }
-    let Some(tx) = net.tx.as_ref() else {
-        return;
-    };
+    let Some(tx) = net.tx.as_ref() else { return };
     if mouse.just_pressed(MouseButton::Left) || keys.just_pressed(KeyCode::KeyF) {
         let _ = tx.send(ClientMessage::Attack { target_id: 0 });
     }
     if let Some(ability_id) = zone_hotbar_press(&keys, draft_job(&profile, &draft)) {
         let _ = tx.send(ClientMessage::Cast { ability_id });
     }
-    let Ok(transform) = player.single() else {
+    // One command per local tick; the server simulates at its own fixed tick.
+    *elapsed = (*elapsed + time.delta_secs()).min(TICK_DT * 1.5);
+    if *elapsed < TICK_DT {
         return;
-    };
-    let (_, yaw, _) = transform.rotation.to_euler(EulerRot::YXZ);
-    let pos = transform.translation;
-    if let Some((prev, prev_yaw)) = *last {
-        if (prev - pos).length_squared() < 0.0001 && (prev_yaw - yaw).abs() < 0.01 {
-            return;
-        }
     }
-    *last = Some((pos, yaw));
-    let _ = tx.send(ClientMessage::Move {
-        pose: Pose {
-            x: pos.x,
-            y: pos.y,
-            z: pos.z,
-            yaw,
-        },
-    });
+    *elapsed -= TICK_DT;
+
+    let Ok(transform) = player.single() else { return };
+    let (_, yaw, _) = transform.rotation.to_euler(EulerRot::YXZ);
+    let axes = MoveAxes {
+        forward: (keys.pressed(KeyCode::KeyW) as i8 - keys.pressed(KeyCode::KeyS) as i8) as f32,
+        strafe: (keys.pressed(KeyCode::KeyD) as i8 - keys.pressed(KeyCode::KeyA) as i8) as f32,
+        yaw,
+        sprint: keys.pressed(KeyCode::ShiftLeft),
+    };
+    let seq = prediction.next_seq.saturating_add(1);
+    if tx.send(ClientMessage::MoveIntent {
+        seq, forward: axes.forward, strafe: axes.strafe, yaw: axes.yaw, sprint: axes.sprint,
+    }).is_ok() {
+        prediction.send(axes);
+    }
 }
 
-fn spawn_remote_capsule(
+const MAX_CACHED_AVATAR_SIZE: u64 = 32 * 1024 * 1024;
+
+fn verified_cache_uri(hash: &str) -> Option<String> {
+    // No filesystem path supplied by the peer ever reaches Bevy's loader.
+    if hash.len() != 64 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let root = PathBuf::from(std::env::var_os("BA_CHARACTER_ROOT")?);
+    let path = root.join("cache").join(format!("{hash}.glb"));
+    let size = fs::metadata(&path).ok()?.len();
+    if size < 20 || size > MAX_CACHED_AVATAR_SIZE {
+        return None;
+    }
+    let content = fs::read(&path).ok()?;
+    if content.len() < 20 || &content[0..4] != b"glTF" {
+        return None;
+    }
+    if u32::from_le_bytes(content[4..8].try_into().ok()?) != 2
+        || u32::from_le_bytes(content[8..12].try_into().ok()?) as usize != content.len()
+    {
+        return None;
+    }
+    let actual = format!("{:x}", Sha256::digest(&content));
+    if !actual.eq_ignore_ascii_case(hash) {
+        warn!("Rejecting modified remote avatar cache: {hash}");
+        return None;
+    }
+    Some(format!("character://cache/{hash}.glb"))
+}
+
+fn spawn_remote_player(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    asset_server: &AssetServer,
     state: &PlayerState,
 ) {
-    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.75, 0.55, 0.35),
-        ..default()
-    });
     let root = commands
         .spawn((
             RemotePlayer {
                 player_id: state.player_id,
+                target: Vec3::new(state.pose.x, state.pose.y, state.pose.z),
+                target_yaw: state.pose.yaw,
             },
             Name::new(format!("Remote:{}", state.appearance.name)),
             Transform::from_translation(Vec3::new(state.pose.x, state.pose.y, state.pose.z))
@@ -359,15 +491,36 @@ fn spawn_remote_capsule(
             Visibility::default(),
         ))
         .id();
-    let body = commands
-        .spawn((
-            Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
-            Mesh3d(mesh),
-            MeshMaterial3d(mat),
-            Transform::default(),
+
+    // Same-host prototype only: both client processes can share the launcher
+    // content-addressed cache. Production requires authenticated asset delivery
+    // and a trusted catalog before loading downloaded user-created models.
+    if let Some(uri) = state.appearance.glb_content_hash.as_deref().and_then(verified_cache_uri) {
+        let handle: Handle<WorldAsset> =
+            asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri.clone()));
+        let model = commands.spawn((
+            Name::new(format!("RemoteAvatar:{}", state.appearance.name)),
+            WorldAssetRoot(handle),
+            Transform::from_xyz(0.0, -1.65, 0.0),
             Visibility::default(),
-        ))
-        .id();
+        )).id();
+        commands.entity(root).add_child(model);
+        info!("Queued verified same-host remote avatar {uri}");
+        return;
+    }
+
+    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
+    let mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.75, 0.55, 0.35),
+        ..default()
+    });
+    let body = commands.spawn((
+        Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
+        Mesh3d(mesh),
+        MeshMaterial3d(mat),
+        Transform::default(),
+        Visibility::default(),
+    )).id();
     commands.entity(root).add_child(body);
 }
 
@@ -375,10 +528,13 @@ pub fn apply_zone_snapshots(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
     mut net: ResMut<ZoneNet>,
-    mut remotes: Query<(Entity, &RemotePlayer, &mut Transform)>,
+    mut remotes: Query<(Entity, &mut RemotePlayer, &Transform)>,
     mut local_prog: Query<&mut crate::rpg::Progression, With<Player>>,
     mut local_xf: Query<&mut Transform, (With<Player>, Without<RemotePlayer>)>,
+    mut prediction: ResMut<ZonePrediction>,
+    time: Res<Time>,
 ) {
     let Some(rx) = net.rx.clone() else {
         return;
@@ -389,22 +545,25 @@ pub fn apply_zone_snapshots(
 
     let mut latest: Option<Vec<PlayerState>> = None;
     let mut local_hp: Option<(i32, i32)> = None;
+    let mut local_authoritative: Option<(Pose, u64, u64)> = None;
     let mut spawn: Option<Pose> = None;
     loop {
         match rx.try_recv() {
             Ok(ServerMessage::Welcome {
                 player_id, spawn: s, ..
             }) => {
+                prediction.reset(Some(s));
                 net.local_player_id = Some(player_id);
                 net.phase = ZonePhase::WelcomeVerified;
                 net.connect_started_at = None;
                 spawn = Some(s);
                 info!("Zone WelcomeVerified player_id={player_id}");
             }
-            Ok(ServerMessage::Snapshot { players, .. }) => {
+            Ok(ServerMessage::Snapshot { tick, players }) => {
                 if let Some(id) = net.local_player_id {
                     if let Some(me) = players.iter().find(|p| p.player_id == id) {
                         local_hp = Some((me.hp, me.max_hp));
+                        local_authoritative = Some((me.pose, me.last_input_seq, tick));
                     }
                 }
                 latest = Some(players);
@@ -464,6 +623,7 @@ pub fn apply_zone_snapshots(
             Ok(ServerMessage::Reject { reason }) => {
                 warn!("Zone rejected: {reason}");
                 net.phase = ZonePhase::Rejected;
+                prediction.reset(None);
                 net.connect_started_at = None;
                 net.tx = None;
                 net.rx = None;
@@ -475,6 +635,7 @@ pub fn apply_zone_snapshots(
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
                 net.phase = ZonePhase::Disconnected;
+                prediction.reset(None);
                 net.tx = None;
                 net.rx = None;
                 net.local_player_id = None;
@@ -490,6 +651,26 @@ pub fn apply_zone_snapshots(
         if let Ok(mut xf) = local_xf.single_mut() {
             xf.translation = Vec3::new(s.x, s.y, s.z);
             xf.rotation = Quat::from_euler(EulerRot::YXZ, s.yaw, 0.0, 0.0);
+        }
+    }
+
+    if let Some((server_pose, ack, tick)) = local_authoritative {
+        prediction.reconcile(server_pose, ack, tick);
+    }
+
+    // The player Transform is a presentation-only view. Server snapshots
+    // reconcile the predicted pose; rendering eases to it instead of snapping
+    // back to the previous server pose each packet.
+    if let Some(target) = prediction.predicted {
+        if let Ok(mut transform) = local_xf.single_mut() {
+            let goal = Vec3::new(target.x, target.y, target.z);
+            let delta = transform.translation.distance(goal);
+            if delta > 2.5 {
+                transform.translation = goal;
+            } else if delta > 0.001 {
+                let alpha = 1.0 - (-20.0 * time.delta_secs()).exp();
+                transform.translation = transform.translation.lerp(goal, alpha);
+            }
         }
     }
 
@@ -513,19 +694,52 @@ pub fn apply_zone_snapshots(
         seen.insert(state.player_id, state.clone());
     }
 
-    for (entity, remote, mut transform) in &mut remotes {
+    for (entity, mut remote, _transform) in &mut remotes {
         if let Some(state) = seen.remove(&remote.player_id) {
-            transform.translation = Vec3::new(state.pose.x, state.pose.y, state.pose.z);
-            transform.rotation = Quat::from_euler(EulerRot::YXZ, state.pose.yaw, 0.0, 0.0);
+            remote.target = Vec3::new(state.pose.x, state.pose.y, state.pose.z);
+            remote.target_yaw = state.pose.yaw;
         } else {
             commands.entity(entity).despawn();
         }
     }
 
-    // Remotes always use capsules until signed content-hash asset cache exists.
-    // Never load network-provided filesystem paths.
+    // Remote avatars use hash-verified local cache assets when present;
+    // otherwise show a deliberately safe capsule placeholder.
     for (_id, state) in seen {
-        spawn_remote_capsule(&mut commands, &mut meshes, &mut materials, &state);
+        spawn_remote_player(&mut commands, &mut meshes, &mut materials, &asset_server, &state);
+    }
+}
+
+
+/// Presentation interpolation for other players. Snap on genuine warps;
+/// otherwise smooth from the latest server target without predicting AI.
+pub fn interpolate_remote_players(
+    time: Res<Time>,
+    mut remotes: Query<(&RemotePlayer, &mut Transform)>,
+) {
+    let alpha = 1.0 - (-14.0 * time.delta_secs()).exp();
+    for (remote, mut transform) in &mut remotes {
+        let delta = transform.translation.distance(remote.target);
+        transform.translation = if delta > 4.0 {
+            remote.target
+        } else {
+            transform.translation.lerp(remote.target, alpha)
+        };
+        let target_rot = Quat::from_euler(EulerRot::YXZ, remote.target_yaw, 0.0, 0.0);
+        transform.rotation = transform.rotation.slerp(target_rot, alpha);
+    }
+}
+
+
+#[cfg(test)]
+mod avatar_cache_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_or_injected_hash_cannot_form_asset_path() {
+        assert!(verified_cache_uri("../../../../outside").is_none());
+        assert!(verified_cache_uri("not-a-hash").is_none());
+        assert!(verified_cache_uri(&"0".repeat(64)).is_none());
     }
 }
 
