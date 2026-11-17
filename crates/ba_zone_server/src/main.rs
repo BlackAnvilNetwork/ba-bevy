@@ -15,7 +15,7 @@ use ba_combat::{
     SwingOutcome, TargetRef, AUTO_REACH,
 };
 use ba_protocol::{
-    AppearanceWire, ClientMessage, PlayerState, Pose, ServerMessage, PROTOCOL_VERSION, TICK_HZ,
+    integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage, PROTOCOL_VERSION, TICK_HZ, SPRINT_SPEED,
 };
 use futures_util::{SinkExt, StreamExt};
 use rand::rngs::SmallRng;
@@ -25,8 +25,6 @@ use tokio::sync::{broadcast, RwLock};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{info, warn};
 
-const WALK_SPEED: f32 = 3.5;
-const SPRINT_SPEED: f32 = 6.5;
 /// Input is applied at fixed simulation cadence, never when packets arrive.
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const INTEREST_RADIUS_METERS: f32 = 96.0;
@@ -185,32 +183,13 @@ fn snapshot_message_for(w: &World, viewer_id: u32) -> ServerMessage {
 }
 
 /// Integrate player intent exactly once per authoritative zone tick.
-fn integrate_movement(pose: Pose, cmd: MovementCommand, dt: f32) -> Pose {
-    let (s, c) = cmd.yaw.sin_cos();
-    // Bevy forward is -Z; right is +X at yaw zero.
-    let mut dx = -s * cmd.forward + c * cmd.strafe;
-    let mut dz = -c * cmd.forward - s * cmd.strafe;
-    let magnitude = (dx * dx + dz * dz).sqrt();
-    if magnitude > 1.0 {
-        dx /= magnitude;
-        dz /= magnitude;
-    }
-    let speed = if cmd.sprint { SPRINT_SPEED } else { WALK_SPEED };
-    clamp_pose(Pose {
-        x: pose.x + dx * speed * dt,
-        z: pose.z + dz * speed * dt,
-        y: 1.65,
-        yaw: cmd.yaw,
-    })
-}
-
 fn tick_movement(w: &mut World, now: Instant) {
     for player in w.players.values_mut() {
         let Some(cmd) = player.movement else { continue };
         if player.hp <= 0 || now.duration_since(cmd.received_at) > INPUT_TIMEOUT {
             continue;
         }
-        player.pose = integrate_movement(player.pose, cmd, DT);
+        player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
         player.last_input_seq = cmd.seq;
     }
 }
@@ -758,9 +737,9 @@ mod tests {
     fn movement_is_bound_to_tick_not_packet_count() {
         let now = Instant::now();
         let cmd = test_command(now, 5000);
-        let a = integrate_movement(DEFAULT_SPAWN, cmd, DT);
+        let a = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
         assert!((a.z - DEFAULT_SPAWN.z).abs() <= SPRINT_SPEED * DT + 0.0001);
-        let b = integrate_movement(a, cmd, DT);
+        let b = integrate_movement(a, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
         assert!((b.z - DEFAULT_SPAWN.z).abs() <= SPRINT_SPEED * DT * 2.0 + 0.0001);
         // 5000 inbound packets still correspond to just one latest input per tick.
     }
@@ -778,7 +757,7 @@ mod tests {
     fn diagonal_input_is_normalized() {
         let mut cmd = test_command(Instant::now(), 1);
         cmd.strafe = 1.0;
-        let next = integrate_movement(DEFAULT_SPAWN, cmd, DT);
+        let next = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
         let d = ((next.x - DEFAULT_SPAWN.x).powi(2) + (next.z - DEFAULT_SPAWN.z).powi(2)).sqrt();
         assert!(d <= SPRINT_SPEED * DT + 0.0001);
     }
