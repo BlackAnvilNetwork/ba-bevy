@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const PROTOCOL_VERSION: u32 = 4;
+pub const PROTOCOL_VERSION: u32 = 5;
 pub const DEFAULT_WS_URL: &str = "ws://127.0.0.1:8787";
 pub const TICK_HZ: u32 = 20;
 
@@ -182,6 +182,11 @@ pub struct PlayerState {
     pub appearance: AppearanceWire,
     pub hp: i32,
     pub max_hp: i32,
+    /// Server-owned character progression. Never accepted from clients.
+    #[serde(default)]
+    pub level: u32,
+    #[serde(default)]
+    pub xp: u64,
     /// Last movement input that the server applied during a simulation tick.
     pub last_input_seq: u64,
 }
@@ -194,6 +199,12 @@ pub enum ClientMessage {
         appearance: AppearanceWire,
         /// Hint only — server chooses spawn for admission.
         pose: Pose,
+        /// Single-use game ticket issued for a Discord-owned character.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ticket: Option<String>,
+        /// Scoped, rotating reconnect credential from prior Welcome.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reconnect_token: Option<String>,
     },
     /// Player intent, never an authoritative destination or position.
     MoveIntent {
@@ -225,10 +236,19 @@ pub enum ServerMessage {
         tick: u64,
         tick_hz: u32,
         spawn: Pose,
+        /// One-hour scoped game reconnect token, never a Discord or AA key.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reconnect_token: Option<String>,
     },
     Snapshot {
         tick: u64,
         players: Vec<PlayerState>,
+    },
+    Progression {
+        tick: u64,
+        character_id: String,
+        xp: u64,
+        level: u32,
     },
     Damage {
         tick: u64,
@@ -284,5 +304,25 @@ impl ServerMessage {
 
     pub fn from_json(s: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(s)
+    }
+}
+
+#[cfg(test)]
+mod session_protocol_tests {
+    use super::*;
+
+    #[test]
+    fn ticket_and_reconnect_are_explicit_and_optional() {
+        let hello=ClientMessage::Hello {
+            protocol: PROTOCOL_VERSION, appearance: AppearanceWire {
+                character_id:"test".into(),name:"Test".into(),starting_job:"Fighter".into(),
+                manifest_id:"anata/male".into(),body_traits:Default::default(),
+                starter_equipment:Default::default(),glb_content_hash:None,
+            }, pose: Pose::default(),ticket:Some("single-use-secret".into()),reconnect_token:None,
+        };
+        let encoded=hello.to_json().unwrap();
+        let recovered=ClientMessage::from_json(&encoded).unwrap();
+        assert_eq!(hello,recovered);
+        assert!(!encoded.contains("reconnect_token"));
     }
 }
