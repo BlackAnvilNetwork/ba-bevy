@@ -25,16 +25,33 @@ export function buildBaAvatarAnimations(model) {
     throw new Error("Black Anvil avatar export requires an animated skeleton")
   }
 
+  // VRoid/VRM packs can use J_Bip_L_UpperArm, Mixamo's mixamorigLeftArm,
+  // VRM humanoid leftUpperArm, or UpperArm_L. Prior code only recognized
+  // "leftupperarm", silently leaving every J_Bip rig in a T-pose.
+  const boneIs = (bone, part, side) => {
+    const key = normalizedName(bone.name)
+    const left = side === "left"
+    const sideWord = left ? "left" : "right"
+    const sideShort = left ? "l" : "r"
+    const partWords = part === "arm" ? ["upperarm", "arm"] : ["upperleg", "upleg", "thigh", "leg"]
+    return partWords.some((p) => (
+      key.endsWith(sideWord + p) ||
+      key.includes(p + sideWord) ||
+      key.includes("bip" + sideShort + p) ||
+      key.endsWith(p + sideShort) ||
+      key.includes("mixamorig" + sideWord + p)
+    ))
+  }
   const findBone = (names) => bones.find((b) => {
     const key = normalizedName(b.name)
     return names.some((name) => key.includes(name))
   })
 
   const torso = findBone(["spine", "chest", "upperbody", "hips"]) || bones[0]
-  const leftLeg = findBone(["leftupperleg", "leftupleg", "leftthigh"])
-  const rightLeg = findBone(["rightupperleg", "rightupleg", "rightthigh"])
-  const leftArm = findBone(["leftupperarm", "leftarm"])
-  const rightArm = findBone(["rightupperarm", "rightarm"])
+  const leftLeg = bones.find((bone) => boneIs(bone, "leg", "left"))
+  const rightLeg = bones.find((bone) => boneIs(bone, "leg", "right"))
+  const leftArm = bones.find((bone) => boneIs(bone, "arm", "left"))
+  const rightArm = bones.find((bone) => boneIs(bone, "arm", "right"))
 
   // GLTFExporter target lookups use exact Object3D bone names. Never export
   // animations referencing a bone omitted by the optimized model.
@@ -62,8 +79,11 @@ export function buildBaAvatarAnimations(model) {
   // VRM humanoid arm axes: left arm points to the model's left in bind pose,
   // right arm points to its right. A ~60° turn down removes the T-pose without
   // collapsing the arms into the torso.
-  const leftRest = -1.0
-  const rightRest = 1.0
+  // With arms along +/-X in the bind pose, +Z rotates the left arm
+  // DOWN while -Z rotates the right arm DOWN. The previous signs raised
+  // both arms instead (when the rig happened to be recognized).
+  const leftRest = 1.0
+  const rightRest = -1.0
   const idle = new AnimationClip("BA_Idle", 2.4, [
     track(torso, 2.4, breathing, 0.025, Z_AXIS),
     track(leftArm, 2.4, still, 0, Z_AXIS, leftRest),

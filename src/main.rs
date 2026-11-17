@@ -33,11 +33,11 @@ use boss::{
     WardenPossessRequest,
 };
 use cel::{cel_shade_figures, CelMaterial};
-use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode, spawn_first_person_rig, animate_first_person_hands};
+use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode};
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
     bind_avatar_animators, update_avatar_animation,
-    pose_legacy_unanimated_avatars, animate_legacy_arm_pose,
+    discover_avatar_bones, pose_humanoid_bones,
 };
 use data::load_game_data;
 use net::{
@@ -128,6 +128,7 @@ fn main() {
         .init_resource::<StickAtmosphere>()
         .init_resource::<NoteComposer>()
         .init_resource::<CameraView>()
+        .init_resource::<character::SwingPose>()
         .init_resource::<WellPour>()
         .init_resource::<PossessFx>()
         .init_resource::<GameFlow>()
@@ -163,7 +164,6 @@ fn main() {
             (
                 attach_player_avatar,
                 resolve_pending_avatars.after(attach_player_avatar),
-                spawn_first_person_rig,
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
                 send_local_move.run_if(in_yard).after(look_player),
@@ -171,12 +171,10 @@ fn main() {
                 interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
                 refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
                 bind_avatar_animators.run_if(in_yard).after(refresh_remote_avatar_models),
-                pose_legacy_unanimated_avatars.run_if(in_yard).after(bind_avatar_animators),
-                animate_legacy_arm_pose.run_if(in_yard).after(pose_legacy_unanimated_avatars),
+                discover_avatar_bones.run_if(in_yard).after(bind_avatar_animators),
                 update_avatar_animation.run_if(in_yard).after(bind_avatar_animators),
                 toggle_camera_mode,
                 apply_camera_mode.after(toggle_camera_mode).after(attach_player_avatar),
-                animate_first_person_hands.run_if(in_yard),
             ),
         )
         .add_systems(
@@ -219,6 +217,7 @@ fn main() {
             (
                 cycle_job.run_if(offline_yard),
                 // Local boss/XP sim is offline-only; zone WelcomeVerified owns combat HP.
+                camera_rig::free_swing.run_if(offline_yard),
                 boss_fight
                     .after(tick_possession)
                     .after(ensure_fighter)
@@ -259,6 +258,16 @@ fn main() {
         .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::roll_avatar,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal).after(apply_zone_snapshots))
         .add_systems(Update,stillwater::camera_feedback.after(apply_camera_mode))
         .add_systems(Update, (ashworks::display, ashworks::gallery_visibility).after(apply_zone_snapshots))
+        // Bevy evaluates glTF animation in PostUpdate. Apply camera-specific
+        // shoulder/leg posing afterwards and before transform propagation so
+        // the real skinning rig cannot be reset to bind/T-pose by the loader.
+        .add_systems(
+            PostUpdate,
+            pose_humanoid_bones
+                .run_if(in_yard)
+                .after(bevy::app::AnimationSystems)
+                .before(bevy::transform::TransformSystems::Propagate),
+        )
         .run();
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { Bone, Group } from "three"
+import { Bone, Group, Quaternion, Vector3 } from "three"
 import { buildBaAvatarAnimations } from "./ba-procedural-animation"
 
 function rig() {
@@ -39,6 +39,33 @@ describe("Black Anvil procedural export rig", () => {
         first.forEach((value, i) => expect(last[i]).toBeCloseTo(value, 5))
       }
     }
+  })
+
+  it("recognizes actual VRoid J_Bip arm names and lowers both arms in idle", () => {
+    const model = new Group()
+    const spine = new Bone()
+    spine.name = "J_Bip_C_Spine"
+    const left = new Bone()
+    left.name = "J_Bip_L_UpperArm"
+    const right = new Bone()
+    right.name = "J_Bip_R_UpperArm"
+    model.add(spine)
+    spine.add(left, right)
+    const [idle, walk] = buildBaAvatarAnimations(model)
+    expect(idle.tracks.map((track) => track.name)).toEqual([
+      "J_Bip_C_Spine.quaternion",
+      "J_Bip_L_UpperArm.quaternion",
+      "J_Bip_R_UpperArm.quaternion",
+    ])
+    expect(walk.tracks.map((track) => track.name)).toContain("J_Bip_L_UpperArm.quaternion")
+    expect(walk.tracks.map((track) => track.name)).toContain("J_Bip_R_UpperArm.quaternion")
+
+    const leftTrack = idle.tracks.find((track) => track.name.includes("L_UpperArm"))
+    const rightTrack = idle.tracks.find((track) => track.name.includes("R_UpperArm"))
+    const leftQ = new Quaternion().fromArray(leftTrack.values, 0)
+    const rightQ = new Quaternion().fromArray(rightTrack.values, 0)
+    expect(new Vector3(-1, 0, 0).applyQuaternion(leftQ).y).toBeLessThan(0)
+    expect(new Vector3(1, 0, 0).applyQuaternion(rightQ).y).toBeLessThan(0)
   })
 
   it("rejects unrigged models instead of silently producing static avatars", () => {
