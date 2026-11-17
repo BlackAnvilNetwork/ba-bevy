@@ -211,6 +211,13 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
 
     let mut events = Vec::new();
     for attacker_id in ids {
+        // Dead attackers must not continue their queued auto-attack swings.
+        if w.players.get(&attacker_id).is_some_and(|p| p.hp <= 0) {
+            if let Some(p) = w.players.get_mut(&attacker_id) {
+                p.engage_target = None;
+            }
+            continue;
+        }
         let Some(engage) = w.players.get(&attacker_id).and_then(|p| p.engage_target) else {
             continue;
         };
@@ -446,7 +453,7 @@ async fn handle_connection(
                                 };
                                 let target = if target_id == 0 {
                                     nearest_other(&w.players, attacker_id, pose)
-                                } else if w.players.contains_key(&target_id) {
+                                } else if target_id != attacker_id && w.players.get(&target_id).is_some_and(|p| p.hp > 0) {
                                     Some(target_id)
                                 } else {
                                     None
@@ -528,6 +535,13 @@ async fn resolve_cast(
         let p = w.players.get(&caster_id)?;
         (p.job, p.stats, p.mp, p.tp, p.pose, p.engage_target)
     };
+    if w.players.get(&caster_id).is_some_and(|p| p.hp <= 0) {
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: ability_id.to_string(),
+            reason: "dead".into(),
+        });
+    }
     let Some(spec) = find_ability(job, ability_id) else {
         return Some(ServerMessage::CastRejected {
             tick,
