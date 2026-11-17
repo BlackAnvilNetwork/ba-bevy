@@ -386,12 +386,41 @@ export class CharacterManager {
     getAvatarSelection(){
       var result = {};
       for (const prop in this.avatar) {
-        result[prop] = {
-          name:this.avatar[prop].name,
-          id:this.avatar[prop].traitInfo?.id
+        const trait = this.avatar[prop];
+        const blendshapes = {};
+        const info = trait.blendShapeTraitsInfo || {};
+        for (const k in info) {
+          const bs = info[k];
+          blendshapes[k] = typeof bs?.getId === "function" ? bs.getId() : (bs?.id || bs?.name || true);
         }
+        const colors = {};
+        if (trait.colorTrait?.value != null) {
+          const vals = Array.isArray(trait.colorTrait.value)
+            ? trait.colorTrait.value
+            : [trait.colorTrait.value];
+          vals.forEach((v, i) => {
+            colors[`c${i}`] = typeof v === "string" ? v : String(v);
+          });
+        } else if (trait.model) {
+          // Sample first mesh lit/base color when no explicit traitColor.
+          trait.model.traverse?.((child) => {
+            if (colors.c0) return;
+            const mat = child.material;
+            const m = Array.isArray(mat) ? mat[0] : mat;
+            if (m?.color?.getHexString) colors.c0 = `#${m.color.getHexString()}`;
+            else if (m?.uniforms?.litFactor?.value?.getHexString) {
+              colors.c0 = `#${m.uniforms.litFactor.value.getHexString()}`;
+            }
+          });
+        }
+        result[prop] = {
+          name: trait.name,
+          id: trait.traitInfo?.id,
+          blendshapes,
+          colors,
+        };
       }
-      return result; 
+      return result;
     }
     /**
      * Gets the bone and triangle count of the current character.

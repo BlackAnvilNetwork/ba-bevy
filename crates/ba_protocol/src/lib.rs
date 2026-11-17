@@ -1,12 +1,12 @@
 //! Shared Black Anvil zone protocol (JSON over WebSocket).
 //!
-//! Auth is intentionally not wallet-based. M3 will attach Discord/session tickets;
-//! for M2 MVP, clients identify with a character draft id + display name.
+//! Auth is intentionally not wallet-based. Discord/session tickets land in M3.
+//! This crate is a **dev/loopback prototype** until ticket verification lands.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 pub const DEFAULT_WS_URL: &str = "ws://127.0.0.1:8787";
 pub const TICK_HZ: u32 = 20;
 
@@ -30,9 +30,10 @@ pub struct AppearanceWire {
     pub body_traits: BTreeMap<String, TraitRefWire>,
     #[serde(default)]
     pub starter_equipment: BTreeMap<String, TraitRefWire>,
-    /// Bevy asset path when the same GLB is available locally (e.g. exports/active.glb).
+    /// Optional content hash (sha256 hex) for future signed asset cache lookup.
+    /// Do not treat as a filesystem path — clients must never load untrusted paths.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub glb_relative_path: Option<String>,
+    pub glb_content_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -55,6 +56,12 @@ impl Default for Pose {
     }
 }
 
+impl Pose {
+    pub fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite() && self.yaw.is_finite()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerState {
@@ -71,6 +78,7 @@ pub enum ClientMessage {
     Hello {
         protocol: u32,
         appearance: AppearanceWire,
+        /// Hint only — server chooses spawn for admission.
         pose: Pose,
     },
     Move {
@@ -97,6 +105,7 @@ pub enum ServerMessage {
         player_id: u32,
         tick: u64,
         tick_hz: u32,
+        spawn: Pose,
     },
     Snapshot {
         tick: u64,
@@ -110,6 +119,25 @@ pub enum ServerMessage {
         hit: bool,
         crit: bool,
         target_hp: i32,
+    },
+    Heal {
+        tick: u64,
+        caster_id: u32,
+        target_id: u32,
+        amount: i32,
+        target_hp: i32,
+    },
+    BuffApplied {
+        tick: u64,
+        caster_id: u32,
+        ability_id: String,
+        atk_mul: Option<f32>,
+        duration_s: f32,
+    },
+    CastRejected {
+        tick: u64,
+        ability_id: String,
+        reason: String,
     },
     Pong {
         client_time_ms: u64,

@@ -6,7 +6,8 @@
 mod avatar;
 
 pub use avatar::{
-    attach_player_avatar, despawn_stale_avatars, HasPlayerAvatar, PlayerAvatarMesh,
+    attach_player_avatar, despawn_stale_avatars, resolve_pending_avatars, HasPlayerAvatar,
+    PlayerAvatarMesh,
 };
 
 use std::collections::BTreeMap;

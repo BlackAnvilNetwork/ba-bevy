@@ -1,5 +1,7 @@
-//! Authoritative Greymere zone — move + real-time melee using `ba_combat`
-//! (same swing period / hit / fSTR / pDIF path as ba-bevy `src/rpg/fight.rs`).
+//! Authoritative Greymere zone — move + real-time melee using `ba_combat`.
+//!
+//! **Dev/loopback prototype.** Default bind is `127.0.0.1` only. Discord ticket
+//! admission is deferred (see #14/#15). Do not expose this process on a public NIC.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -24,8 +26,16 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::{info, warn};
 
 const MAX_MOVE_SPEED: f32 = 7.0;
+/// Cap idle→move dt so a long pause cannot become a teleport budget.
+const MAX_MOVE_DT: f32 = 1.0 / TICK_HZ as f32 * 2.0;
 const BOUNDS: (f32, f32, f32, f32) = (-20.0, 20.0, -20.0, 20.0);
 const DT: f32 = 1.0 / TICK_HZ as f32;
+const DEFAULT_SPAWN: Pose = Pose {
+    x: 0.0,
+    y: 1.65,
+    z: 0.0,
+    yaw: 0.0,
+};
 
 #[derive(Clone)]
 struct Player {
@@ -38,15 +48,10 @@ struct Player {
     max_hp: i32,
     mp: i32,
     max_mp: i32,
-    /// Seconds until next auto-attack (matches Bevy `Fighter.swing_cd`).
     swing_cd: f32,
-    /// Sticky engage target; cleared when target dies or disconnects.
     engage_target: Option<u32>,
-    /// Ability id → ready-at Instant.
     recast_ready: HashMap<String, Instant>,
-    /// Weapon skill TP (0..=3000), gained on auto hits.
     tp: i32,
-    /// Auto-attack multiplier from kits buffs (berserk, etc.).
     atk_mul: f32,
     atk_mul_until: Option<Instant>,
 }
@@ -81,8 +86,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let addr = std::env::var("BA_ZONE_BIND").unwrap_or_else(|_| "127.0.0.1:8787".into());
+    if !addr.starts_with("127.0.0.1") && !addr.starts_with("localhost") && std::env::var_os("BA_ZONE_ALLOW_NONLOCAL").is_none()
+    {
+        eprintln!(
+            "refusing non-loopback bind `{addr}` — set BA_ZONE_ALLOW_NONLOCAL=1 to override (unsafe)"
+        );
+        std::process::exit(2);
+    }
     let listener = TcpListener::bind(&addr).await?;
-    info!("ba_zone_server listening on ws://{addr} (protocol v{PROTOCOL_VERSION}, realtime melee)");
+    info!(
+        "ba_zone_server listening on ws://{addr} (protocol v{PROTOCOL_VERSION}, loopback prototype)"
+    );
 
     let world: SharedWorld = Arc::new(RwLock::new(World {
         players: HashMap::new(),
@@ -122,6 +136,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         let (stream, peer) = listener.accept().await?;
+        if !peer.ip().is_loopback() && std::env::var_os("BA_ZONE_ALLOW_NONLOCAL").is_none() {
+            warn!("rejecting non-loopback peer {peer}");
+            continue;
+        }
         let world = world.clone();
         let snap_tx = snap_tx.clone();
         let next_id = next_id.clone();
@@ -151,7 +169,6 @@ fn snapshot_message(w: &World) -> ServerMessage {
     }
 }
 
-/// Real-time auto-attack: engaged players swing on `swing_cd` while in reach.
 fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
     let now = Instant::now();
     let ids: Vec<u32> = w.players.keys().copied().collect();
@@ -170,7 +187,11 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
         let Some(engage) = w.players.get(&attacker_id).and_then(|p| p.engage_target) else {
             continue;
         };
-        if w.players.get(&attacker_id).map(|p| p.swing_cd > 0.0).unwrap_or(true) {
+        if w.players
+            .get(&attacker_id)
+            .map(|p| p.swing_cd > 0.0)
+            .unwrap_or(true)
+        {
             continue;
         }
         if w.players.get(&engage).map(|p| p.hp <= 0).unwrap_or(true) {
@@ -196,7 +217,7 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
         };
         let dist = dist_xz(pose_a, pose_t);
         if dist > AUTO_REACH {
-            continue; // stay engaged; resume when they close again
+            continue;
         }
 
         let target = TargetRef::from_defender(&def_stats, dist);
@@ -272,7 +293,14 @@ async fn handle_connection(
                 match incoming {
                     Some(Ok(Message::Text(text))) => {
                         match ClientMessage::from_json(&text) {
-                            Ok(ClientMessage::Hello { protocol, appearance, pose }) => {
+                            Ok(ClientMessage::Hello { protocol, appearance, pose: _client_pose }) => {
+                                if player_id.is_some() {
+                                    let reject = ServerMessage::Reject {
+                                        reason: "duplicate hello".into(),
+                                    };
+                                    write.send(Message::Text(reject.to_json()?.into())).await?;
+                                    continue;
+                                }
                                 if protocol != PROTOCOL_VERSION {
                                     let reject = ServerMessage::Reject {
                                         reason: format!(
@@ -282,19 +310,28 @@ async fn handle_connection(
                                     write.send(Message::Text(reject.to_json()?.into())).await?;
                                     break;
                                 }
-                                if appearance.name.trim().is_empty() {
+                                if appearance.name.trim().is_empty()
+                                    || appearance.character_id.trim().is_empty()
+                                {
                                     let reject = ServerMessage::Reject {
-                                        reason: "name required".into(),
+                                        reason: "name and characterId required".into(),
                                     };
                                     write.send(Message::Text(reject.to_json()?.into())).await?;
                                     break;
                                 }
+                                // Sanitize appearance: drop any path-like fields (wire uses hash only).
+                                let mut appearance = appearance;
+                                appearance.glb_content_hash = appearance
+                                    .glb_content_hash
+                                    .filter(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()));
+
                                 let job = JobId::parse(&appearance.starting_job);
                                 let stats = starter_stats(job);
                                 let max_hp = starter_max_hp(job);
                                 let max_mp = 80 + stats.mnd * 4 + stats.int * 2;
                                 let id = next_id.fetch_add(1, Ordering::Relaxed);
-                                let pose = clamp_pose(pose);
+                                // Server-chosen spawn (ignore client pose for admission).
+                                let pose = DEFAULT_SPAWN;
                                 {
                                     let mut w = world.write().await;
                                     w.players.insert(
@@ -325,20 +362,24 @@ async fn handle_connection(
                                     player_id: id,
                                     tick,
                                     tick_hz: TICK_HZ,
+                                    spawn: pose,
                                 };
                                 write.send(Message::Text(welcome.to_json()?.into())).await?;
                                 info!("{peer}: hello as {} ({job:?}) id={id}", appearance.name);
                             }
                             Ok(ClientMessage::Move { pose }) => {
                                 let Some(id) = player_id else { continue };
+                                if !pose.is_finite() {
+                                    continue;
+                                }
                                 let mut w = world.write().await;
                                 let Some(player) = w.players.get_mut(&id) else { continue };
-                                let dt = player.last_move.elapsed().as_secs_f32().max(1.0 / 60.0);
+                                let raw_dt = player.last_move.elapsed().as_secs_f32();
+                                let dt = raw_dt.clamp(1.0 / 120.0, MAX_MOVE_DT);
                                 player.pose = clamp_pose(limit_speed(player.pose, pose, dt));
                                 player.last_move = Instant::now();
                             }
                             Ok(ClientMessage::Attack { target_id }) => {
-                                // Engage / retarget — swings happen on the server tick.
                                 let Some(attacker_id) = player_id else { continue };
                                 let mut w = world.write().await;
                                 let pose = match w.players.get(&attacker_id) {
@@ -429,17 +470,35 @@ async fn resolve_cast(
         let p = w.players.get(&caster_id)?;
         (p.job, p.stats, p.mp, p.tp, p.pose, p.engage_target)
     };
-    let spec = find_ability(job, ability_id)?;
+    let Some(spec) = find_ability(job, ability_id) else {
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: ability_id.to_string(),
+            reason: "unknown_ability".into(),
+        });
+    };
     if let Some(ready) = w.players.get(&caster_id)?.recast_ready.get(ability_id) {
         if *ready > now {
-            return None;
+            return Some(ServerMessage::CastRejected {
+                tick,
+                ability_id: spec.id.clone(),
+                reason: "recast".into(),
+            });
         }
     }
     if spec.mp > 0 && mp < spec.mp {
-        return None;
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: spec.id.clone(),
+            reason: "mp".into(),
+        });
     }
     if spec.kind == AbilityKind::WeaponSkill && tp < spec.tp_cost {
-        return None;
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: spec.id.clone(),
+            reason: "tp".into(),
+        });
     }
 
     if spec.kind == AbilityKind::Buff {
@@ -455,32 +514,41 @@ async fn resolve_cast(
             p.recast_ready
                 .insert(spec.id.clone(), now + Duration::from_secs_f32(spec.recast));
         }
-        let hp = w.players.get(&caster_id).map(|p| p.hp).unwrap_or(0);
         info!("cast buff {} on {caster_id} atk_mul={:?}", spec.id, spec.atk_mul);
-        return Some(ServerMessage::Damage {
+        return Some(ServerMessage::BuffApplied {
             tick,
-            attacker_id: caster_id,
-            target_id: caster_id,
-            damage: 0,
-            hit: true,
-            crit: false,
-            target_hp: hp,
+            caster_id,
+            ability_id: spec.id.clone(),
+            atk_mul: spec.atk_mul,
+            duration_s: spec.duration,
         });
     }
 
-    let (target_id, outcome) = if matches!(spec.kind, AbilityKind::Heal) {
-        (caster_id, resolve_ability_potency(&stats, &spec, None))
-    } else {
-        let tid = engage.or_else(|| nearest_other(&w.players, caster_id, pose))?;
-        let tpose = w.players.get(&tid)?.pose;
-        let dist = dist_xz(pose, tpose);
-        let tstats = w.players.get(&tid)?.stats;
-        let outcome =
-            resolve_ability_potency(&stats, &spec, Some(TargetRef::from_defender(&tstats, dist)));
-        (tid, outcome)
-    };
+    if matches!(spec.kind, AbilityKind::Heal) {
+        let outcome = resolve_ability_potency(&stats, &spec, None);
+        return apply_ability_outcome(&mut w, caster_id, caster_id, &spec, outcome, now, tick);
+    }
 
-    apply_ability_outcome(&mut w, caster_id, target_id, &spec, outcome, now, tick)
+    let Some(tid) = engage.or_else(|| nearest_other(&w.players, caster_id, pose)) else {
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: spec.id.clone(),
+            reason: "no_target".into(),
+        });
+    };
+    let tpose = w.players.get(&tid)?.pose;
+    let dist = dist_xz(pose, tpose);
+    let tstats = w.players.get(&tid)?.stats;
+    let outcome =
+        resolve_ability_potency(&stats, &spec, Some(TargetRef::from_defender(&tstats, dist)));
+    if matches!(outcome, SwingOutcome::OutOfRange) {
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: spec.id.clone(),
+            reason: "out_of_range".into(),
+        });
+    }
+    apply_ability_outcome(&mut w, caster_id, tid, &spec, outcome, now, tick)
 }
 
 fn apply_ability_outcome(
@@ -492,6 +560,15 @@ fn apply_ability_outcome(
     now: Instant,
     tick: u64,
 ) -> Option<ServerMessage> {
+    // Range already validated by resolve_cast for damaging casts.
+    if matches!(outcome, SwingOutcome::OutOfRange) {
+        return Some(ServerMessage::CastRejected {
+            tick,
+            ability_id: spec.id.clone(),
+            reason: "out_of_range".into(),
+        });
+    }
+
     {
         let p = w.players.get_mut(&caster_id)?;
         if spec.mp > 0 {
@@ -504,37 +581,51 @@ fn apply_ability_outcome(
             .insert(spec.id.clone(), now + Duration::from_secs_f32(spec.recast));
     }
 
-    let (damage, hit, crit, target_hp) = match outcome {
-        SwingOutcome::OutOfRange => return None,
-        SwingOutcome::Miss => {
-            let hp = w.players.get(&target_id).map(|p| p.hp).unwrap_or(0);
-            (0, false, false, hp)
-        }
-        SwingOutcome::Hit { damage, crit } => {
+    match outcome {
+        SwingOutcome::OutOfRange => unreachable!(),
+        SwingOutcome::Miss => Some(ServerMessage::Damage {
+            tick,
+            attacker_id: caster_id,
+            target_id,
+            damage: 0,
+            hit: false,
+            crit: false,
+            target_hp: w.players.get(&target_id).map(|p| p.hp).unwrap_or(0),
+        }),
+        SwingOutcome::Hit { damage, crit: _ } if damage < 0 => {
+            let amount = (-damage).max(0);
             let hp = if let Some(t) = w.players.get_mut(&target_id) {
-                if damage < 0 {
-                    // heal
-                    t.hp = (t.hp - damage).min(t.max_hp); // -(-amount)
-                } else {
-                    t.hp = (t.hp - damage).max(0);
-                }
+                t.hp = (t.hp + amount).min(t.max_hp);
                 t.hp
             } else {
                 0
             };
-            (damage.abs(), true, crit, hp)
+            Some(ServerMessage::Heal {
+                tick,
+                caster_id,
+                target_id,
+                amount,
+                target_hp: hp,
+            })
         }
-    };
-
-    Some(ServerMessage::Damage {
-        tick,
-        attacker_id: caster_id,
-        target_id,
-        damage,
-        hit,
-        crit,
-        target_hp,
-    })
+        SwingOutcome::Hit { damage, crit } => {
+            let hp = if let Some(t) = w.players.get_mut(&target_id) {
+                t.hp = (t.hp - damage).max(0);
+                t.hp
+            } else {
+                0
+            };
+            Some(ServerMessage::Damage {
+                tick,
+                attacker_id: caster_id,
+                target_id,
+                damage,
+                hit: true,
+                crit,
+                target_hp: hp,
+            })
+        }
+    }
 }
 
 fn nearest_other(players: &HashMap<u32, Player>, self_id: u32, pose: Pose) -> Option<u32> {
@@ -558,17 +649,20 @@ fn dist_xz(a: Pose, b: Pose) -> f32 {
 }
 
 fn clamp_pose(mut pose: Pose) -> Pose {
+    if !pose.is_finite() {
+        return DEFAULT_SPAWN;
+    }
     let (min_x, max_x, min_z, max_z) = BOUNDS;
     pose.x = pose.x.clamp(min_x, max_x);
     pose.z = pose.z.clamp(min_z, max_z);
     pose.y = 1.65;
-    if !pose.yaw.is_finite() {
-        pose.yaw = 0.0;
-    }
     pose
 }
 
 fn limit_speed(prev: Pose, desired: Pose, dt: f32) -> Pose {
+    if !desired.is_finite() {
+        return prev;
+    }
     let dx = desired.x - prev.x;
     let dz = desired.z - prev.z;
     let dist = (dx * dx + dz * dz).sqrt();
@@ -587,5 +681,43 @@ fn limit_speed(prev: Pose, desired: Pose, dt: f32) -> Pose {
         y: 1.65,
         z: prev.z + dz * scale,
         yaw: desired.yaw,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn idle_pause_cannot_teleport() {
+        let prev = Pose {
+            x: 0.0,
+            y: 1.65,
+            z: 0.0,
+            yaw: 0.0,
+        };
+        let desired = Pose {
+            x: 50.0,
+            y: 1.65,
+            z: 0.0,
+            yaw: 0.0,
+        };
+        // Even if client claims a huge gap, server clamps dt.
+        let moved = limit_speed(prev, desired, MAX_MOVE_DT);
+        let dist = (moved.x - prev.x).abs();
+        assert!(dist <= MAX_MOVE_SPEED * MAX_MOVE_DT + 0.001);
+    }
+
+    #[test]
+    fn rejects_non_finite_pose() {
+        let bad = Pose {
+            x: f32::NAN,
+            y: 1.65,
+            z: 0.0,
+            yaw: 0.0,
+        };
+        assert!(!bad.is_finite());
+        let clamped = clamp_pose(bad);
+        assert!(clamped.is_finite());
     }
 }

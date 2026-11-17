@@ -71,6 +71,12 @@ function partitionSelection(selection) {
       id: value.id,
       name: value.name || value.id,
     }
+    if (value.blendshapes && Object.keys(value.blendshapes).length) {
+      entry.blendshapes = value.blendshapes
+    }
+    if (value.colors && Object.keys(value.colors).length) {
+      entry.colors = value.colors
+    }
     const lower = key.toLowerCase()
     if (EQUIP_KEYS.has(lower)) {
       starterEquipment[key] = entry

@@ -27,7 +27,9 @@ use boss::{
     WardenPossessRequest,
 };
 use cel::{cel_shade_figures, CelMaterial};
-use character::{attach_player_avatar, despawn_stale_avatars, load_character_profile};
+use character::{
+    attach_player_avatar, despawn_stale_avatars, load_character_profile, resolve_pending_avatars,
+};
 use data::load_game_data;
 use net::{
     apply_zone_snapshots, connect_zone_on_enter, maybe_enable_zone_net, send_local_move, ZoneNet,
@@ -121,6 +123,7 @@ fn main() {
             (
                 despawn_stale_avatars,
                 attach_player_avatar.after(despawn_stale_avatars),
+                resolve_pending_avatars.after(attach_player_avatar),
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
                 send_local_move.run_if(in_yard),
@@ -164,17 +167,18 @@ fn main() {
             Update,
             (
                 cycle_job.run_if(in_yard),
+                // Local boss/XP sim is offline-only; zone WelcomeVerified owns combat HP.
                 boss_fight
                     .after(tick_possession)
                     .after(ensure_fighter)
-                    .run_if(in_yard),
+                    .run_if(offline_yard),
                 apply_xp_grants
                     .after(handle_interact)
                     .after(boss_fight)
-                    .run_if(in_yard),
-                announce_level_up.after(apply_xp_grants).run_if(in_yard),
+                    .run_if(offline_yard),
+                announce_level_up.after(apply_xp_grants).run_if(offline_yard),
                 update_sheet_hud.after(apply_xp_grants),
-                start_dissolve.after(boss_fight).run_if(in_yard),
+                start_dissolve.after(boss_fight).run_if(offline_yard),
             ),
         )
         .add_systems(
@@ -204,4 +208,8 @@ fn main() {
 
 fn in_yard(flow: Res<GameFlow>) -> bool {
     !flow.in_menu()
+}
+
+fn offline_yard(flow: Res<GameFlow>, net: Res<ZoneNet>) -> bool {
+    !flow.in_menu() && !net.online()
 }

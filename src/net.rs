@@ -1,12 +1,14 @@
-//! Optional localhost zone client (M2 MVP). Connects after Enter Yard when
+//! Optional localhost zone client (dev prototype). Connects after Enter Yard when
 //! `BA_ZONE=1` or `BA_ZONE_URL` is set (default `ws://127.0.0.1:8787`).
+//!
+//! Connection phases are explicit — never treat channel creation as Welcome.
 
 use std::collections::HashMap;
 use std::net::TcpStream;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bevy::prelude::*;
 use tungstenite::stream::MaybeTlsStream;
@@ -22,97 +24,36 @@ use crate::forge_menu::{Appearance, CharacterDraft, GameFlow};
 use crate::player::Player;
 use crate::rpg::JobId;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ZonePhase {
+    #[default]
+    Idle,
+    Connecting,
+    WelcomeVerified,
+    Disconnected,
+    Rejected,
+}
+
 #[derive(Resource, Default)]
 pub struct ZoneNet {
     pub enabled: bool,
+    pub phase: ZonePhase,
     pub local_player_id: Option<u32>,
-    pub connected: bool,
+    pub last_error: Option<String>,
+    pub retry_at: Option<Instant>,
     tx: Option<Sender<ClientMessage>>,
     rx: Option<Arc<Mutex<Receiver<ServerMessage>>>>,
+}
+
+impl ZoneNet {
+    pub fn online(&self) -> bool {
+        self.phase == ZonePhase::WelcomeVerified
+    }
 }
 
 #[derive(Component)]
 pub struct RemotePlayer {
     pub player_id: u32,
-}
-
-#[derive(Component)]
-struct RemoteAvatarMesh;
-
-fn assets_root() -> std::path::PathBuf {
-    let from_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assets");
-    if from_manifest.is_dir() {
-        from_manifest
-    } else {
-        std::path::PathBuf::from("assets")
-    }
-}
-
-/// Prefer Studio GLB under `assets/` when the remote advertised a path; else capsule.
-fn spawn_remote_visual(
-    commands: &mut Commands,
-    asset_server: &AssetServer,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    state: &PlayerState,
-) -> Entity {
-    let root = commands
-        .spawn((
-            RemotePlayer {
-                player_id: state.player_id,
-            },
-            Name::new(format!("Remote:{}", state.appearance.name)),
-            Transform::from_translation(Vec3::new(state.pose.x, state.pose.y, state.pose.z))
-                .with_rotation(Quat::from_euler(EulerRot::YXZ, state.pose.yaw, 0.0, 0.0)),
-            Visibility::default(),
-        ))
-        .id();
-
-    if let Some(rel) = state.appearance.glb_relative_path.as_deref() {
-        let on_disk = assets_root().join(rel);
-        if on_disk.is_file() {
-            let handle: Handle<WorldAsset> =
-                asset_server.load(GltfAssetLabel::Scene(0).from_asset(rel.to_string()));
-            let avatar = commands
-                .spawn((
-                    RemoteAvatarMesh,
-                    Name::new(format!("RemoteAvatar:{}", state.appearance.name)),
-                    WorldAssetRoot(handle),
-                    // Remote pose uses the same eye-height convention as local Player.
-                    Transform::from_xyz(0.0, -1.65, 0.0),
-                    Visibility::default(),
-                ))
-                .id();
-            commands.entity(root).add_child(avatar);
-            info!(
-                "Remote {} using Studio GLB {rel}",
-                state.appearance.name
-            );
-            return root;
-        }
-        warn!(
-            "Remote {} GLB missing at {}; using capsule",
-            state.appearance.name,
-            on_disk.display()
-        );
-    }
-
-    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
-    let mat = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.75, 0.55, 0.35),
-        ..default()
-    });
-    let body = commands
-        .spawn((
-            Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
-            Mesh3d(mesh),
-            MeshMaterial3d(mat),
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .id();
-    commands.entity(root).add_child(body);
-    root
 }
 
 pub fn maybe_enable_zone_net(mut net: ResMut<ZoneNet>) {
@@ -122,7 +63,7 @@ pub fn maybe_enable_zone_net(mut net: ResMut<ZoneNet>) {
     if std::env::var_os("BA_ZONE").is_some() || std::env::var_os("BA_ZONE_URL").is_some() {
         net.enabled = true;
         let url = std::env::var("BA_ZONE_URL").unwrap_or_else(|_| DEFAULT_WS_URL.to_string());
-        info!("Zone net enabled → {url}");
+        info!("Zone net enabled → {url} (dev loopback prototype)");
     }
 }
 
@@ -133,8 +74,17 @@ pub fn connect_zone_on_enter(
     player: Query<&Transform, With<Player>>,
     mut net: ResMut<ZoneNet>,
 ) {
-    if !net.enabled || net.connected || flow.in_menu() {
+    if !net.enabled || flow.in_menu() {
         return;
+    }
+    match net.phase {
+        ZonePhase::Idle | ZonePhase::Disconnected => {}
+        ZonePhase::Connecting | ZonePhase::WelcomeVerified | ZonePhase::Rejected => return,
+    }
+    if let Some(at) = net.retry_at {
+        if Instant::now() < at {
+            return;
+        }
     }
     let Ok(transform) = player.single() else {
         return;
@@ -164,8 +114,9 @@ pub fn connect_zone_on_enter(
 
     net.tx = Some(out_tx);
     net.rx = Some(Arc::new(Mutex::new(in_rx)));
-    net.connected = true;
-    info!("Connecting to zone {url}");
+    net.phase = ZonePhase::Connecting;
+    net.last_error = None;
+    info!("Zone ConnectRequested → {url}");
 }
 
 fn job_wire(job: JobId) -> String {
@@ -217,7 +168,8 @@ fn appearance_from_local(draft: &CharacterDraft, profile: &CharacterProfile) -> 
             manifest_id: ba.manifest_id.clone(),
             body_traits: body,
             starter_equipment: equip,
-            glb_relative_path: Some(ba.glb_asset_path().to_string()),
+            // Hash lookup for remotes is future work; never send filesystem paths.
+            glb_content_hash: None,
         };
     }
     AppearanceWire {
@@ -231,7 +183,7 @@ fn appearance_from_local(draft: &CharacterDraft, profile: &CharacterProfile) -> 
         },
         body_traits: Default::default(),
         starter_equipment: Default::default(),
-        glb_relative_path: None,
+        glb_content_hash: None,
     }
 }
 
@@ -327,17 +279,15 @@ pub fn send_local_move(
     player: Query<&Transform, With<Player>>,
     mut last: Local<Option<(Vec3, f32)>>,
 ) {
-    if !net.connected || flow.in_menu() {
+    if !net.online() || flow.in_menu() {
         return;
     }
     let Some(tx) = net.tx.as_ref() else {
         return;
     };
-    // Real-time engage: same LMB as local boss auto-attack; server owns swing CD/math.
     if mouse.just_pressed(MouseButton::Left) || keys.just_pressed(KeyCode::KeyF) {
         let _ = tx.send(ClientMessage::Attack { target_id: 0 });
     }
-    // Hotbar → zone cast (job starter abilities on server).
     if let Some(ability_id) = zone_hotbar_press(&keys, draft_job(&profile, &draft)) {
         let _ = tx.send(ClientMessage::Cast { ability_id });
     }
@@ -362,14 +312,48 @@ pub fn send_local_move(
     });
 }
 
+fn spawn_remote_capsule(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    state: &PlayerState,
+) {
+    let mesh = meshes.add(Capsule3d::new(0.35, 1.0));
+    let mat = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.75, 0.55, 0.35),
+        ..default()
+    });
+    let root = commands
+        .spawn((
+            RemotePlayer {
+                player_id: state.player_id,
+            },
+            Name::new(format!("Remote:{}", state.appearance.name)),
+            Transform::from_translation(Vec3::new(state.pose.x, state.pose.y, state.pose.z))
+                .with_rotation(Quat::from_euler(EulerRot::YXZ, state.pose.yaw, 0.0, 0.0)),
+            Visibility::default(),
+        ))
+        .id();
+    let body = commands
+        .spawn((
+            Name::new(format!("RemoteCapsule:{}", state.appearance.name)),
+            Mesh3d(mesh),
+            MeshMaterial3d(mat),
+            Transform::default(),
+            Visibility::default(),
+        ))
+        .id();
+    commands.entity(root).add_child(body);
+}
+
 pub fn apply_zone_snapshots(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut net: ResMut<ZoneNet>,
     mut remotes: Query<(Entity, &RemotePlayer, &mut Transform)>,
     mut local_prog: Query<&mut crate::rpg::Progression, With<Player>>,
+    mut local_xf: Query<&mut Transform, (With<Player>, Without<RemotePlayer>)>,
 ) {
     let Some(rx) = net.rx.clone() else {
         return;
@@ -380,11 +364,16 @@ pub fn apply_zone_snapshots(
 
     let mut latest: Option<Vec<PlayerState>> = None;
     let mut local_hp: Option<(i32, i32)> = None;
+    let mut spawn: Option<Pose> = None;
     loop {
         match rx.try_recv() {
-            Ok(ServerMessage::Welcome { player_id, .. }) => {
+            Ok(ServerMessage::Welcome {
+                player_id, spawn: s, ..
+            }) => {
                 net.local_player_id = Some(player_id);
-                info!("Zone welcome player_id={player_id}");
+                net.phase = ZonePhase::WelcomeVerified;
+                spawn = Some(s);
+                info!("Zone WelcomeVerified player_id={player_id}");
             }
             Ok(ServerMessage::Snapshot { players, .. }) => {
                 if let Some(id) = net.local_player_id {
@@ -417,18 +406,61 @@ pub fn apply_zone_snapshots(
                     }
                 }
             }
+            Ok(ServerMessage::Heal {
+                target_id,
+                amount,
+                target_hp,
+                ..
+            }) => {
+                info!("Zone heal ->{target_id} +{amount} hp={target_hp}");
+                if Some(target_id) == net.local_player_id {
+                    if let Ok(mut prog) = local_prog.single_mut() {
+                        prog.hp = target_hp;
+                    }
+                }
+            }
+            Ok(ServerMessage::BuffApplied {
+                caster_id,
+                ability_id,
+                atk_mul,
+                duration_s,
+                ..
+            }) => {
+                info!("Zone buff {ability_id} on {caster_id} mul={atk_mul:?} {duration_s}s");
+            }
+            Ok(ServerMessage::CastRejected {
+                ability_id,
+                reason,
+                ..
+            }) => {
+                warn!("Zone cast rejected {ability_id}: {reason}");
+            }
             Ok(ServerMessage::Reject { reason }) => {
                 warn!("Zone rejected: {reason}");
+                net.phase = ZonePhase::Rejected;
+                net.last_error = Some(reason);
             }
             Ok(_) => {}
             Err(TryRecvError::Empty) => break,
             Err(TryRecvError::Disconnected) => {
-                net.connected = false;
+                net.phase = ZonePhase::Disconnected;
+                net.tx = None;
+                net.rx = None;
+                net.local_player_id = None;
+                net.retry_at = Some(Instant::now() + Duration::from_secs(3));
+                warn!("Zone disconnected; retry in 3s");
                 break;
             }
         }
     }
     drop(rx);
+
+    if let Some(s) = spawn {
+        if let Ok(mut xf) = local_xf.single_mut() {
+            xf.translation = Vec3::new(s.x, s.y, s.z);
+            xf.rotation = Quat::from_euler(EulerRot::YXZ, s.yaw, 0.0, 0.0);
+        }
+    }
 
     if let Some((hp, max_hp)) = local_hp {
         if let Ok(mut prog) = local_prog.single_mut() {
@@ -459,17 +491,17 @@ pub fn apply_zone_snapshots(
         }
     }
 
+    // Remotes always use capsules until signed content-hash asset cache exists.
+    // Never load network-provided filesystem paths.
     for (_id, state) in seen {
-        spawn_remote_visual(
-            &mut commands,
-            &asset_server,
-            &mut meshes,
-            &mut materials,
-            &state,
-        );
+        spawn_remote_capsule(&mut commands, &mut meshes, &mut materials, &state);
     }
 }
 
-// silence unused TcpStream import if MaybeTls path unused on some platforms
+/// When zone combat is verified, skip local boss simulation (dual-authority).
+pub fn zone_online(net: Res<ZoneNet>) -> bool {
+    net.online()
+}
+
 #[allow(dead_code)]
 fn _tcp_ty(_: &TcpStream) {}

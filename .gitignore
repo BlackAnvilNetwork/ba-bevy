@@ -17,3 +17,6 @@ Cargo.lock
 /launcher/node_modules/
 /launcher/dist/
 /launcher/src-tauri/target/
+
+# Smoke runner
+/scripts/node_modules/
