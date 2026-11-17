@@ -32,7 +32,8 @@ use character::{
 };
 use data::load_game_data;
 use net::{
-    apply_zone_snapshots, connect_zone_on_enter, maybe_enable_zone_net, send_local_move, ZoneNet,
+    apply_zone_snapshots, connect_zone_on_enter, interpolate_remote_players, maybe_enable_zone_net,
+    send_local_move, ZoneNet, ZonePrediction,
 };
 use debug_shot::{
     capture_debug_shot, spawn_debug_hud, toggle_debug_hud, type_note, update_debug_hud,
@@ -94,6 +95,7 @@ fn main() {
         .init_resource::<GameFlow>()
         .init_resource::<CharacterDraft>()
         .init_resource::<ZoneNet>()
+        .init_resource::<ZonePrediction>()
         .insert_resource(ClearColor(atmosphere::hex_rgb(atmosphere::SKY_TOP)))
         .add_message::<DeathDissolveRequest>()
         .add_message::<WardenPossessRequest>()
@@ -126,8 +128,9 @@ fn main() {
                 resolve_pending_avatars.after(attach_player_avatar),
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
-                send_local_move.run_if(in_yard),
-                apply_zone_snapshots.run_if(in_yard),
+                send_local_move.run_if(in_yard).after(look_player),
+                apply_zone_snapshots.run_if(in_yard).after(send_local_move),
+                interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
             ),
         )
         .add_systems(
@@ -153,7 +156,9 @@ fn main() {
             (
                 grab_cursor.run_if(in_yard),
                 look_player.run_if(in_yard),
-                move_player.run_if(in_yard),
+                // Online movement has exactly one writer: net prediction.
+                // Offline developer mode retains the original Bevy locomotion.
+                move_player.run_if(offline_yard),
                 update_proximity.run_if(in_yard),
                 handle_interact.run_if(in_yard),
                 on_possess_request.after(handle_interact).run_if(in_yard),
