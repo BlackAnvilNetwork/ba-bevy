@@ -15,7 +15,8 @@ if (-not (Test-Path "node_modules")) {
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root "assets\character\exports") | Out-Null
 
-Write-Host "Black Anvil Character Studio — Anata male/female."
+$env:VITE_BA_MODE = "1"
+Write-Host "Black Anvil Launcher / Character Studio — Anata male/female."
 Write-Host "Save page: Save for Black Anvil → assets/character/exports/active.{json,glb}"
 Write-Host "Open http://127.0.0.1:5173"
 npx vite --host 127.0.0.1 --port 5173 --strictPort
