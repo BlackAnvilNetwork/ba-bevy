@@ -136,7 +136,7 @@ export class CharacterManager {
       // deliberately selected Studio animation is running, do not compete
       // with its mixer for ownership of the same bones.
       if (import.meta.env.VITE_BA_MODE === "1") {
-        if (!this.animationManager?.currentClip) {
+        if (!this.baIdlePreviewSuspended && !this.animationManager?.currentClip) {
           this.baIdlePreview ??= new BaIdlePreview()
           this.baIdlePreview.update(this.avatar,deltaTime)
         } else if (this.baIdlePreview) {
@@ -391,7 +391,19 @@ export class CharacterManager {
     async getGLBBlob(exportOptions = null){
       exportOptions = exportOptions || {}
       const finalOptions = {...this.manifestDataManager.getExportOptions(), ...exportOptions};
-      return getGLBBlobData(this.characterModel, this.avatar, finalOptions);
+      const hadIdlePreview = Boolean(this.baIdlePreview)
+      if (hadIdlePreview) {
+        // Export from the original VRM bind pose, not the transient preview
+        // frame. The GLB gets its own authored BA_Idle and BA_Walk clips.
+        this.baIdlePreviewSuspended = true
+        this.baIdlePreview.dispose()
+        this.baIdlePreview = null
+      }
+      try {
+        return await getGLBBlobData(this.characterModel, this.avatar, finalOptions);
+      } finally {
+        this.baIdlePreviewSuspended = false
+      }
     }
     /**
      * Gets the current avatar selection.
