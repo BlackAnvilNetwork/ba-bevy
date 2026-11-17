@@ -13,8 +13,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Check crates + client
         run: cargo check -p ba_protocol -p ba_combat -p ba_zone_server -p black_anvil
-      - name: Zone unit tests
-        run: cargo test -p ba_zone_server
+      - name: Shared protocol & zone unit tests
+        run: cargo test -p ba_protocol -p ba_zone_server
 
   zone-smoke:
     runs-on: windows-latest
@@ -70,3 +70,5 @@ jobs:
         run: npm run studio:build
       - name: Check native launcher commands
         run: cargo check --manifest-path launcher/src-tauri/Cargo.toml
+      - name: Test launcher character validation and revision logic
+        run: cargo test --manifest-path launcher/src-tauri/Cargo.toml
