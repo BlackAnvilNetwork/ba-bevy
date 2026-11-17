@@ -13,6 +13,7 @@ use bevy::prelude::*;
 use crate::character::{CharacterProfile, PlayerAvatarMesh};
 use crate::forge_menu::GameFlow;
 use crate::player::{NoteComposer, Player};
+use crate::rpg::{CombatKits, Progression, WeaponFamily};
 
 #[derive(Component)]
 pub struct PlayerCamera;
@@ -115,13 +116,19 @@ pub fn apply_camera_mode(
 /// The only authoritative equipment here is the selected character's item
 /// reference. Do not invent a default sword for an unarmed character. Future
 /// server equipment snapshots can update this same reference explicitly.
-pub fn equipped_weapon_name(profile: &CharacterProfile) -> Option<&str> {
-    let draft = profile.draft.as_ref()?;
-    let weapon = draft.starter_equipment.iter()
-        .find(|(slot, _)| slot.eq_ignore_ascii_case("weapon"))
-        .map(|(_, weapon)| weapon)?;
-    if weapon.id.trim().is_empty() { return None; }
-    Some(weapon.name.as_deref().unwrap_or(&weapon.id))
+pub fn equipped_weapon_name(profile: &CharacterProfile, combat_weapon: Option<WeaponFamily>) -> Option<String> {
+    if let Some(draft)=profile.draft.as_ref() {
+        if let Some((_,weapon)) = draft.starter_equipment.iter()
+            .find(|(slot,_)|slot.eq_ignore_ascii_case("weapon"))
+        {
+            if weapon.id.trim().is_empty() { return None; } // explicitly unarmed
+            return Some(weapon.name.clone().unwrap_or_else(||weapon.id.clone()));
+        }
+    }
+    // Until the persistent item system exposes live equipment, the combat
+    // kit's job weapon is the only actual weapon selection used to resolve
+    // attacks. Use it here too rather than showing fists for a sword fighter.
+    combat_weapon.map(|weapon|weapon.as_str().to_owned())
 }
 
 fn skin_color(profile: &CharacterProfile) -> Color {
@@ -148,6 +155,8 @@ pub fn spawn_first_person_rig(
     camera: Query<Entity, (With<PlayerCamera>, Without<FirstPersonRig>)>,
     existing: Query<Entity, With<FirstPersonRig>>,
     profile: Res<CharacterProfile>,
+    kits: Option<Res<CombatKits>>,
+    player: Query<&Progression, With<Player>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
@@ -183,7 +192,11 @@ pub fn spawn_first_person_rig(
         commands.entity(rig).add_child(hand);
     }
 
-    if let Some(item) = equipped_weapon_name(&profile) {
+    let job_weapon = kits.as_ref()
+        .and_then(|kits|player.single().ok().map(|p|kits.weapon_for(p.job)));
+    if let Some(item) = equipped_weapon_name(&profile,job_weapon)
+        .filter(|name|!name.to_ascii_lowercase().contains("knuckles"))
+    {
         let weapon_mat = materials.add(StandardMaterial {
             base_color: Color::srgb(0.74,0.82,0.87),
             metallic: 0.8,
@@ -267,6 +280,8 @@ mod tests {
     }
     #[test]
     fn unarmed_character_does_not_get_a_fake_sword() {
-        assert_eq!(equipped_weapon_name(&CharacterProfile::default()),None);
+        assert_eq!(equipped_weapon_name(&CharacterProfile::default(),None),None);
+        assert_eq!(equipped_weapon_name(&CharacterProfile::default(),Some(WeaponFamily::Sword)),Some("sword".to_owned()));
+        assert_eq!(equipped_weapon_name(&CharacterProfile::default(),Some(WeaponFamily::Knuckles)),Some("knuckles".to_owned()));
     }
 }
