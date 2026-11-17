@@ -1,0 +1,25 @@
+[package]
+name = "ba_gateway"
+version = "0.1.0"
+edition = "2021"
+description = "Discord OAuth account, game-ticket, character and avatar service"
+
+[[bin]]
+name = "ba_gateway"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.9"
+sha2 = "0.10"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+url = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+ba_protocol = { path = "../ba_protocol" }
