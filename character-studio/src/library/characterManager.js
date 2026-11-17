@@ -939,26 +939,19 @@ export class CharacterManager {
 
           // Set the color to child meshes of the model
           model.traverse((mesh) => {
-            if (mesh.isMesh) {
-              if (mesh.material.type === "MeshStandardMaterial") {
-                if (Array.isArray(mesh.material)) {
-                  mesh.material.forEach((mat) => {
-                    mat.color = color;
-                    //mat.emissive = color;
-                  });
-                } else {
-                  mesh.material.color = color;
-                  //mesh.material.emissive = color;
+            if (!mesh.isMesh) return
+            const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+            materials.forEach((mat) => {
+              if (!mat) return
+              if (mat.uniforms?.litFactor) {
+                mat.uniforms.litFactor.value = color
+                if (mat.uniforms.shadeColorFactor) {
+                  mat.uniforms.shadeColorFactor.value = color.clone().multiplyScalar(0.8)
                 }
-              } else {
-                mesh.material[0].uniforms.litFactor.value = color;
-                mesh.material[0].uniforms.shadeColorFactor.value = new THREE.Color(
-                  color.r * 0.8,
-                  color.g * 0.8,
-                  color.b * 0.8
-                );
+              } else if (mat.color?.isColor) {
+                mat.color.copy(color)
               }
-            }
+            })
           });
         } catch (error) {
           console.error("Error setting trait color:", error.message);
