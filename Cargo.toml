@@ -28,8 +28,9 @@ ba_pixel_geometry = { path = "crates/ba_pixel_geometry" }
 ba_pixel_sim = { path = "crates/ba_pixel_sim" }
 ba_protocol = { path = "crates/ba_protocol" }
 ba_combat = { path = "crates/ba_combat" }
-tungstenite = { version = "0.26", default-features = true }
+tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
 sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 
 [profile.dev]
 opt-level = 1
