@@ -94,13 +94,12 @@ export function buildBaCharacterV1(characterManager, overrides = {}) {
   const selection = characterManager.getAvatarSelection()
   const { bodyTraits, starterEquipment } = partitionSelection(selection)
   const gender = genderKey()
+  // Build a candidate revision without changing selected identity/revision.
+  // A failed GLB export or native save must not advance the revision counter.
   const existingId =
     sessionStorage.getItem("ba_character_id") || crypto.randomUUID()
-  sessionStorage.setItem("ba_character_id", existingId)
-
-  const prevRev = Number(sessionStorage.getItem("ba_revision") || "0")
-  const revision = prevRev + 1
-  sessionStorage.setItem("ba_revision", String(revision))
+  const previous = Number(sessionStorage.getItem("ba_revision") || "0")
+  const revision = (Number.isSafeInteger(previous) && previous >= 0 ? previous : 0) + 1
 
   return {
     schemaVersion: BA_SCHEMA_VERSION,
@@ -117,6 +116,34 @@ export function buildBaCharacterV1(characterManager, overrides = {}) {
       format: "glb",
       relativePath: "character/exports/active.glb",
     },
+  }
+}
+
+/**
+ * Commit an already-saved native character selection into Studio state.
+ * Call this only after save_draft returns success or after get_draft verifies
+ * an existing launcher selection. Editing an existing character must preserve
+ * both its UUID and its monotonically increasing revision across restarts.
+ */
+export function rememberBaCharacterDraft(character) {
+  if (character?.schemaVersion !== BA_SCHEMA_VERSION ||
+      !character.characterId ||
+      !Number.isSafeInteger(character.revision) ||
+      character.revision < 1) {
+    throw new Error("Cannot select an invalid Black Anvil character revision")
+  }
+  sessionStorage.setItem("ba_character_id", character.characterId)
+  sessionStorage.setItem("ba_revision", String(character.revision))
+  if (character.name) {
+    sessionStorage.setItem("ba_name", character.name)
+    localStorage.setItem("name", character.name)
+  }
+  if (JOBS.includes(character.startingJob)) {
+    sessionStorage.setItem("ba_job", character.startingJob)
+  }
+  if (character.manifestId === "anata/female" || character.manifestId === "anata/male") {
+    const gender = character.manifestId.split("/")[1]
+    sessionStorage.setItem("ba_gender", gender)
   }
 }
 
