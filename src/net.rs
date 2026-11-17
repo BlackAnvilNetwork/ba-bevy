@@ -501,6 +501,7 @@ fn spawn_remote_player(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
     asset_server: &AssetServer,
+    graphs: &mut Assets<AnimationGraph>,
     state: &PlayerState,
 ) {
     let hash = state.appearance.glb_content_hash.clone();
@@ -547,6 +548,7 @@ fn spawn_remote_player(
             Transform::from_xyz(0.0,-1.65,0.0),
             Visibility::default(),
         )).id();
+        crate::character::prepare_avatar_animation(commands, asset_server, graphs, scene, &uri.expect("verified avatar URI present with handle"));
         commands.entity(root).add_child(scene);
     }
 }
@@ -557,6 +559,7 @@ fn spawn_remote_player(
 pub fn refresh_remote_avatar_models(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
     mut remotes: Query<(Entity,&mut RemotePlayer,&Children)>,
     placeholders: Query<(),With<RemoteAvatarPlaceholder>>,
 ) {
@@ -581,13 +584,16 @@ pub fn refresh_remote_avatar_models(
             continue;
         }
         if let Some(uri) = remote.avatar_hash.as_deref().and_then(verified_cache_uri) {
-            let handle: Handle<WorldAsset>=asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri));
+            let handle: Handle<WorldAsset>=asset_server.load(GltfAssetLabel::Scene(0).from_asset(uri.clone()));
             let scene=commands.spawn((
                 Name::new("RemoteVerifiedAvatar"),
                 WorldAssetRoot(handle.clone()),
                 Transform::from_xyz(0.0,-1.65,0.0),
                 Visibility::default(),
             )).id();
+            crate::character::prepare_avatar_animation(
+                &mut commands, &asset_server, &mut graphs, scene, &uri,
+            );
             commands.entity(entity).add_child(scene);
             remote.pending_avatar=Some(handle);
         }
@@ -599,6 +605,7 @@ pub fn apply_zone_snapshots(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
     mut net: ResMut<ZoneNet>,
     mut remotes: Query<(Entity, &mut RemotePlayer, &Transform)>,
     mut local_prog: Query<&mut crate::rpg::Progression, With<Player>>,
@@ -798,7 +805,7 @@ pub fn apply_zone_snapshots(
     // Remote avatars use hash-verified local cache assets when present;
     // otherwise show a deliberately safe capsule placeholder.
     for (_id, state) in seen {
-        spawn_remote_player(&mut commands, &mut meshes, &mut materials, &asset_server, &state);
+        spawn_remote_player(&mut commands, &mut meshes, &mut materials, &asset_server, &mut graphs, &state);
     }
 }
 
