@@ -169,7 +169,11 @@ pub fn spawn_forge_menu(
     vfx: Res<ForgeVfx>,
     profile: Res<CharacterProfile>,
     mut draft: ResMut<CharacterDraft>,
+    flow: Res<GameFlow>,
 ) {
+    if !flow.in_menu() {
+        return;
+    }
     apply_studio_draft(&mut draft, &profile);
 
     let backdrop = assets.load("ui/boot/forge-backdrop.png");
