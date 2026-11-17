@@ -45,6 +45,9 @@ pub struct ZoneNet {
     pub last_error: Option<String>,
     pub retry_at: Option<Instant>,
     pub connect_started_at: Option<Instant>,
+    // One-time scoped character reconnect credential, rotated each Welcome.
+    // It is not a Discord token or a wallet signer.
+    pub reconnect_token: Option<String>,
     tx: Option<Sender<ClientMessage>>,
     rx: Option<Arc<Mutex<Receiver<ServerMessage>>>>,
 }
@@ -192,8 +195,8 @@ pub fn connect_zone_on_enter(
         return;
     }
     if net.phase == ZonePhase::Rejected {
-        net.phase = ZonePhase::Disconnected;
-        net.retry_at = Some(Instant::now() + Duration::from_secs(5));
+        // Admission failure is a terminal result: a fresh Discord-authorized
+        // game ticket must come from the launcher. No silent retry loop.
         return;
     }
     if net.phase == ZonePhase::WelcomeVerified {
@@ -221,6 +224,12 @@ pub fn connect_zone_on_enter(
     };
 
     let url = std::env::var("BA_ZONE_URL").unwrap_or_else(|_| DEFAULT_WS_URL.to_string());
+    let reconnect_token = net.reconnect_token.clone();
+    let ticket = if reconnect_token.is_some() {
+        None
+    } else {
+        std::env::var("BA_GAME_TICKET").ok()
+    };
     let (out_tx, out_rx) = mpsc::channel::<ClientMessage>();
     let (in_tx, in_rx) = mpsc::channel::<ServerMessage>();
     let url_thread = url.clone();
@@ -228,7 +237,7 @@ pub fn connect_zone_on_enter(
     thread::Builder::new()
         .name("ba-zone-ws".into())
         .spawn(move || {
-            if let Err(err) = zone_ws_thread(&url_thread, appearance, pose, out_rx, in_tx) {
+            if let Err(err) = zone_ws_thread(&url_thread, appearance, pose, ticket, reconnect_token, out_rx, in_tx) {
                 eprintln!("zone ws ended: {err}");
             }
         })
@@ -317,9 +326,17 @@ fn zone_ws_thread(
     url: &str,
     appearance: AppearanceWire,
     pose: Pose,
+    ticket: Option<String>,
+    reconnect_token: Option<String>,
     out_rx: Receiver<ClientMessage>,
     in_tx: Sender<ServerMessage>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if url.starts_with("ws://") &&
+        !(url.starts_with("ws://127.0.0.1:") || url.starts_with("ws://localhost:")
+            || url.starts_with("ws://[::1]:"))
+    {
+        return Err("Unencrypted WebSocket connections are allowed only on loopback".into());
+    }
     let (mut socket, _resp) = connect(url)?;
     if let MaybeTlsStream::Plain(stream) = socket.get_mut() {
         stream.set_read_timeout(Some(Duration::from_millis(50)))?;
@@ -329,6 +346,8 @@ fn zone_ws_thread(
         protocol: PROTOCOL_VERSION,
         appearance,
         pose,
+        ticket,
+        reconnect_token,
     };
     socket.send(Message::Text(hello.to_json()?.into()))?;
 
@@ -545,14 +564,16 @@ pub fn apply_zone_snapshots(
 
     let mut latest: Option<Vec<PlayerState>> = None;
     let mut local_hp: Option<(i32, i32)> = None;
+    let mut local_progression: Option<(u32,u64)> = None;
     let mut local_authoritative: Option<(Pose, u64, u64)> = None;
     let mut spawn: Option<Pose> = None;
     loop {
         match rx.try_recv() {
             Ok(ServerMessage::Welcome {
-                player_id, spawn: s, ..
+                player_id, spawn: s, reconnect_token, ..
             }) => {
                 prediction.reset(Some(s));
+                net.reconnect_token = reconnect_token;
                 net.local_player_id = Some(player_id);
                 net.phase = ZonePhase::WelcomeVerified;
                 net.connect_started_at = None;
@@ -563,6 +584,7 @@ pub fn apply_zone_snapshots(
                 if let Some(id) = net.local_player_id {
                     if let Some(me) = players.iter().find(|p| p.player_id == id) {
                         local_hp = Some((me.hp, me.max_hp));
+                        local_progression = Some((me.level, me.xp));
                         local_authoritative = Some((me.pose, me.last_input_seq, tick));
                     }
                 }
@@ -624,6 +646,7 @@ pub fn apply_zone_snapshots(
                 warn!("Zone rejected: {reason}");
                 net.phase = ZonePhase::Rejected;
                 prediction.reset(None);
+                net.reconnect_token = None;
                 net.connect_started_at = None;
                 net.tx = None;
                 net.rx = None;
@@ -674,6 +697,15 @@ pub fn apply_zone_snapshots(
         }
     }
 
+    if let Some((level,xp)) = local_progression {
+        if let Ok(mut prog) = local_prog.single_mut() {
+            let level = level.max(1);
+            let changed = prog.level != level;
+            prog.level = level;
+            prog.xp = xp.min(u32::MAX as u64) as u32;
+            if changed { prog.sync_sheet(); }
+        }
+    }
     if let Some((hp, max_hp)) = local_hp {
         if let Ok(mut prog) = local_prog.single_mut() {
             prog.hp = hp;
