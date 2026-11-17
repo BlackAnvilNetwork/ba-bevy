@@ -28,10 +28,10 @@ export default function BaLauncherDashboard({ onCustomize }) {
     }
     invoke("get_draft").then((raw) => {
       if (!active) return
-      setDraftReady(true)
       if (!raw) {
         setCharacter(null)
         setStatus("No character saved yet")
+        setDraftReady(true)
         return
       }
       const draft = JSON.parse(raw)
@@ -40,6 +40,7 @@ export default function BaLauncherDashboard({ onCustomize }) {
       }
       rememberBaCharacterDraft(draft)
       setCharacter(draft)
+      setDraftReady(true)
       setStatus("Character ready · Play Black Anvil")
     }).catch((e) => {
       if (active) {
