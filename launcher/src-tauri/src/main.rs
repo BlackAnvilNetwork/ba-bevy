@@ -283,6 +283,8 @@ fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::V
     }
     let mut command = Command::new(&binary);
     command.current_dir(&working_dir);
+    // Explicit native launcher entry: Bevy skips its separate developer forge.
+    command.env("BA_LAUNCH_MODE", "game");
     if multiplayer {
         command.env("BA_ZONE", "1");
     } else {
