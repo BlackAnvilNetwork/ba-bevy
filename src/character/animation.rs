@@ -103,7 +103,10 @@ pub fn pose_legacy_unanimated_avatars(
         let mut posed=0_usize;
         for entity in children.iter_descendants(root) {
             let Ok((name,transform))=names.get(entity) else {continue};
-            let simple=name.to_ascii_lowercase().replace(['_','-','.',' '],"");
+            let simple: String=name.as_str().chars()
+                .filter(|c|c.is_ascii_alphanumeric())
+                .flat_map(|c|c.to_lowercase())
+                .collect();
             let side = if simple.contains("leftupperarm") || simple.contains("leftarm") {
                 Some(-1.0)
             } else if simple.contains("rightupperarm") || simple.contains("rightarm") {
