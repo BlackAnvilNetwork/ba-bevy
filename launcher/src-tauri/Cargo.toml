@@ -22,6 +22,7 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.1", features = ["shell-open"] }
 base64 = "0.22"
 sha2 = "0.10"
+atomicwrites = "0.4"
 dirs-next = "2"
 
 [features]
