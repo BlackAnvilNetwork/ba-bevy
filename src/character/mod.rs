@@ -6,7 +6,7 @@
 mod avatar;
 
 pub use avatar::{
-    attach_player_avatar, despawn_stale_avatars, resolve_pending_avatars, HasPlayerAvatar,
+    attach_player_avatar, resolve_pending_avatars, HasPlayerAvatar,
     PlayerAvatarMesh,
 };
 

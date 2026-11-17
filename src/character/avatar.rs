@@ -19,20 +19,6 @@ pub struct PendingPlayerAvatar {
     pub handle: Handle<WorldAsset>,
 }
 
-/// Despawn prior Studio mesh when the player is ready for a fresh attach.
-pub fn despawn_stale_avatars(
-    mut commands: Commands,
-    meshes: Query<Entity, With<PlayerAvatarMesh>>,
-    waiting: Query<(), (With<crate::player::Player>, Without<HasPlayerAvatar>, Without<AvatarLoadFailed>)>,
-) {
-    if waiting.is_empty() {
-        return;
-    }
-    for entity in &meshes {
-        commands.entity(entity).despawn();
-    }
-}
-
 /// Queue the active Studio GLB as a player child when a draft exists.
 pub fn attach_player_avatar(
     mut commands: Commands,

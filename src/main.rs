@@ -30,7 +30,7 @@ use boss::{
 };
 use cel::{cel_shade_figures, CelMaterial};
 use character::{
-    attach_player_avatar, despawn_stale_avatars, load_character_profile, resolve_pending_avatars,
+    attach_player_avatar, load_character_profile, resolve_pending_avatars,
 };
 use data::load_game_data;
 use net::{
@@ -140,8 +140,7 @@ fn main() {
         .add_systems(
             Update,
             (
-                despawn_stale_avatars,
-                attach_player_avatar.after(despawn_stale_avatars),
+                attach_player_avatar,
                 resolve_pending_avatars.after(attach_player_avatar),
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
