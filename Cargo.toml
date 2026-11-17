@@ -8,6 +8,7 @@ members = [
     "crates/ba_protocol",
     "crates/ba_combat",
     "crates/ba_zone_server",
+    "crates/ba_gateway",
 ]
 exclude = ["launcher/src-tauri"]
 
