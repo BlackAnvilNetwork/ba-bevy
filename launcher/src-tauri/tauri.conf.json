@@ -1,6 +1,6 @@
 {
   "build": {
-    "beforeDevCommand": "",
+    "beforeDevCommand": "powershell -ExecutionPolicy Bypass -File ../../scripts/run-character-studio.ps1",
     "beforeBuildCommand": "powershell -ExecutionPolicy Bypass -File ../../scripts/build-launcher-studio.ps1",
     "devPath": "http://127.0.0.1:5173",
     "distDir": "../../character-studio/build",
@@ -62,7 +62,7 @@
         "fullscreen": false,
         "height": 900,
         "resizable": true,
-        "title": "Black Anvil — Character Studio",
+        "title": "Black Anvil — Launcher",
         "width": 1280
       }
     ]
