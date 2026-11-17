@@ -7,6 +7,7 @@ import { ViewContext, ViewMode } from "./context/ViewContext"
 import { EffectManager } from "./library/effectManager"
 //import { AnimationManager } from "./library/animationManager"
 import MessageWindow from "./components/MessageWindow"
+import BaLauncherDashboard from "./components/BaLauncherDashboard"
 
 import Background from "./components/Background"
 
@@ -101,6 +102,8 @@ export default function App() {
     effectManager,
   } = resource.read()
   const [hideUi, setHideUi] = useState(false)
+  // The Tauri window is the launcher. Character Studio is an in-app view.
+  const [launcherHome, setLauncherHome] = useState(baMode && Boolean(window.__TAURI__))
   const {
     camera,
     controls,
@@ -110,7 +113,7 @@ export default function App() {
     lookAtManager,
     showEnvironmentModels
   } = useContext(SceneContext)
-  const { viewMode } = useContext(ViewContext)
+  const { viewMode, setViewMode } = useContext(ViewContext)
 
   effectManager.camera = camera
   effectManager.scene = scene
@@ -209,8 +212,20 @@ export default function App() {
   // Translate hook
   const {t} = useContext(LanguageContext);
 
+  if (launcherHome) {
+    return <BaLauncherDashboard onCustomize={() => {
+      setViewMode(ViewMode.APPEARANCE)
+      setLauncherHome(false)
+    }} />
+  }
+
   return (
     <Fragment>
+      {baMode && window.__TAURI__ && (
+        <button type="button" className="ba-back-to-launcher" onClick={() => setLauncherHome(true)}>
+          ← Back to launcher
+        </button>
+      )}
       
       <div className="generalTitle">{baMode ? "Black Anvil" : "Character Studio"}</div>
 
