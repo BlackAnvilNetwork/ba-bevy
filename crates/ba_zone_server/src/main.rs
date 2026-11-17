@@ -25,7 +25,6 @@ use ba_combat::{
 };
 use ba_protocol::{
     integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage,
-    DEV_ZONE_MAX_X, DEV_ZONE_MAX_Z, DEV_ZONE_MIN_X, DEV_ZONE_MIN_Z,
     PROTOCOL_VERSION, SPRINT_SPEED, TICK_HZ,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -40,7 +39,7 @@ use tracing::{info, warn};
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const INTEREST_RADIUS_METERS: f32 = 96.0;
 const MAX_MOVE_PACKETS_PER_SEC: u32 = 80;
-const BOUNDS: (f32, f32, f32, f32) = (DEV_ZONE_MIN_X, DEV_ZONE_MAX_X, DEV_ZONE_MIN_Z, DEV_ZONE_MAX_Z);
+
 const DT: f32 = 1.0 / TICK_HZ as f32;
 const DEFAULT_SPAWN: Pose = Pose {
     x: 0.2,
@@ -757,7 +756,10 @@ async fn resolve_cast(
             reason: "no_target".into(),
         });
     };
-    let tpose = w.kilns.iter().find(|k| k.spec.id == tid && k.targetable(w.tick))?.pose();
+    let Some(target) = w.kilns.iter().find(|k| k.spec.id == tid && k.targetable(w.tick)) else {
+        return Some(ServerMessage::CastRejected { tick, ability_id: spec.id.clone(), reason: "no_target".into() });
+    };
+    let tpose = target.pose();
     let dist = dist_xz(pose, tpose);
     let tstats = starter_stats(JobId::Knight);
     let outcome =

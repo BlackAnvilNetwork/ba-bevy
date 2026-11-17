@@ -68,6 +68,18 @@ jobs:
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           }
+      - name: Walk Stillwater from the lantern to Cael's forge
+        shell: pwsh
+        run: |
+          $env:BA_DEV_ALLOW_UNAUTH = "1"
+          $p = Start-Process -FilePath "target\debug\ba_zone_server.exe" -PassThru -NoNewWindow
+          try {
+            Start-Sleep -Seconds 1
+            node scripts/smoke-stillwater.mjs
+            if ($LASTEXITCODE -ne 0) { throw "Stillwater walkthrough failed" }
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
 
   authenticated-zone-smoke:
     runs-on: windows-latest

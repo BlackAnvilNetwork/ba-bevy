@@ -1,3 +1,4 @@
+mod megascans;
 mod stillwater;
 mod ashworks;
 mod atmosphere;
@@ -96,6 +97,7 @@ fn main() {
     // asset source. Launcher-managed revisions are never copied into the
     // game's installed assets or source tree.
     let mut app = App::new();
+    app.insert_resource(megascans::MegascansRoot(asset_root.join("megascans")));
     if let Some(root) = std::env::var_os("BA_CHARACTER_ROOT") {
         let root = PathBuf::from(root);
         if root.is_dir() {
@@ -255,7 +257,7 @@ fn main() {
         )
         .init_resource::<stillwater::DisplayState>()
         .add_systems(Startup,(stillwater::setup,ashworks::spawn))
-        .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::roll_avatar,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal).after(apply_zone_snapshots))
+        .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::edda_animation,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal).after(apply_zone_snapshots))
         .add_systems(Update,stillwater::camera_feedback.after(apply_camera_mode))
         .add_systems(Update, (ashworks::display, ashworks::gallery_visibility).after(apply_zone_snapshots))
         // Bevy evaluates glTF animation in PostUpdate. Apply camera-specific

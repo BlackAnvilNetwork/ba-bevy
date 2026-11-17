@@ -7,7 +7,7 @@ Opening vertical slice + Character Studio + **dev/loopback zone prototype**.
 ## Run (single-player)
 
 ```bash
-cargo run
+cargo run --bin black_anvil
 ```
 
 Forge: customize opens Character Studio (`scripts/run-character-studio.ps1`, bound to `127.0.0.1`).  
@@ -23,22 +23,43 @@ Default bind is **loopback only** (`127.0.0.1:8787`). Non-local binds require `B
 
 # terminal 2 / 3
 $env:BA_ZONE = "1"
-cargo run
+cargo run --bin black_anvil
 ```
 
 | Input | Zone action |
 |-------|-------------|
 | LMB / F | Engage nearest — server auto-attacks (~0.72s swing) |
 | 1–8 | Cast kits.json hotbar (buffs / WS / heals; server math) |
-| WASD | Move (client prediction; server clamps speed / NaNs / bounds) |
+| WASD / Ctrl | Move / sprint |
+| Shift or Space | Roll in the movement direction. Costs 35 stamina and protects the first 0.25 seconds |
+| E | Speak, gather, collect a ground bundle, or use the ward stone |
+| Q / I / L | Use healing supplies / open the pack / toggle common drop labels |
+| V or F5 | Switch first- and third-person view |
 
-Combat math: `crates/ba_combat` + `assets/combat/kits.json`. Protocol v3: `crates/ba_protocol` (`Damage` / `Heal` / `BuffApplied` / `CastRejected`).  
+Combat math: `crates/ba_combat` + `assets/combat/kits.json`. Protocol v5: `crates/ba_protocol` (`Damage` / `Heal` / `BuffApplied` / `CastRejected`).
 Remotes render as capsules until a signed content-hash asset cache exists (never load network filesystem paths).  
 Autos grant TP; `ws_*` casts spend it. Kits buffs raise server `atk_mul`. Local boss/XP sim is disabled while zone Welcome is verified.
 
+### The Stillwater Boneyard
+
+New online characters arrive at the Lantern Post. Speak to Old Pell, hunt in the Shallows, and gather iron and peat from the banks. Follow the great ribs inland to the Drowned Ox. At the northern arch, defeat Edda and collect **Edda’s Book** from her fallen bundle. The Drowned Gate admits a level-three character carrying the book, the Ox’s Yoke, and three Cold Iron. The ferryman brings you to Cael’s field forge at Sable Rest. Four Cold Iron and one Peat make the first iron edge.
+
+White, gold, and red wind-ups mark normal, heavy, and unblockable attacks. Step out of their footprint or roll through the impact. Watch for the collapse, then collect the bundle with **E**. Rare components cast a blue beam. Each contributor has their own bundle. The authenticated gateway saves unclaimed bundles with the character.
+
+#### Quixel Megascans kit
+
+Stillwater uses locally installed glTF scans at the marsh banks and rock outcrops. Surface sets can also supply the bank and gate masonry. A checkout without scans uses the built-in geometry and materials. Install Pillow for the importer and restart the client after importing.
+
+```powershell
+py -m pip install Pillow
+py scripts/import-megascans.py terrain "$HOME/Downloads/forest_terrain_tletcalfa_ue_mid.zip"
+```
+
+The `terrain` and `rock` slots accept a single model in a glTF ZIP, an extracted folder, or a GLB. The `bank` and `gate` slots take one resolution of a texture set with base color, normal and roughness maps. The importer caps textures at 2K and packs roughness into the green channel. Keep original exports and the generated `assets/megascans/` directory with the private project assets. [Quixel library](https://quixel.com/news/update-megascans-are-going-free-again) · [Fab license](https://www.fab.com/eula)
+
 ### Greymere Ashworks (zone playtest)
 
-Enter the yard with the zone server and client running as above. The forge order appears in the upper right. Engage the **Clinker Imp** near the well with F or left click. Use your job hotbar and step beyond its ring of gold sparks before the kiln pulse lands. Players who damage the construct and are alive nearby when it breaks share XP and raw cinder.
+Set `$env:BA_ZONE_START = "greymere"` in the server terminal before launching to start a fresh playtest here. Existing saved Greymere characters can travel to Stillwater by using E at the eastern road. The forge order appears in the upper right. Engage the **Clinker Imp** near the well with F or left click. Use your job hotbar and step beyond its warning ring before the kiln pulse lands. Players who damage the construct and are alive nearby when it breaks earn XP and can each collect a bundle of raw cinder with E.
 
 * **Kiln ward** — bring two raw cinder to the fire basket beside the well and press G. The equipped ward reduces incoming kiln pulse damage to one third (rounded down).
 * **Tempered edge** — follow the east road under the firing gallery, defeat the Kiln Warden, and return to the basket with one kiln heart and two raw cinder. Press G to temper the edge for 25% more auto-attack power.

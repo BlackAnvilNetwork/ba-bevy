@@ -286,6 +286,7 @@ fn model_correction(left_minus_right: Vec3) -> Option<Quat> {
 }
 
 pub fn pose_humanoid_bones(
+    zone: Option<Res<crate::net::ZoneNet>>,
     time: Res<Time>,
     view: Res<CameraView>,
     swing: Res<SwingPose>,
@@ -346,6 +347,13 @@ pub fn pose_humanoid_bones(
             .model_yaw
             .unwrap_or(Quat::from_rotation_y(std::f32::consts::PI));
         visual.rotation = actor.rotation.inverse() * state.facing * correction;
+        if local.is_some() {
+            let progress = zone.as_ref().filter(|z| z.online() && z.marsh.rolling).map(|z| z.marsh.roll_progress);
+            let roll = Quat::from_rotation_x(-std::f32::consts::TAU * progress.unwrap_or(0.0));
+            let pivot = Vec3::Y * 0.85;
+            visual.translation = Vec3::Y * -1.65 + pivot - roll * pivot;
+            visual.rotation = roll * visual.rotation;
+        }
         // GlobalTransforms still describe the previous frame. Express aim in
         // that frame too, cancelling movement of the actor and camera.
         let frame = global.rotation() * correction.inverse();
