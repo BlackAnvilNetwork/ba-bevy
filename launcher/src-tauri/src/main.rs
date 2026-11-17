@@ -8,11 +8,16 @@
 //! for local AssetServer loads (dev only — not an installed-release store).
 
 use std::fs;
+use std::process::{Child, Command};
+use std::sync::Mutex;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use serde::Deserialize;
+
+// A native Play action must not spawn duplicate game processes on double clicks.
+static RUNNING_GAME: Mutex<Option<Child>> = Mutex::new(None);
 
 const MAX_GLB: usize = 32 * 1024 * 1024;
 const JOBS: &[&str] = &[
@@ -228,9 +233,74 @@ fn get_draft() -> Result<Option<String>, String> {
     fs::read_to_string(path).map(Some).map_err(|e| e.to_string())
 }
 
+
+/// Launch a native Bevy game process without accepting an arbitrary executable path.
+///
+/// The development preview uses this checkout's compiled Bevy binary. A production
+/// installer must bundle a signed executable and matching assets before this path
+/// is eligible for release. Discord session-ticket handoff is a separate gate.
+#[tauri::command]
+fn launch_game(app: tauri::AppHandle, multiplayer: bool) -> Result<serde_json::Value, String> {
+    let draft = get_draft()?.ok_or("Create and save a character before playing")?;
+    validate_character(&draft)?;
+    if !exports_dir().join("active.glb").is_file() {
+        return Err("The character's avatar is missing. Save it again in Character Studio.".into());
+    }
+
+    let mut running = RUNNING_GAME.lock().map_err(|_| "game process lock poisoned")?;
+    if let Some(child) = running.as_mut() {
+        if child.try_wait().map_err(|e| e.to_string())?.is_none() {
+            return Ok(serde_json::json!({ "alreadyRunning": true, "pid": child.id() }));
+        }
+    }
+    *running = None;
+
+    #[cfg(debug_assertions)]
+    let (binary, working_dir) = {
+        let root = repo_root();
+        let filename = if cfg!(windows) { "black_anvil.exe" } else { "black_anvil" };
+        let debug = root.join("target").join("debug").join(filename);
+        let release = root.join("target").join("release").join(filename);
+        (if debug.is_file() { debug } else { release }, root)
+    };
+
+    #[cfg(not(debug_assertions))]
+    let (binary, working_dir) = {
+        let game = app.path_resolver()
+            .resolve_resource(if cfg!(windows) { "game/black_anvil.exe" } else { "game/black_anvil" })
+            .ok_or("Game is not packaged with this launcher release")?;
+        let root = game.parent().ok_or("Invalid packaged game path")?.to_path_buf();
+        (game, root)
+    };
+    let _ = &app;
+
+    if !binary.is_file() {
+        return Err(format!(
+            "Bevy game executable not installed at {}. Development: run cargo build --bin black_anvil first.",
+            binary.display()
+        ));
+    }
+    let mut command = Command::new(&binary);
+    command.current_dir(&working_dir);
+    if multiplayer {
+        command.env("BA_ZONE", "1");
+    } else {
+        command.env_remove("BA_ZONE");
+        command.env_remove("BA_ZONE_URL");
+    }
+    let child = command.spawn().map_err(|e| format!("Could not start Bevy: {e}"))?;
+    let pid = child.id();
+    *running = Some(child);
+    Ok(serde_json::json!({
+        "pid": pid,
+        "alreadyRunning": false,
+        "mode": if multiplayer { "loopback-zone" } else { "local-preview" }
+    }))
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![save_draft, get_draft])
+        .invoke_handler(tauri::generate_handler![save_draft, get_draft, launch_game])
         .run(tauri::generate_context!())
         .expect("error while running Black Anvil launcher");
 }
