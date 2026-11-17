@@ -157,6 +157,7 @@ fn router(app: Gateway) -> Router {
         .route("/v1/auth/callback", get(auth::callback))
         .route("/v1/auth/poll", post(auth::poll))
         .route("/v1/me", get(auth::me))
+        .route("/v1/auth/logout", post(auth::logout))
         .route("/v1/characters", post(characters::save_character))
         .route("/v1/characters/selected", get(characters::selected))
         .route("/v1/assets/{hash}", get(characters::download_asset))
