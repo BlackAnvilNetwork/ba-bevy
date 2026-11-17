@@ -245,6 +245,24 @@ pub(crate) async fn me(State(app): State<Gateway>, headers: HeaderMap) -> ApiRes
     Ok(Json(json!({ "accountId": account_id, "displayName": display_name, "discordId": discord_id })))
 }
 
+/// Revoke a Black Anvil account session without touching the user's Discord
+/// OAuth identity or an independently-controlled smart-account wallet.
+pub(crate) async fn logout(
+    State(app): State<Gateway>, headers: HeaderMap,
+) -> ApiResult<Json<Value>> {
+    let account_id = account_id_for_session(&app,&headers)?;
+    let raw = headers.get(axum::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .ok_or_else(ApiError::auth)?;
+    let db = app.db.lock().map_err(|_| ApiError::internal())?;
+    db.execute(
+        "UPDATE sessions SET revoked=1 WHERE token_hash=?1 AND account_id=?2",
+        params![token_hash(raw),account_id],
+    )?;
+    Ok(Json(json!({"ok":true})))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
