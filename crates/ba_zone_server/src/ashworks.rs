@@ -63,7 +63,7 @@ pub fn edge_bonus(p: &Player) -> f32 {
     }
 }
 
-pub fn forge(p: &mut Player) {
+pub fn forge(p: &mut Player, recipe: Recipe) {
     let site = Pose {
         x: FORGE.0,
         z: FORGE.1,
@@ -71,6 +71,9 @@ pub fn forge(p: &mut Player) {
     };
     let (stock, ward) = supplies(&p.inventory);
     if p.hp <= 0 || stock < WARD_COST || dist_xz(p.pose, site) > 2.5 {
+        return;
+    }
+    if (recipe == Recipe::TemperedEdge) != ward {
         return;
     }
     if ward && (!owns(&p.inventory, HEART) || owns(&p.inventory, EDGE)) {

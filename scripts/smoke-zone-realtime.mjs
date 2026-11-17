@@ -157,7 +157,7 @@ async function hunt() {
 await hunt();
 if (b.ashworks.cinder !== 1) await waitUntil(() => b.ashworks.cinder === 1, 2000, "shared contribution reward");
 await hunt();
-send(a, { type: "forge_ward" });
+send(a, { type: "forge", recipe: "kiln_ward" });
 await sleep(300);
 if (a.ashworks.ward || a.ashworks.cinder !== 2) throw new Error("crafted away from forge");
 
@@ -178,8 +178,8 @@ async function walkTo(x, z) {
   throw new Error("could not reach waypoint");
 }
 await walkTo(-2.05,0.35);
-send(a, { type: "forge_ward" });
-send(a, { type: "forge_ward" });
+send(a, { type: "forge", recipe: "kiln_ward" });
+send(a, { type: "forge", recipe: "kiln_ward" });
 await waitUntil(() => a.ashworks.ward && a.ashworks.cinder === 0, 2000, "forge ward");
 if (b.ashworks.ward) throw new Error("ward leaked to other character");
 // Finish the forge order with the boss heart. The extra imp also supplies
@@ -195,7 +195,10 @@ await waitUntil(() => a.ashworks.heart, 45000, "kiln heart");
 if (a.rejects.filter(r => r.ability_id === "ws_gs_hard_slash").length !== 1) throw new Error("earned weapon skill rejected");
 if (a.peers.find(p => pid(p) === a.id).level < 2) throw new Error("XP did not advance level");
 await walkTo(-2.05,0.35);
-send(a, { type: "forge_ward" });
+send(a, { type: "forge", recipe: "kiln_ward" });
+await sleep(250);
+if (a.ashworks.edge || !a.ashworks.heart) throw new Error("replayed ward craft consumed kiln heart");
+send(a, { type: "forge", recipe: "tempered_edge" });
 await waitUntil(() => a.ashworks.edge && !a.ashworks.heart && a.ashworks.cinder === 0, 2000, "temper edge");
 a.ws.close();
 b.ws.close();

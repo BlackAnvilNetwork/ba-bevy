@@ -438,7 +438,11 @@ pub fn send_local_move(
         return;
     }
     let Some(tx) = net.tx.as_ref() else { return };
-    if keys.just_pressed(KeyCode::KeyG) { let _ = tx.send(ClientMessage::ForgeWard); }
+    if keys.just_pressed(KeyCode::KeyG) {
+        use ba_protocol::ashworks::Recipe;
+        let recipe = if net.ashworks.ward { Recipe::TemperedEdge } else { Recipe::KilnWard };
+        let _ = tx.send(ClientMessage::Forge { recipe });
+    }
     if mouse.just_pressed(MouseButton::Left) || keys.just_pressed(KeyCode::KeyF) {
         let _ = tx.send(ClientMessage::Attack { target_id: 0 });
     }

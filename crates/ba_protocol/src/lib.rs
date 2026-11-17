@@ -224,7 +224,7 @@ pub enum ClientMessage {
     Cast {
         ability_id: String,
     },
-    ForgeWard,
+    Forge { recipe: ashworks::Recipe },
     Ping {
         client_time_ms: u64,
     },

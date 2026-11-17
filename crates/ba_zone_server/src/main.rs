@@ -579,9 +579,9 @@ async fn handle_connection(
                                     }
                                 }
                             }
-                            Ok(ClientMessage::ForgeWard) => {
+                            Ok(ClientMessage::Forge { recipe }) => {
                                 if let Some(id) = player_id {
-                                    if let Some(p) = world.write().await.players.get_mut(&id) { ashworks::forge(p); }
+                                    if let Some(p) = world.write().await.players.get_mut(&id) { ashworks::forge(p, recipe); }
                                 }
                             }
                             Ok(ClientMessage::Ping { client_time_ms }) => {
