@@ -3,6 +3,9 @@
 //! Animation is presentation only; it cannot grant speed/combat outcomes.
 
 use std::time::Duration;
+use std::collections::HashMap;
+use crate::camera_rig::{CameraMode, CameraView};
+use super::PlayerAvatarMesh;
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -13,13 +16,26 @@ pub struct AvatarAnimationGraph {
     walk: AnimationNodeIndex,
 }
 
-#[derive(Component)]
-pub(crate) struct LegacyRigPoseApplied;
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+enum JointKind { UpperArm, UpperLeg }
 
+/// Rest/bind rotation captured *before* Bevy applies the first animation.
+/// The model is never replaced by a primitive viewmodel in first person.
 #[derive(Component)]
-pub(crate) struct LegacyArmPose {
+pub(crate) struct AvatarJoint {
+    root: Entity,
     rest: Quat,
-    direction: f32,
+    kind: JointKind,
+    // +1 on the left, -1 on the right: rotate a standard +/-X T-pose arm
+    // downward around Z in third person.
+    sign: f32,
+}
+
+#[derive(Component,Default)]
+pub(crate) struct AvatarMotion {
+    previous: Vec3,
+    initialized: bool,
+    speed: f32,
 }
 
 #[derive(Component)]
@@ -49,9 +65,12 @@ pub fn prepare_avatar_animation(
         walk_clip,
     ]);
     let handle = graphs.add(graph);
-    commands.entity(root).insert(AvatarAnimationGraph {
-        handle, idle_clip, idle: nodes[0], walk: nodes[1],
-    });
+    commands.entity(root).insert((
+        AvatarAnimationGraph {
+            handle, idle_clip, idle: nodes[0], walk: nodes[1],
+        },
+        AvatarMotion::default(),
+    ));
 }
 
 /// Explicitly bind every scene's AnimationPlayer once it exists. The glTF
@@ -86,58 +105,141 @@ pub fn bind_avatar_animators(
     }
 }
 
-/// Older locally saved GLBs may predate BA_Idle/BA_Walk (and Bevy won't
-/// spawn an AnimationPlayer for them). Give such skeletons a relaxed arms-down
-/// fallback instead of rendering a permanent T-pose. The newer clips take
-/// precedence and are never mixed with this fallback.
-pub fn pose_legacy_unanimated_avatars(
+fn simplified_bone_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+/// Recognize VRoid J_Bip_L_UpperArm, Mixamo mixamorigLeftArm, VRM
+/// leftUpperArm, and UpperArm_L. This used to recognize only one of these
+/// naming systems; missing bones meant every old GLB stayed in a T-pose.
+fn joint_from_name(name: &str) -> Option<(JointKind,f32)> {
+    let key = simplified_bone_name(name);
+    let part = if key.contains("upperarm")
+        || (key.ends_with("leftarm") || key.ends_with("rightarm"))
+    {
+        JointKind::UpperArm
+    } else if key.contains("upperleg") || key.contains("thigh") || key.contains("upleg") {
+        JointKind::UpperLeg
+    } else {
+        return None;
+    };
+    let part_key = if part == JointKind::UpperArm { "upperarm" } else { "upperleg" };
+    let is_left = key.contains("left") || key.contains(&format!("bipl{part_key}"))
+        || key.ends_with(&format!("{part_key}l"))
+        || (part==JointKind::UpperLeg && key.contains("biplthigh"));
+    let is_right = key.contains("right") || key.contains(&format!("bipr{part_key}"))
+        || key.ends_with(&format!("{part_key}r"))
+        || (part==JointKind::UpperLeg && key.contains("biprthigh"));
+    if is_left == is_right { return None; }
+    Some((part, if is_left {1.0} else {-1.0}))
+}
+
+/// Traverse one full skinned scene once its nodes appear. Unlike an
+/// event-only hook this also handles imported legacy GLBs which do not
+/// contain an AnimationPlayer at all.
+pub fn discover_avatar_bones(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    roots: Query<(Entity,&AvatarAnimationGraph), Without<LegacyRigPoseApplied>>,
+    roots: Query<Entity, With<AvatarAnimationGraph>>,
     children: Query<&Children>,
-    names: Query<(&Name,&Transform)>,
+    bones: Query<(&Name,&Transform),Without<AvatarJoint>>,
 ) {
-    use bevy::asset::LoadState;
-    for (root,graph) in &roots {
-        if !matches!(asset_server.load_state(graph.idle_clip.id()), LoadState::Failed(_)) {
-            continue;
-        }
-        let mut posed=0_usize;
-        for entity in children.iter_descendants(root) {
-            let Ok((name,transform))=names.get(entity) else {continue};
-            let simple: String=name.as_str().chars()
-                .filter(|c|c.is_ascii_alphanumeric())
-                .flat_map(|c|c.to_lowercase())
-                .collect();
-            let side = if simple.contains("leftupperarm") || simple.contains("leftarm") {
-                Some(-1.0)
-            } else if simple.contains("rightupperarm") || simple.contains("rightarm") {
-                Some(1.0)
-            } else {
-                None
-            };
-            if let Some(direction)=side {
-                commands.entity(entity).insert(LegacyArmPose {
-                    rest:transform.rotation,
-                    direction,
-                });
-                posed+=1;
-            }
-        }
-        if posed>0 {
-            commands.entity(root).insert(LegacyRigPoseApplied);
-            warn!("Avatar GLB has no BA_Idle clip; applied animated legacy arms-down pose to {posed} bones. Re-save in Studio to embed animation clips.");
+    for root in &roots {
+        for node in children.iter_descendants(root) {
+            let Ok((name,transform)) = bones.get(node) else {continue};
+            let Some((kind,sign)) = joint_from_name(name.as_str()) else {continue};
+            commands.entity(node).insert(AvatarJoint {
+                root, rest:transform.rotation, kind, sign,
+            });
         }
     }
 }
 
-pub fn animate_legacy_arm_pose(
+/// Render-only posing layered after imported glTF animation evaluation.
+///
+/// BA's oldest character GLBs have no clips; newer ones can have partial
+/// clips targeting the torso but not J_Bip arms. Pose the recognized upper
+/// arms in both situations and give the legs a small walk cycle when the
+/// character moves. It is the SAME actual skinned body in both cameras.
+///
+/// Runs AFTER AnimationSystems, before transform propagation, so an imported
+/// animation cannot reset the arm pose to T-pose on the next frame.
+pub fn pose_humanoid_bones(
     time: Res<Time>,
-    mut arms: Query<(&LegacyArmPose,&mut Transform)>,
+    view: Res<CameraView>,
+    mut roots: Query<(Entity,&GlobalTransform,&mut AvatarMotion,Option<&PlayerAvatarMesh>)>,
+    mut joints: Query<(&AvatarJoint,&mut Transform)>,
 ) {
-    let breathe=(time.elapsed_secs()*1.8).sin()*0.035;
-    for (arm,mut transform) in &mut arms {
-        transform.rotation=arm.rest*Quat::from_rotation_z(arm.direction*(1.0+breathe));
+    let dt=time.delta_secs().max(0.0001);
+    let mut motion:HashMap<Entity,(f32,bool)> = HashMap::new();
+    for (entity,world,mut state,local) in &mut roots {
+        let here=world.translation();
+        if state.initialized {
+            state.speed=(here-state.previous).length()/dt;
+        } else {
+            state.speed=0.0;
+            state.initialized=true;
+        }
+        state.previous=here;
+        motion.insert(entity,(state.speed,local.is_some()));
+    }
+    let phase=time.elapsed_secs()*9.0;
+    let breathe=(time.elapsed_secs()*1.8).sin()*0.025;
+    for (joint,mut xf) in &mut joints {
+        let Some(&(speed,is_local)) = motion.get(&joint.root) else {continue};
+        let walking=speed>0.25;
+        let sway=if walking {phase.sin()*0.25}else{0.0};
+        match joint.kind {
+            JointKind::UpperArm if is_local && view.mode==CameraMode::FirstPerson => {
+                // Upper arms extend forward from the character's actual
+                // shoulders. Pitch drives the real rig, not a white capsule.
+                let reach=(1.12+view.pitch*0.36).clamp(0.65,1.5);
+                xf.rotation=joint.rest
+                    * Quat::from_rotation_y(-joint.sign*reach)
+                    * Quat::from_rotation_z(joint.sign*(0.17+breathe))
+                    * Quat::from_rotation_x(joint.sign*sway*0.2);
+            }
+            JointKind::UpperArm => {
+                xf.rotation=joint.rest
+                    * Quat::from_rotation_z(joint.sign*(1.00+breathe))
+                    * Quat::from_rotation_x(-joint.sign*sway*0.7);
+            }
+            JointKind::UpperLeg => {
+                xf.rotation=joint.rest
+                    * Quat::from_rotation_x(joint.sign*sway);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod pose_tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_vrm_vroid_mixamo_and_suffix_arm_names() {
+        for (left,right) in [
+            ("leftUpperArm","rightUpperArm"),
+            ("J_Bip_L_UpperArm","J_Bip_R_UpperArm"),
+            ("mixamorigLeftArm","mixamorigRightArm"),
+            ("UpperArm_L","UpperArm_R"),
+        ] {
+            assert_eq!(joint_from_name(left),Some((JointKind::UpperArm,1.0)), "{left}");
+            assert_eq!(joint_from_name(right),Some((JointKind::UpperArm,-1.0)), "{right}");
+        }
+        assert_eq!(joint_from_name("J_Bip_L_UpperLeg"),Some((JointKind::UpperLeg,1.0)));
+        assert_eq!(joint_from_name("J_Bip_R_UpperLeg"),Some((JointKind::UpperLeg,-1.0)));
+        assert_eq!(joint_from_name("Head"),None);
+        assert_eq!(joint_from_name("LeftForeArm"),None);
+    }
+
+    #[test]
+    fn arms_down_rotate_bind_pose_toward_ground() {
+        let left=Quat::from_rotation_z(1.0)*Vec3::NEG_X;
+        let right=Quat::from_rotation_z(-1.0)*Vec3::X;
+        assert!(left.y<0.0 && right.y<0.0);
     }
 }
 
