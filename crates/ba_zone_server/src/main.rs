@@ -29,6 +29,7 @@ const WALK_SPEED: f32 = 3.5;
 const SPRINT_SPEED: f32 = 6.5;
 /// Input is applied at fixed simulation cadence, never when packets arrive.
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
+const INTEREST_RADIUS_METERS: f32 = 96.0;
 const MAX_MOVE_PACKETS_PER_SEC: u32 = 80;
 const BOUNDS: (f32, f32, f32, f32) = (-20.0, 20.0, -20.0, 20.0);
 const DT: f32 = 1.0 / TICK_HZ as f32;
@@ -139,13 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let _ = snap_tx.send(json);
                     }
                 }
-                let snap = {
-                    let w = world.read().await;
-                    snapshot_message(&w)
-                };
-                if let Ok(json) = snap.to_json() {
-                    let _ = snap_tx.send(json);
-                }
+
             }
         });
     }
@@ -167,11 +162,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn snapshot_message(w: &World) -> ServerMessage {
-    let players: Vec<PlayerState> = w
-        .players
-        .iter()
-        .map(|(id, p)| PlayerState {
+fn snapshot_message_for(w: &World, viewer_id: u32) -> ServerMessage {
+    let origin = w.players.get(&viewer_id).map(|p| p.pose);
+    let players: Vec<PlayerState> = w.players.iter().filter_map(|(id, p)| {
+        if let Some(origin) = origin {
+            if *id != viewer_id && dist_xz(origin, p.pose) > INTEREST_RADIUS_METERS {
+                return None;
+            }
+        } else {
+            return None;
+        }
+        Some(PlayerState {
             player_id: *id,
             pose: p.pose,
             appearance: p.appearance.clone(),
@@ -179,11 +180,8 @@ fn snapshot_message(w: &World) -> ServerMessage {
             max_hp: p.max_hp,
             last_input_seq: p.last_input_seq,
         })
-        .collect();
-    ServerMessage::Snapshot {
-        tick: w.tick,
-        players,
-    }
+    }).collect();
+    ServerMessage::Snapshot { tick: w.tick, players }
 }
 
 /// Integrate player intent exactly once per authoritative zone tick.
@@ -332,11 +330,23 @@ async fn handle_connection(
     let (mut write, mut read) = ws.split();
     let mut snap_rx = snap_tx.subscribe();
     let mut player_id: Option<u32> = None;
+    // Per-viewer snapshots: remote actors outside AOI are never replicated.
+    let mut snapshot_interval = tokio::time::interval(Duration::from_secs_f32(DT));
+    snapshot_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     info!("{peer}: connected");
 
     loop {
         tokio::select! {
+            _ = snapshot_interval.tick(), if player_id.is_some() => {
+                if let Some(viewer_id) = player_id {
+                    let snap = {
+                        let w = world.read().await;
+                        snapshot_message_for(&w, viewer_id)
+                    };
+                    write.send(Message::Text(snap.to_json()?.into())).await?;
+                }
+            }
             incoming = read.next() => {
                 match incoming {
                     Some(Ok(Message::Text(text))) => {
@@ -753,6 +763,15 @@ mod tests {
         let b = integrate_movement(a, cmd, DT);
         assert!((b.z - DEFAULT_SPAWN.z).abs() <= SPRINT_SPEED * DT * 2.0 + 0.0001);
         // 5000 inbound packets still correspond to just one latest input per tick.
+    }
+
+    #[test]
+    fn interest_filter_rejects_out_of_range_players() {
+        let origin = DEFAULT_SPAWN;
+        let near = Pose { x: 20.0, ..origin };
+        let far = Pose { x: INTEREST_RADIUS_METERS + 0.01, ..origin };
+        assert!(dist_xz(origin, near) < INTEREST_RADIUS_METERS);
+        assert!(dist_xz(origin, far) > INTEREST_RADIUS_METERS);
     }
 
     #[test]
