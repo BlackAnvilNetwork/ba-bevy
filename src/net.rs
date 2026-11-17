@@ -287,8 +287,11 @@ fn appearance_from_local(draft: &CharacterDraft, profile: &CharacterProfile) -> 
             manifest_id: ba.manifest_id.clone(),
             body_traits: body,
             starter_equipment: equip,
-            // Hash lookup for remotes is future work; never send filesystem paths.
-            glb_content_hash: None,
+            // A content hash, never a file path. Receiver verifies bytes before
+            // permitting the renderer to load a cached model.
+            glb_content_hash: ba.runtime.content_hash.clone().filter(|hash| {
+                hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit())
+            }),
         };
     }
     AppearanceWire {
