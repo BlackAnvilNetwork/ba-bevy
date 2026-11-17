@@ -4,7 +4,6 @@
 
 use std::time::Duration;
 use bevy::prelude::*;
-use bevy::world_serialization::WorldInstanceReady;
 
 #[derive(Component)]
 pub struct AvatarAnimationGraph {
@@ -36,35 +35,38 @@ pub fn prepare_avatar_animation(
         asset_server.load(GltfAssetLabel::Animation(1).from_asset(glb_uri.to_string())),
     ]);
     let handle = graphs.add(graph);
-    commands.entity(root)
-        .insert(AvatarAnimationGraph {
-            handle, idle: nodes[0], walk: nodes[1],
-        })
-        .observe(start_avatar_when_scene_ready);
+    commands.entity(root).insert(AvatarAnimationGraph {
+        handle, idle: nodes[0], walk: nodes[1],
+    });
 }
 
-fn start_avatar_when_scene_ready(
-    ready: On<WorldInstanceReady>,
+/// Explicitly bind every scene's AnimationPlayer once it exists. The glTF
+/// importer can spawn the animated child AFTER the root scene-ready event on
+/// some meshes: a one-off event observer may then miss the player, leaving
+/// the skeleton in its T-pose forever. This polling system is idempotent and
+/// runs only for newly spawned AnimationPlayers.
+pub fn bind_avatar_animators(
     mut commands: Commands,
-    children: Query<&Children>,
-    animations: Query<&AvatarAnimationGraph>,
-    mut players: Query<&mut AnimationPlayer>,
+    roots: Query<(Entity, &AvatarAnimationGraph, &Children)>,
+    mut players: Query<&mut AnimationPlayer, Without<AvatarAnimationDrive>>,
 ) {
-    let Ok(graph) = animations.get(ready.entity) else { return };
-    for child in children.iter_descendants(ready.entity) {
-        if let Ok(mut player) = players.get_mut(child) {
-            let mut transitions = AnimationTransitions::new();
-            transitions.play(&mut player, graph.idle, Duration::ZERO).repeat();
-            commands.entity(child).insert((
-                AnimationGraphHandle(graph.handle.clone()),
-                transitions,
-                AvatarAnimationDrive {
-                    root: ready.entity,
-                    last_position: Vec3::ZERO,
-                    initialized: false,
-                    moving: false,
-                },
-            ));
+    for (root, graph, children) in &roots {
+        for descendant in children.iter_descendants(root) {
+            if let Ok(mut player) = players.get_mut(descendant) {
+                let mut transitions = AnimationTransitions::new();
+                transitions.play(&mut player, graph.idle, Duration::ZERO).repeat();
+                commands.entity(descendant).insert((
+                    AnimationGraphHandle(graph.handle.clone()),
+                    transitions,
+                    AvatarAnimationDrive {
+                        root,
+                        last_position: Vec3::ZERO,
+                        initialized: false,
+                        moving: false,
+                    },
+                ));
+                info!("Bound BA_Idle/BA_Walk animation to skinned avatar player {descendant:?}");
+            }
         }
     }
 }
