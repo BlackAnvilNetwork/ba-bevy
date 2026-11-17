@@ -204,13 +204,15 @@ pub fn pose_humanoid_bones(
                 let reach=(1.27+view.pitch*0.3).clamp(0.80,1.5);
                 xf.rotation=joint.rest
                     * Quat::from_rotation_y(-joint.sign*reach)
-                    * Quat::from_rotation_z(joint.sign*(0.06+breathe))
+                    * Quat::from_rotation_z(-joint.sign*(0.30+breathe))
                     * Quat::from_rotation_x(joint.sign*sway*0.2);
             }
             JointKind::LowerArm if is_local && view.mode==CameraMode::FirstPerson => {
                 // Bend the player's OWN skinned forearms inward toward the
                 // middle of the view (no detached replacement viewmodel).
-                xf.rotation=joint.rest * Quat::from_rotation_y(-joint.sign*0.68);
+                xf.rotation=joint.rest
+                    * Quat::from_rotation_y(-joint.sign*0.68)
+                    * Quat::from_rotation_z(-joint.sign*0.10);
             }
             JointKind::LowerArm => {
                 xf.rotation=joint.rest;
