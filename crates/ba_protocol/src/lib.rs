@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 pub const DEFAULT_WS_URL: &str = "ws://127.0.0.1:8787";
 pub const TICK_HZ: u32 = 20;
 
@@ -70,6 +70,8 @@ pub struct PlayerState {
     pub appearance: AppearanceWire,
     pub hp: i32,
     pub max_hp: i32,
+    /// Last movement input that the server applied during a simulation tick.
+    pub last_input_seq: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -81,8 +83,13 @@ pub enum ClientMessage {
         /// Hint only — server chooses spawn for admission.
         pose: Pose,
     },
-    Move {
-        pose: Pose,
+    /// Player intent, never an authoritative destination or position.
+    MoveIntent {
+        seq: u64,
+        forward: f32,
+        strafe: f32,
+        yaw: f32,
+        sprint: bool,
     },
     /// Engage sticky target for real-time auto-attacks. `target_id: 0` = nearest.
     Attack {
