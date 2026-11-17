@@ -23,11 +23,15 @@ export class BaIdlePreview {
       if (!this.active.has(scene)) {
         try {
           const [idle] = buildBaAvatarAnimations(scene)
+          const originals = new Map()
+          scene.traverse((node) => {
+            if (node.isBone) originals.set(node, node.quaternion.clone())
+          })
           const mixer = new AnimationMixer(scene)
           const action = mixer.clipAction(idle)
           action.setLoop(LoopRepeat, Infinity)
           action.play()
-          this.active.set(scene, { mixer, action })
+          this.active.set(scene, { mixer, action, originals })
         } catch (error) {
           // E.g. decals/textures have no bones. Do not interrupt creation.
           console.debug("Skipping static character trait for idle preview", error)
@@ -39,6 +43,7 @@ export class BaIdlePreview {
         value.action.stop()
         value.mixer.stopAllAction()
         value.mixer.uncacheRoot(scene)
+        for (const [bone, rest] of value.originals) bone.quaternion.copy(rest)
         this.active.delete(scene)
       } else {
         value.mixer.update(Math.min(0.1, Math.max(0, seconds || 0)))
@@ -51,6 +56,10 @@ export class BaIdlePreview {
       value.action.stop()
       value.mixer.stopAllAction()
       value.mixer.uncacheRoot(scene)
+      // Restore the neutral VRM bind pose before serializing a GLB. Otherwise
+      // export would bake the preview's arms-down pose and then apply the
+      // arms-down clip *again* (double rotation).
+      for (const [bone, rest] of value.originals) bone.quaternion.copy(rest)
     }
     this.active.clear()
   }
