@@ -141,8 +141,15 @@ pub fn load_draft_from_path(path: &Path) -> Option<BaCharacterV1> {
     }
 }
 
-pub fn load_character_profile(mut commands: Commands) {
+pub fn load_character_profile(mut commands: Commands, mut flow: ResMut<crate::forge_menu::GameFlow>) {
     let draft = load_active_draft();
+    // Only the explicit native Play command bypasses the developer forge, and
+    // only after a locally saved character can be loaded. Production game
+    // admission will additionally require a verified Discord session ticket.
+    if std::env::var("BA_LAUNCH_MODE").as_deref() == Ok("game") && draft.is_some() {
+        *flow = crate::forge_menu::GameFlow::InYard;
+        info!("Launcher handoff: saved character selected, entering yard directly");
+    }
     if let Some(ref d) = draft {
         info!(
             "Loaded BaCharacterV1 '{}' job={} manifest={} glb={}",
