@@ -169,6 +169,8 @@ fn main() {
                 interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
                 refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
                 bind_avatar_animators.run_if(in_yard).after(refresh_remote_avatar_models),
+                pose_legacy_unanimated_avatars.run_if(in_yard).after(bind_avatar_animators),
+                animate_legacy_arm_pose.run_if(in_yard).after(pose_legacy_unanimated_avatars),
                 update_avatar_animation.run_if(in_yard).after(bind_avatar_animators),
                 toggle_camera_mode,
                 apply_camera_mode.after(toggle_camera_mode).after(attach_player_avatar),
