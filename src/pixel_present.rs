@@ -14,8 +14,8 @@ use bevy::{
 
 use ba_pixel_geometry::CpuMesh;
 
-const PIXEL_W: u32 = 480;
-const PIXEL_H: u32 = 270;
+const PIXEL_W: u32 = 768;
+const PIXEL_H: u32 = 432;
 
 #[derive(Component)]
 pub struct PixelPresentCam;

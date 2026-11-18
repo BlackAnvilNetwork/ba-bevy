@@ -44,6 +44,8 @@ pub struct HudRoot;
 
 #[derive(Component)]
 pub struct SheetText;
+#[derive(Component)]
+pub struct HealthFill;
 
 const INTERACT_RANGE: f32 = 3.2;
 const BOOK_RANGE: f32 = 2.4;
@@ -95,17 +97,42 @@ pub fn spawn_hud(mut commands: Commands) {
                 top: px(16),
                 left: px(18),
                 flex_direction: FlexDirection::Column,
-                row_gap: px(4),
+                row_gap: px(5),
+                padding: UiRect::axes(px(11), px(7)),
+                border: UiRect::left(px(2)),
                 ..default()
             },
+            BackgroundColor(Color::srgba(0.065, 0.063, 0.085, 0.81)),
+            BorderColor::all(Color::srgb(0.63, 0.51, 0.34)),
         ))
         .with_children(|root| {
             root.spawn((
                 SheetText,
                 Text::new(""),
                 TextFont::from_font_size(16.0),
-                TextColor(Color::srgba(0.9, 0.86, 0.72, 0.95)),
+                TextColor(Color::srgb(0.96, 0.89, 0.74)),
             ));
+            root.spawn((
+                Node {
+                    width: px(205),
+                    height: px(8),
+                    border: UiRect::all(px(1)),
+                    ..default()
+                },
+                BackgroundColor(Color::srgb(0.12, 0.09, 0.12)),
+                BorderColor::all(Color::srgb(0.65, 0.53, 0.36)),
+            ))
+            .with_children(|track| {
+                track.spawn((
+                    HealthFill,
+                    Node {
+                        height: percent(100),
+                        width: percent(100),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.58, 0.23, 0.24)),
+                ));
+            });
         });
 
     commands.insert_resource(DialogueSession::default());
@@ -116,6 +143,9 @@ pub fn update_sheet_hud(
     prog: Query<(&Progression, Option<&crate::forge_menu::CharacterName>), With<Player>>,
     fighter: Query<&crate::rpg::Fighter, With<Player>>,
     kits: Option<Res<crate::rpg::CombatKits>>,
+    net: Res<crate::net::ZoneNet>,
+    display: Res<crate::stillwater::DisplayState>,
+    mut health: Query<&mut Node, With<HealthFill>>,
     mut sheet: Query<&mut Text, With<SheetText>>,
 ) {
     if flow.in_menu() {
@@ -128,10 +158,23 @@ pub fn update_sheet_hud(
         return;
     };
     let who = name.map(|n| n.0.as_str()).unwrap_or("Wanderer");
+    if let Ok(mut fill) = health.single_mut() {
+        fill.width = percent(100.0 * (p.hp as f32 / p.vitals.max_hp.max(1) as f32).clamp(0.0, 1.0));
+    }
+    if net.online() && ba_protocol::stillwater::marsh(net.region_x) && !display.inventory {
+        let line = format!(
+            "{who}   Lv {}\nHP {}/{}   MP {}/{}",
+            p.level, p.hp, p.vitals.max_hp, p.mp, p.vitals.max_mp
+        );
+        if **text != line {
+            **text = line;
+        }
+        return;
+    }
     let weapon = kits
         .as_ref()
         .map(|k| k.weapon_for(p.job).as_str())
-        .unwrap_or("—");
+        .unwrap_or("-");
     let bar = if let (Ok(f), Some(k)) = (fighter.single(), kits.as_ref()) {
         let slots: Vec<String> = f
             .hotbar
@@ -142,13 +185,13 @@ pub fn update_sheet_hud(
         if slots.is_empty() {
             String::new()
         } else {
-            format!("\n{}", slots.join(" · "))
+            format!("\n{}", slots.join(" / "))
         }
     } else {
         String::new()
     };
     **text = format!(
-        "{who}  ·  {}  Lv {}  ·  {}/{} XP  ·  {}\nHP {}/{}  MP {}/{}  ·  DEF {}  MDB {}  ·  [ ] switch job{}",
+        "{who}  /  {}  Lv {}  /  {}/{} XP  /  {}\nHP {}/{}  MP {}/{}  /  DEF {}  MDB {}  /  [ ] switch job{}",
         p.job.display_name(),
         p.level,
         p.xp,

@@ -24,7 +24,7 @@ pub struct StickSkyUniforms {
     pub dark: f32,
     pub haze: f32,
     pub veil: f32,
-    pub _pad0: f32,
+    pub marsh: f32,
     pub _pad1: f32,
 }
 
@@ -37,7 +37,7 @@ impl From<&StickAtmosphere> for StickSkyUniforms {
             dark: a.weather_dark,
             haze: a.weather_haze,
             veil: a.weather_veil,
-            _pad0: 0.0,
+            marsh: 0.0,
             _pad1: 0.0,
         }
     }
@@ -121,14 +121,19 @@ pub fn follow_sky_to_player(
 pub fn sync_sky_uniforms(
     atmo: Res<StickAtmosphere>,
     mut materials: ResMut<Assets<StickSkyMaterial>>,
+    player: Query<&Transform, With<crate::player::Player>>,
     skies: Query<&MeshMaterial3d<StickSkyMaterial>, With<StickSky>>,
 ) {
     if !atmo.is_changed() && !atmo.is_added() {
         // Still update time every frame
     }
+    let in_marsh = player
+        .single()
+        .is_ok_and(|p| ba_protocol::stillwater::marsh(p.translation.x));
     for handle in &skies {
         if let Some(mut mat) = materials.get_mut(&handle.0) {
             mat.uniforms = StickSkyUniforms::from(&*atmo);
+            mat.uniforms.marsh = if in_marsh { 1.0 } else { 0.0 };
         }
     }
 }
