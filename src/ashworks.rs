@@ -23,7 +23,7 @@ pub fn gallery_visibility(
     mut gallery: Query<&mut Visibility, With<Gallery>>,
 ) {
     if let Ok(mut vis) = gallery.single_mut() {
-        *vis = if net.online() && !flow.in_menu() {
+        *vis = if net.online() && net.region_x<100. && !flow.in_menu() {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -46,6 +46,7 @@ pub fn spawn(
         })
     };
     let iron = pigment(0.16, 0.13, 0.20);
+    let pale = pigment(0.95,0.95,0.95);
     let copper = pigment(0.47, 0.24, 0.12);
     let flame = pigment(1.0, 0.51, 0.08);
     // A roofless firing gallery follows the east road, leaving room to dodge
@@ -102,7 +103,7 @@ pub fn spawn(
             commands.spawn((
                 Ember(i, angle),
                 Mesh3d(cube.clone()),
-                MeshMaterial3d(flame.clone()),
+                MeshMaterial3d(if i==0 { pale.clone() } else { flame.clone() }),
                 Transform::from_xyz(spec.x, 0.1, spec.z),
                 Visibility::Hidden,
             ));
@@ -135,7 +136,7 @@ pub fn display(
         (With<ForgeOrder>, Without<Ember>, Without<Body>),
     >,
 ) {
-    let active = net.online() && !flow.in_menu();
+    let active = net.online() && net.region_x<100. && !flow.in_menu();
     let t = time.elapsed_secs();
     for (body, mut tf, mut vis) in &mut bodies {
         let spec = &CONSTRUCTS[body.0];
@@ -152,6 +153,7 @@ pub fn display(
             (t * 2.8).sin() * 0.025
         };
         *tf = Transform::from_xyz(spec.x, bounce.abs(), spec.z).with_scale(Vec3::splat(size));
+        if s.winding_up {tf.scale*=Vec3::new(1.25,0.63,1.25);}
         if let Ok(p) = player.single() {
             tf.rotation =
                 Quat::from_rotation_y((p.translation.x - spec.x).atan2(p.translation.z - spec.z));

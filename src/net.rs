@@ -39,6 +39,10 @@ pub enum ZonePhase {
 
 #[derive(Resource, Default)]
 pub struct ZoneNet {
+    pub marsh: ba_protocol::stillwater::MarshView,
+    pub region_x:f32,
+    pub impact:Option<(Instant,bool,bool)>,
+    pub last_amount:i32,
     pub ashworks: ba_protocol::ashworks::AshworksView,
     pub enabled: bool,
     pub phase: ZonePhase,
@@ -438,6 +442,12 @@ pub fn send_local_move(
         return;
     }
     let Some(tx) = net.tx.as_ref() else { return };
+    if keys.just_pressed(KeyCode::KeyE) {let _=tx.send(ClientMessage::Interact);}
+    if keys.just_pressed(KeyCode::KeyQ) {let _=tx.send(ClientMessage::Drink);}
+    if keys.just_pressed(KeyCode::ShiftLeft)||keys.just_pressed(KeyCode::Space) {
+        if let Ok(tf)=player.single(){let (yaw,_,_)=tf.rotation.to_euler(EulerRot::YXZ);
+            let _=tx.send(ClientMessage::Dodge{yaw,forward:(keys.pressed(KeyCode::KeyW) as i8-keys.pressed(KeyCode::KeyS) as i8) as f32,strafe:(keys.pressed(KeyCode::KeyD) as i8-keys.pressed(KeyCode::KeyA) as i8) as f32});}
+    }
     if keys.just_pressed(KeyCode::KeyG) {
         use ba_protocol::ashworks::Recipe;
         let recipe = if net.ashworks.ward { Recipe::TemperedEdge } else { Recipe::KilnWard };
@@ -462,7 +472,7 @@ pub fn send_local_move(
         forward: (keys.pressed(KeyCode::KeyW) as i8 - keys.pressed(KeyCode::KeyS) as i8) as f32,
         strafe: (keys.pressed(KeyCode::KeyD) as i8 - keys.pressed(KeyCode::KeyA) as i8) as f32,
         yaw,
-        sprint: keys.pressed(KeyCode::ShiftLeft),
+        sprint: keys.pressed(KeyCode::ControlLeft),
     };
     let seq = prediction.next_seq.saturating_add(1);
     if tx.send(ClientMessage::MoveIntent {
@@ -608,6 +618,7 @@ pub fn refresh_remote_avatar_models(
 
 pub fn apply_zone_snapshots(
     mut commands: Commands,
+    mut swing: ResMut<crate::character::SwingPose>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
@@ -645,10 +656,11 @@ pub fn apply_zone_snapshots(
                 spawn = Some(s);
                 info!("Zone WelcomeVerified player_id={player_id}");
             }
-            Ok(ServerMessage::Snapshot { tick, players, ashworks }) => {
-                net.ashworks = ashworks;
+            Ok(ServerMessage::Snapshot { tick, players, ashworks, marsh }) => {
+                net.ashworks = ashworks;net.marsh=marsh;
                 if let Some(id) = net.local_player_id {
                     if let Some(me) = players.iter().find(|p| p.player_id == id) {
+                        net.region_x=me.pose.x;
                         local_hp = Some((me.hp, me.max_hp));
                         local_progression = Some((me.level, me.xp));
                         local_authoritative = Some((me.pose, me.last_input_seq, tick));
@@ -665,6 +677,11 @@ pub fn apply_zone_snapshots(
                 target_hp,
                 ..
             }) => {
+                if hit && (Some(attacker_id)==net.local_player_id || Some(target_id)==net.local_player_id) {
+                    net.last_amount=damage;
+                    net.impact=Some((Instant::now(),crit || [ba_protocol::stillwater::OX,ba_protocol::stillwater::EDDA,u32::MAX-1].contains(&attacker_id) || [ba_protocol::stillwater::OX,ba_protocol::stillwater::EDDA,u32::MAX-1].contains(&target_id),Some(target_id)==net.local_player_id));
+                }
+                if Some(attacker_id)==net.local_player_id { swing.strike(time.elapsed_secs()); }
                 if hit {
                     info!(
                         "Zone hit {attacker_id}->{target_id} dmg={damage}{} hp={target_hp}",

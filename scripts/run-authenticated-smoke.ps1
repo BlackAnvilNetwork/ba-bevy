@@ -6,6 +6,7 @@ $testDir = Join-Path $env:RUNNER_TEMP ("ba-auth-smoke-" + [guid]::NewGuid().ToSt
 New-Item -ItemType Directory -Path $testDir -Force | Out-Null
 $env:BA_GATEWAY_DB = Join-Path $testDir "accounts.sqlite"
 $env:BA_AVATAR_DIR = Join-Path $testDir "avatars"
+$env:BA_ZONE_START = "greymere"
 $env:BA_GATEWAY_BIND = "127.0.0.1:8790"
 $env:BA_GATEWAY_PUBLIC_URL = "http://127.0.0.1:8790"
 $env:BA_GATEWAY_INTERNAL_URL = "http://127.0.0.1:8790"

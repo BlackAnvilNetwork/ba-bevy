@@ -244,6 +244,7 @@ pub fn boss_fight(
     mut dissolve: MessageWriter<DeathDissolveRequest>,
     mut xp: MessageWriter<GrantXp>,
     mut rng: Local<Option<SmallRng>>,
+    mut swing: ResMut<crate::character::SwingPose>,
 ) {
     if session.phase != DialoguePhase::BossFight || note.active {
         return;
@@ -350,12 +351,14 @@ pub fn boss_fight(
             );
             match outcome {
                 CastOutcome::Damage { amount, .. } => {
+                    swing.strike(now);
                     fighter.swing_cd = fighter.swing_period();
                     fighter.add_tp(tp_from_auto_hit(240.0));
                     apply_boss_dmg += amount;
                     fighter.note_cast(&format!("Strike {amount}"), now);
                 }
                 CastOutcome::Miss => {
+                    swing.strike(now);
                     fighter.swing_cd = fighter.swing_period();
                     fighter.note_cast("Miss", now);
                 }
@@ -384,11 +387,13 @@ pub fn boss_fight(
                     );
                     match outcome {
                         CastOutcome::Damage { amount, .. } => {
+                            swing.strike(now);
                             apply_ws_side_effects(&mut fighter, ws, now);
                             apply_boss_dmg += amount;
                             fighter.note_cast(&format!("{} {amount}", ws.label), now);
                         }
                         CastOutcome::Miss => {
+                            swing.strike(now);
                             apply_ws_side_effects(&mut fighter, ws, now);
                             fighter.note_cast(&format!("{} miss", ws.label), now);
                         }
@@ -414,11 +419,13 @@ pub fn boss_fight(
                     );
                     match outcome {
                         CastOutcome::Damage { amount, .. } => {
+                            swing.strike(now);
                             apply_ws_side_effects(&mut fighter, ws, now);
                             apply_boss_dmg += amount;
                             fighter.note_cast(&format!("{} {amount}", ws.label), now);
                         }
                         CastOutcome::Miss => {
+                            swing.strike(now);
                             apply_ws_side_effects(&mut fighter, ws, now);
                             fighter.note_cast(&format!("{} miss", ws.label), now);
                         }

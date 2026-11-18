@@ -501,15 +501,16 @@ pub fn spawn_forge_menu(
 
 pub fn hide_yard_hud_while_menu(
     flow: Res<GameFlow>,
-    mut hud: Query<&mut Visibility, Or<(With<HudRoot>, With<SheetText>)>>,
+    net: Res<crate::net::ZoneNet>,
+    mut hud: Query<(&mut Visibility,Option<&HudRoot>), Or<(With<HudRoot>, With<SheetText>)>>,
 ) {
     let vis = if flow.in_menu() {
         Visibility::Hidden
     } else {
         Visibility::Inherited
     };
-    for mut v in &mut hud {
-        *v = vis;
+    for (mut v,dialogue) in &mut hud {
+        *v = if dialogue.is_some() && net.online(){Visibility::Hidden}else{vis};
     }
 }
 

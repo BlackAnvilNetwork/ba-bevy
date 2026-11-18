@@ -92,7 +92,7 @@ pub fn spawn_player(
         children![(
             atmosphere::camera_bundle(&atmo),
             PlayerCamera,
-            Transform::from_rotation(Quat::from_rotation_x(pitch)),
+            crate::camera_rig::target_camera_transform(view.mode, pitch),
         )],
     ));
 }

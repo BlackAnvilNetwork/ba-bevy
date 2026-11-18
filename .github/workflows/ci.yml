@@ -17,6 +17,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Check crates + client
         run: cargo check -p ba_protocol -p ba_combat -p ba_zone_server -p black_anvil
+      - name: Exercise shipped avatar rigs in both camera modes
+        run: cargo test -p black_anvil character::animation
       - name: Shared protocol & zone unit tests
         run: cargo test -p ba_protocol -p ba_zone_server
 
@@ -47,6 +49,7 @@ jobs:
       - name: Run zone smoke
         shell: pwsh
         run: |
+          $env:BA_ZONE_START = "greymere"
           $env:BA_DEV_ALLOW_UNAUTH = "1" # explicit localhost-only legacy smoke
           $p = Start-Process -FilePath "target\debug\ba_zone_server.exe" -PassThru -NoNewWindow
           try {
@@ -62,6 +65,18 @@ jobs:
             }
             if (-not $ok) { throw "zone server did not listen" }
             node scripts/smoke-zone-realtime.mjs
+          } finally {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          }
+      - name: Walk Stillwater from the lantern to Cael's forge
+        shell: pwsh
+        run: |
+          $env:BA_DEV_ALLOW_UNAUTH = "1"
+          $p = Start-Process -FilePath "target\debug\ba_zone_server.exe" -PassThru -NoNewWindow
+          try {
+            Start-Sleep -Seconds 1
+            node scripts/smoke-stillwater.mjs
+            if ($LASTEXITCODE -ne 0) { throw "Stillwater walkthrough failed" }
           } finally {
             Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
           }

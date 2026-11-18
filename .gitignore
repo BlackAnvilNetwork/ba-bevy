@@ -26,3 +26,6 @@ Cargo.lock
 /ba-gateway.sqlite
 /ba-gateway.sqlite-*
 /ba-avatars/
+
+# Locally licensed Quixel exports
+/assets/megascans/

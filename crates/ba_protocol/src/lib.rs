@@ -4,6 +4,7 @@
 //! This crate is a **dev/loopback prototype** until ticket verification lands.
 
 pub mod ashworks;
+pub mod stillwater;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -113,10 +114,11 @@ pub fn integrate_movement(pose: Pose, axes: MoveAxes, dt: f32) -> Pose {
         dz /= magnitude;
     }
     let speed = if axes.sprint { SPRINT_SPEED } else { WALK_SPEED };
+    let (x0,x1,z0,z1)=stillwater::bounds(pose.x);
     Pose {
-        x: (pose.x + dx * speed * dt).clamp(DEV_ZONE_MIN_X, DEV_ZONE_MAX_X),
+        x: (pose.x + dx * speed * dt).clamp(x0,x1),
         y: PLAYER_HEIGHT,
-        z: (pose.z + dz * speed * dt).clamp(DEV_ZONE_MIN_Z, DEV_ZONE_MAX_Z),
+        z: (pose.z + dz * speed * dt).clamp(z0,z1),
         yaw: axes.yaw,
     }
 }
@@ -224,6 +226,9 @@ pub enum ClientMessage {
     Cast {
         ability_id: String,
     },
+    Interact,
+    Drink,
+    Dodge { forward:f32, strafe:f32, yaw:f32 },
     Forge { recipe: ashworks::Recipe },
     Ping {
         client_time_ms: u64,
@@ -248,6 +253,8 @@ pub enum ServerMessage {
         players: Vec<PlayerState>,
         #[serde(default)]
         ashworks: ashworks::AshworksView,
+        #[serde(default)]
+        marsh: stillwater::MarshView,
     },
     Progression {
         tick: u64,

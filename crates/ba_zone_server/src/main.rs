@@ -6,6 +6,8 @@
 
 mod auth;
 mod ashworks;
+mod stillwater;
+use ba_protocol::stillwater as sw;
 use ashworks::Kiln;
 
 use std::collections::HashMap;
@@ -23,7 +25,6 @@ use ba_combat::{
 };
 use ba_protocol::{
     integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage,
-    DEV_ZONE_MAX_X, DEV_ZONE_MAX_Z, DEV_ZONE_MIN_X, DEV_ZONE_MIN_Z,
     PROTOCOL_VERSION, SPRINT_SPEED, TICK_HZ,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -38,7 +39,7 @@ use tracing::{info, warn};
 const INPUT_TIMEOUT: Duration = Duration::from_millis(250);
 const INTEREST_RADIUS_METERS: f32 = 96.0;
 const MAX_MOVE_PACKETS_PER_SEC: u32 = 80;
-const BOUNDS: (f32, f32, f32, f32) = (DEV_ZONE_MIN_X, DEV_ZONE_MAX_X, DEV_ZONE_MIN_Z, DEV_ZONE_MAX_Z);
+
 const DT: f32 = 1.0 / TICK_HZ as f32;
 const DEFAULT_SPAWN: Pose = Pose {
     x: 0.2,
@@ -64,6 +65,7 @@ struct Player {
     xp: u64,
     level: u32,
     inventory: Value,
+    journey: stillwater::Journey,
     state_revision: u64,
     appearance: AppearanceWire,
     pose: Pose,
@@ -131,7 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let world: SharedWorld = Arc::new(RwLock::new(World {
         players: HashMap::new(),
-        kilns: ba_protocol::ashworks::CONSTRUCTS.iter().map(Kiln::new).collect(),
+        kilns: ba_protocol::ashworks::CONSTRUCTS.iter().chain(sw::FOES.iter()).map(Kiln::new).collect(),
         tick: 0,
         rng: SmallRng::from_os_rng(),
     }));
@@ -240,23 +242,36 @@ fn snapshot_message_for(w: &World, viewer_id: u32) -> ServerMessage {
             last_input_seq: p.last_input_seq,
         })
     }).collect();
-    ServerMessage::Snapshot { tick: w.tick, players, ashworks: ashworks::view(w, viewer_id) }
+    ServerMessage::Snapshot { tick: w.tick, players, ashworks: ashworks::view(w, viewer_id), marsh:stillwater::view(w,viewer_id) }
 }
 
 /// Integrate player intent exactly once per authoritative zone tick.
 fn tick_movement(w: &mut World, now: Instant) {
     for player in w.players.values_mut() {
+        stillwater::warmth(player,w.tick);
+        let j=&mut player.journey;
+        if player.hp<=0 {
+            if j.revive==0 {j.revive=w.tick+60;}
+            if w.tick>=j.revive {player.pose=if sw::marsh(player.pose.x){sw::POST}else{DEFAULT_SPAWN}; player.hp=player.max_hp; j.revive=0; player.movement=None;player.engage_target=None;j.notice="The water lets you go. This time.".into();}
+            continue
+        }
+        if w.tick%2==0 {j.stamina=(j.stamina+1).min(100);}
+        if w.tick<j.roll_until {
+            for _ in 0..2 {player.pose=integrate_movement(player.pose,j.roll,DT);}
+            continue
+        }
+        if w.tick<j.freeze {continue}
         let Some(cmd) = player.movement else { continue };
         if player.hp <= 0 || now.duration_since(cmd.received_at) > INPUT_TIMEOUT {
             continue;
         }
-        player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, if w.tick<j.slow {DT*0.45}else{DT});
         player.last_input_seq = cmd.seq;
     }
 }
 
 fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
-    ashworks::tick(w);
+    let mut events=ashworks::tick(w);
     let now = Instant::now();
     let ids: Vec<u32> = w.players.keys().copied().collect();
     for id in &ids {
@@ -269,7 +284,6 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
         }
     }
 
-    let mut events = Vec::new();
     for attacker_id in ids {
         // Dead attackers must not continue their queued auto-attack swings.
         if w.players.get(&attacker_id).is_some_and(|p| p.hp <= 0) {
@@ -283,12 +297,12 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
         };
         if w.players
             .get(&attacker_id)
-            .map(|p| p.swing_cd > 0.0)
+            .map(|p| p.swing_cd > 0.0 || w.tick<p.journey.freeze)
             .unwrap_or(true)
         {
             continue;
         }
-        if !w.kilns.iter().any(|k| k.spec.id == engage && k.hp > 0) {
+        if !w.kilns.iter().any(|k| k.spec.id == engage && k.targetable(w.tick)) {
             if let Some(p) = w.players.get_mut(&attacker_id) {
                 p.engage_target = None;
             }
@@ -343,6 +357,7 @@ fn tick_combat(w: &mut World) -> Vec<ServerMessage> {
             }
         };
 
+        if hit { let end=w.tick+if crit||engage==sw::EDDA||engage==sw::OX {2}else{1}; if let Some(p)=w.players.get_mut(&attacker_id){p.journey.freeze=end;} }
         events.push(ServerMessage::Damage {
             tick: w.tick,
             attacker_id,
@@ -435,7 +450,7 @@ async fn handle_connection(
                                         }
                                         (
                                             profile.appearance,
-                                            clamp_pose(profile.pose),
+                                            if profile.state_revision==0 {stillwater::opening()} else {clamp_pose(profile.pose)},
                                             Some(profile.account_id),
                                             profile.character_id,
                                             profile.xp,
@@ -459,7 +474,7 @@ async fn handle_connection(
                                         let character_id=appearance.character_id.clone();
                                         (
                                             appearance,
-                                            DEFAULT_SPAWN,
+                                            stillwater::opening(),
                                             None,
                                             character_id,
                                             0_u64,
@@ -484,7 +499,7 @@ async fn handle_connection(
                                         w.players.insert(id, Player {
                                             account_id,
                                             character_id,
-                                            xp, level, inventory, state_revision,
+                                            xp, level, inventory, state_revision, journey:Default::default(),
                                             appearance: appearance.clone(),
                                             pose,
                                             movement: None,
@@ -558,7 +573,7 @@ async fn handle_connection(
                                 };
                                 let target = if target_id == 0 {
                                     ashworks::nearest(&w, pose)
-                                } else if w.kilns.iter().any(|k| k.spec.id == target_id && k.hp > 0) {
+                                } else if w.kilns.iter().any(|k| k.spec.id == target_id && k.targetable(w.tick)) {
                                     Some(target_id)
                                 } else {
                                     None
@@ -576,6 +591,19 @@ async fn handle_connection(
                                 {
                                     if let Ok(json) = msg.to_json() {
                                         let _ = snap_tx.send(json);
+                                    }
+                                }
+                            }
+                            Ok(action @ (ClientMessage::Interact | ClientMessage::Drink | ClientMessage::Dodge { .. })) => {
+                                if let Some(id)=player_id {
+                                    let mut w=world.write().await;let tick=w.tick;let blind_clear=w.kilns.iter().all(|k|!matches!(k.spec.id,70002..=70004)||k.hp==0);
+                                    if let Some(p)=w.players.get_mut(&id) {
+                                        match action {
+                                            ClientMessage::Interact=>stillwater::interact(p,tick,blind_clear),
+                                            ClientMessage::Drink=>stillwater::drink(p,tick),
+                                            ClientMessage::Dodge{forward,strafe,yaw}=>stillwater::dodge(p,tick,MoveAxes{forward,strafe,yaw,sprint:true}),
+                                            _=>{}
+                                        }
                                     }
                                 }
                             }
@@ -728,7 +756,10 @@ async fn resolve_cast(
             reason: "no_target".into(),
         });
     };
-    let tpose = w.kilns.iter().find(|k| k.spec.id == tid && k.hp > 0)?.pose();
+    let Some(target) = w.kilns.iter().find(|k| k.spec.id == tid && k.targetable(w.tick)) else {
+        return Some(ServerMessage::CastRejected { tick, ability_id: spec.id.clone(), reason: "no_target".into() });
+    };
+    let tpose = target.pose();
     let dist = dist_xz(pose, tpose);
     let tstats = starter_stats(JobId::Knight);
     let outcome =
@@ -835,7 +866,7 @@ fn clamp_pose(mut pose: Pose) -> Pose {
     if !pose.is_finite() {
         return DEFAULT_SPAWN;
     }
-    let (min_x, max_x, min_z, max_z) = BOUNDS;
+    let (min_x, max_x, min_z, max_z) = sw::bounds(pose.x);
     pose.x = pose.x.clamp(min_x, max_x);
     pose.z = pose.z.clamp(min_z, max_z);
     pose.y = 1.65;
