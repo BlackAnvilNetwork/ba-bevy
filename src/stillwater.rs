@@ -4,6 +4,7 @@ use ba_protocol::stillwater::*;
 use bevy::prelude::*;
 
 pub mod lantern_post;
+pub mod sable_rest;
 
 #[derive(Component)]
 pub struct MarshHud;
@@ -197,9 +198,7 @@ pub fn setup(
             0.,
         );
     }
-    for pt in [SHRINE, REST] {
-        prop(&round, &gold, pt.x + 1.1, 0.2, pt.z, 0.45, 0.6, 0.45, 0.);
-    }
+    prop(&round, &gold, SHRINE.x + 1.1, 0.2, SHRINE.z, 0.45, 0.6, 0.45, 0.);
     for (pt, mat) in NODES {
         prop(
             &round,
@@ -252,7 +251,7 @@ pub fn setup(
         prop(&cube, &gold, pt.x, 1.45, pt.z - 0.43, 0.1, 0.1, 0.44, 0.);
     }
     // Blue twin lanterns distinguish travel points from the single hub lanterns.
-    for site in [LANTERN_ROAD, GATE, SABLE_DOCK] {
+    for site in [LANTERN_ROAD, GATE] {
         for side in [-1., 1.] {
             let x = site.x + side * 1.65;
             prop(&cube, &bone, x, 1.15, site.z, 0.44, 2.3, 0.44, 0.);
@@ -280,10 +279,10 @@ pub fn setup(
             2.,
         ),
         (GATE.x + 1.5, GATE.z, "models/hooded_figure.glb", 1.),
-        (REST.x + 1.3, REST.z - 0.7, "models/hooded_figure.glb", 1.),
+        (REST.x - 0.9, REST.z - 1.9, "models/hooded_figure.glb", 1.),
         (
-            REST.x,
-            REST.z,
+            REST.x - 2.8,
+            REST.z - 1.1,
             "kits/mini-dungeon/Models/GLB format/table.glb",
             2.,
         ),
@@ -858,7 +857,7 @@ pub fn journal(
     let (name, mut action) = if rest(net.region_x) {
         (
             "THE SABLE REST",
-            "Cael’s forge · The return ferry is at the twin blue lanterns to the south",
+            "Cael’s forge ahead · Return ferry at the blue lanterns to the south",
         )
     } else if !marsh(net.region_x) {
         ("GREYMERE", "E · Collect materials")
@@ -903,7 +902,7 @@ pub fn journal(
     } else if range(GATE) < TRAVEL_REACH {
         action = "E · Cross the Drowned Gate to Sable Rest";
     } else if range(REST) < 4.5 {
-        action = "E · Use Cael’s forge · Return ferry south at the twin blue lanterns";
+        action = "E · Forge Cael’s Iron Edge · 4 Cold Iron + 1 Peat";
     }
     if HERONS.iter().any(|&p| range(p) < 4.5) {
         action = "E · Listen to the heron"

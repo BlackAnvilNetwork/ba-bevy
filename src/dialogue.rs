@@ -146,7 +146,7 @@ pub fn update_sheet_hud(
     net: Res<crate::net::ZoneNet>,
     display: Res<crate::stillwater::DisplayState>,
     mut health: Query<&mut Node, With<HealthFill>>,
-    mut sheet: Query<&mut Text, With<SheetText>>,
+    mut sheet: Query<(&mut Text, &mut TextFont), With<SheetText>>,
 ) {
     if flow.in_menu() {
         return;
@@ -154,9 +154,17 @@ pub fn update_sheet_hud(
     let Ok((p, name)) = prog.single() else {
         return;
     };
-    let Ok(mut text) = sheet.single_mut() else {
+    let Ok((mut text, mut font)) = sheet.single_mut() else {
         return;
     };
+    let font_size = if ba_protocol::stillwater::rest(net.region_x) && !display.inventory {
+        13.0
+    } else {
+        16.0
+    };
+    if font.font_size != font_size.into() {
+        font.font_size = font_size.into();
+    }
     let who = name.map(|n| n.0.as_str()).unwrap_or("Wanderer");
     if let Ok(mut fill) = health.single_mut() {
         fill.width = percent(100.0 * (p.hp as f32 / p.vitals.max_hp.max(1) as f32).clamp(0.0, 1.0));

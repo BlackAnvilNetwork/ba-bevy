@@ -133,7 +133,16 @@ pub fn sync_sky_uniforms(
     for handle in &skies {
         if let Some(mut mat) = materials.get_mut(&handle.0) {
             mat.uniforms = StickSkyUniforms::from(&*atmo);
-            mat.uniforms.marsh = if in_marsh { 1.0 } else { 0.0 };
+            mat.uniforms.marsh = if player
+                .single()
+                .is_ok_and(|p| ba_protocol::stillwater::rest(p.translation.x))
+            {
+                2.0
+            } else if in_marsh {
+                1.0
+            } else {
+                0.0
+            };
         }
     }
 }

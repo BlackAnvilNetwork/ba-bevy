@@ -256,7 +256,8 @@ fn main() {
             ),
         )
         .add_plugins(MaterialPlugin::<stillwater::lantern_post::FenWater>::default())
-        .add_systems(Startup, stillwater::lantern_post::build)
+        .add_systems(Startup, (stillwater::lantern_post::build, stillwater::sable_rest::build))
+        .add_systems(Update, stillwater::sable_rest::drift)
         .add_systems(Update, stillwater::lantern_post::flicker)
         .init_resource::<stillwater::DisplayState>()
         .add_systems(Startup,(stillwater::setup,ashworks::spawn))
