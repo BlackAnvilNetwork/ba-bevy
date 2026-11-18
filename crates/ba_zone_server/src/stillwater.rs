@@ -321,6 +321,15 @@ pub fn dodge(p: &mut Player, tick: u64, mut axes: MoveAxes) {
     p.journey.roll_until = tick + 9;
     p.journey.roll = axes;
 }
+fn travel(p: &mut Player, destination: Pose, notice: &str) {
+    p.pose = destination;
+    p.movement = None;
+    p.engage_target = None;
+    p.journey.roll_until = 0;
+    p.journey.immune_until = 0;
+    p.journey.notice = notice.into();
+}
+
 pub fn interact(p: &mut Player, tick: u64, blind_clear: bool) {
     if p.hp <= 0 || tick < p.journey.next_action {
         return;
@@ -353,14 +362,33 @@ pub fn interact(p: &mut Player, tick: u64, blind_clear: bool) {
     }
     let here = p.pose;
     let near = |pt| dist_xz(here, pt) < 4.5;
-    if near(at(28., -1.5)) {
-        p.pose = POST;
-        p.movement = None;
-        p.engage_target = None;
-        return;
-    }
-    if near(GATE) {
-        if count(p, BOOK) > 0 && count(p, YOKE) > 0 && count(p, "Cold Iron") >= 3 && p.level >= 3 {
+    let at_waystone = |pt| dist_xz(here, pt) < TRAVEL_REACH;
+    if at_waystone(GREYMERE_ROAD) {
+        travel(
+            p,
+            POST,
+            "Stillwater Boneyard · Pell waits at the Lantern Post.",
+        );
+    } else if at_waystone(LANTERN_ROAD) {
+        travel(
+            p,
+            at(GREYMERE_ROAD.x, GREYMERE_ROAD.z + 6.),
+            "Greymere · You arrive beside the east road.",
+        );
+    } else if at_waystone(SABLE_DOCK) {
+        travel(
+            p,
+            at(GATE.x, GATE.z - 6.),
+            "Stillwater Boneyard · The ferryman sets you down beyond the Drowned Gate.",
+        );
+    } else if at_waystone(GATE) {
+        let unlocked = count(p, "@crossed") > 0;
+        if unlocked
+            || (count(p, BOOK) > 0
+                && count(p, YOKE) > 0
+                && count(p, "Cold Iron") >= 3
+                && p.level >= 3)
+        {
             if flag(p, "@crossed") {
                 gold(p, 200);
                 for (item, n) in [
@@ -372,12 +400,11 @@ pub fn interact(p: &mut Player, tick: u64, blind_clear: bool) {
                     add(p, item, n);
                 }
             }
-            p.pose = REST;
-            p.movement = None;
-            p.engage_target = None;
-            p.journey.notice =
-                "The ward falls silent. The ferryman poles north. Sable Rest — Cael's field forge."
-                    .into();
+            travel(
+                p,
+                REST,
+                "The ferryman poles north to Sable Rest. Cael tends the field forge.",
+            );
         } else {
             p.journey.notice =
                 "The Drowned Gate awaits level 3, the Ox's Yoke, three Cold Iron and Edda's Book."

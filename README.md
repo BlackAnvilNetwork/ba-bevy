@@ -44,6 +44,8 @@ Autos grant TP; `ws_*` casts spend it. Kits buffs raise server `atk_mul`. Local 
 
 New online characters arrive at the Lantern Post. Speak to Old Pell, hunt in the Shallows, and gather iron and peat from the banks. Follow the great ribs inland to the Drowned Ox. At the northern arch, defeat Edda and collect **Edda’s Book** from her fallen bundle. The Drowned Gate admits a level-three character carrying the book, the Ox’s Yoke, and three Cold Iron. The ferryman brings you to Cael’s field forge at Sable Rest. Four Cold Iron and one Peat make the first iron edge.
 
+In zone multiplayer, press **E** at the twin blue lanterns to travel. Greymere’s east road connects to the waystone south of Pell at the Lantern Post. The Drowned Gate connects to Sable Rest, where the return ferry waits south of Cael’s forge. Once a character opens the Drowned Gate, they can cross again after spending their iron.
+
 White, gold, and red wind-ups mark normal, heavy, and unblockable attacks. Step out of their footprint or roll through the impact. Watch for the collapse, then collect the bundle with **E**. Rare components cast a blue beam. Each contributor has their own bundle. The authenticated gateway saves unclaimed bundles with the character.
 
 #### Quixel Megascans kit

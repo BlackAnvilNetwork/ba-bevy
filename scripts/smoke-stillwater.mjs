@@ -85,6 +85,13 @@ try {
   }
   await act();
   assert(inventory()["Pell's Worn Hatchet"]);
+  await walk(300, 103);
+  await act();
+  await wait(() => me().pose.x < 30, "Stillwater to Greymere");
+  await walk(28, -1.5);
+  await act();
+  await wait(() => me().pose.x === 300, "Greymere to the Lantern Post");
+  assert.equal(inventory()["Pell's Worn Hatchet"], 1);
   send("dodge", { forward: 1, strafe: 0, yaw: 0 });
   await wait(() => snap.marsh.stamina < 100, "paid roll");
   await walk(278.5, 62);
@@ -118,6 +125,14 @@ try {
   await wait(() => snap.marsh.crossed, "book opens road");
   await act();
   await wait(() => inventory()["Cael's Iron Edge"], "field forge");
+  const packAfterCraft = { ...inventory() };
+  await walk(600, 15);
+  await act();
+  await wait(() => !snap.marsh.crossed && me().pose.z < -98, "return ferry");
+  await walk(300, -98);
+  await act();
+  await wait(() => snap.marsh.crossed, "unlocked passage after crafting");
+  assert.deepEqual(inventory(), packAfterCraft, "crossing twice must preserve the pack and rewards");
   console.log(
     "PASS Stillwater: personal gathering, roll cost, hunts, physical book, locked gate, crossing, first craft",
   );

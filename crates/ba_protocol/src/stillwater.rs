@@ -5,6 +5,11 @@ use serde::{Deserialize, Serialize};
 pub const POST: Pose = at(300., 93.);
 pub const GATE: Pose = at(300., -98.);
 pub const REST: Pose = at(600., 4.);
+// Separated from Pell and Cael so one interaction always has one destination.
+pub const GREYMERE_ROAD: Pose = at(28., -1.5);
+pub const LANTERN_ROAD: Pose = at(300., 103.);
+pub const SABLE_DOCK: Pose = at(600., 15.);
+pub const TRAVEL_REACH: f32 = 4.5;
 pub const SHRINE: Pose = at(246., -29.);
 pub const BLIND: Pose = at(350., 33.);
 pub const OX: u32 = 70010;

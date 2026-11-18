@@ -6,6 +6,7 @@ use crate::{
     player::Player,
 };
 use ba_protocol::ashworks::{CONSTRUCTS, FORGE, PULSE_RADIUS, WARD_COST};
+use ba_protocol::stillwater::{GREYMERE_ROAD, TRAVEL_REACH};
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -49,11 +50,25 @@ pub fn spawn(
     let pale = pigment(0.95,0.95,0.95);
     let copper = pigment(0.47, 0.24, 0.12);
     let flame = pigment(1.0, 0.51, 0.08);
+    let lantern = pigment(0.20, 0.75, 0.92);
     // A roofless firing gallery follows the east road, leaving room to dodge
     // through either side. Coal-black brick, copper bands and ember lamps.
     commands
         .spawn((Gallery, Transform::default(), Visibility::Hidden))
         .with_children(|root| {
+            // Frame the eastbound road beyond the firing gallery.
+            for z in [GREYMERE_ROAD.z - 1.65, GREYMERE_ROAD.z + 1.65] {
+                for (y, size, material) in [
+                    (1.15, Vec3::new(0.44, 2.3, 0.44), &iron),
+                    (2.5, Vec3::splat(0.5), &lantern),
+                ] {
+                    root.spawn((
+                        Mesh3d(cube.clone()),
+                        MeshMaterial3d(material.clone()),
+                        Transform::from_xyz(GREYMERE_ROAD.x, y, z).with_scale(size),
+                    ));
+                }
+            }
             for x in [16., 19., 25.] {
                 for z in [-3.65, 0.65] {
                     for (y, w, h, d, material) in [
@@ -214,6 +229,11 @@ pub fn display(
         "GREYMERE ASHWORKS\n{task}\nRaw cinder  {}",
         net.ashworks.cinder
     );
+    if Vec2::new(pos.x - GREYMERE_ROAD.x, pos.z - GREYMERE_ROAD.z).length() < TRAVEL_REACH {
+        line.push_str("\nE · Travel to Stillwater Boneyard");
+    } else {
+        line.push_str("\nStillwater Boneyard · Twin blue lanterns on the east road");
+    }
     for spec in &CONSTRUCTS {
         if Vec2::new(pos.x - spec.x, pos.z - spec.z).length() < 8. {
             if let Some(s) = net.ashworks.constructs.iter().find(|s| s.id == spec.id) {

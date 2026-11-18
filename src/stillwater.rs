@@ -243,6 +243,14 @@ pub fn setup(
         );
         prop(&cube, &gold, pt.x, 1.45, pt.z - 0.43, 0.1, 0.1, 0.44, 0.);
     }
+    // Blue twin lanterns distinguish travel points from the single hub lanterns.
+    for site in [LANTERN_ROAD, GATE, SABLE_DOCK] {
+        for side in [-1., 1.] {
+            let x = site.x + side * 1.65;
+            prop(&cube, &bone, x, 1.15, site.z, 0.44, 2.3, 0.44, 0.);
+            prop(&cube, &blue, x, 2.5, site.z, 0.48, 0.5, 0.48, 0.);
+        }
+    }
     for (x, z, path, size) in [
         (POST.x, POST.z - 1.5, "models/hooded_figure.glb", 1.),
         (
@@ -776,9 +784,9 @@ pub fn journal(
     keys: Res<ButtonInput<KeyCode>>,
     mut display: ResMut<DisplayState>,
     player: Query<&Transform, With<Player>>,
-    mut hud: Query<(&mut Text, &mut Visibility), With<MarshHud>>,
+    mut hud: Query<(&mut Text, &mut Visibility, &mut Node), With<MarshHud>>,
 ) {
-    let Ok((mut text, mut vis)) = hud.single_mut() else {
+    let Ok((mut text, mut vis, mut node)) = hud.single_mut() else {
         return;
     };
     if !net.online() || flow.in_menu() {
@@ -792,6 +800,15 @@ pub fn journal(
         display.filter = !display.filter
     }
     let m = &net.marsh;
+    // Leave room for the Ashworks order and its east-road directions.
+    let top = px(if marsh(net.region_x) || rest(net.region_x) {
+        20.
+    } else {
+        175.
+    });
+    if node.top != top {
+        node.top = top;
+    }
     if !marsh(net.region_x) && !rest(net.region_x) && m.drops.is_empty() && !display.inventory {
         *vis = Visibility::Hidden;
         return;
@@ -803,19 +820,19 @@ pub fn journal(
     let (name, mut action) = if rest(net.region_x) {
         (
             "THE SABLE REST",
-            "E at Cael's field forge · 4 Cold Iron + 1 Peat",
+            "Cael’s forge · The return ferry is at the twin blue lanterns to the south",
         )
     } else if !marsh(net.region_x) {
         ("GREYMERE", "E · Collect materials")
     } else if range(GATE) < 13. {
         (
             "THE DROWNED GATE",
-            "Defeat Edda, pick up her book, then E at the ward stone",
+            "Sable Rest ferry · Approach the twin blue lanterns at the ward stone",
         )
     } else if range(POST) < 10. {
         (
             "THE LANTERN POST",
-            "E · Talk to Old Pell. Hunt west into the Shallows",
+            "E · Talk to Pell. The twin blue lanterns south of him lead to Greymere",
         )
     } else if range(BLIND) < 10. {
         ("HUNTER'S BLIND", "E · Search under the hide rack")
@@ -837,6 +854,15 @@ pub fn journal(
             "Hunt the reeds, then head north to the great ribs",
         )
     };
+    if range(LANTERN_ROAD) < TRAVEL_REACH {
+        action = "E · Travel to Greymere";
+    } else if range(SABLE_DOCK) < TRAVEL_REACH {
+        action = "E · Take the return ferry to Stillwater Boneyard";
+    } else if range(GATE) < TRAVEL_REACH {
+        action = "E · Cross the Drowned Gate to Sable Rest";
+    } else if range(REST) < 4.5 {
+        action = "E · Use Cael’s forge · Return ferry south at the twin blue lanterns";
+    }
     if HERONS.iter().any(|&p| range(p) < 4.5) {
         action = "E · Listen to the heron"
     }
