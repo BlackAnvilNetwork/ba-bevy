@@ -255,6 +255,9 @@ fn main() {
                     .run_if(in_yard),
             ),
         )
+        .add_plugins(MaterialPlugin::<stillwater::lantern_post::FenWater>::default())
+        .add_systems(Startup, stillwater::lantern_post::build)
+        .add_systems(Update, stillwater::lantern_post::flicker)
         .init_resource::<stillwater::DisplayState>()
         .add_systems(Startup,(stillwater::setup,ashworks::spawn))
         .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::edda_animation,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal).after(apply_zone_snapshots))

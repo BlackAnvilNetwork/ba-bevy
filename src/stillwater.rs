@@ -3,8 +3,12 @@ use crate::{forge_menu::GameFlow, net::ZoneNet, player::Player};
 use ba_protocol::stillwater::*;
 use bevy::prelude::*;
 
+pub mod lantern_post;
+
 #[derive(Component)]
 pub struct MarshHud;
+#[derive(Component)]
+pub struct MarshPrompt;
 #[derive(Component)]
 pub struct Silt;
 #[derive(Component)]
@@ -25,7 +29,9 @@ pub struct Paint {
 }
 #[derive(Default, Resource)]
 pub struct DisplayState {
-    inventory: bool,
+    pub(crate) inventory: bool,
+    last_notice: String,
+    notice_until: f32,
     filter: bool,
     paused: bool,
     deaths: std::collections::HashMap<u32, f32>,
@@ -51,7 +57,7 @@ pub fn setup(
 ) {
     let cube = meshes.add(Cuboid::from_size(Vec3::ONE));
     let round = meshes.add(Sphere::new(1.).mesh().uv(10, 7));
-    let water = pigment(&mut mats, [0.09, 0.18, 0.18], 0.13);
+
     let mud = pigment(&mut mats, [0.32, 0.29, 0.20], 0.12);
     let reed = pigment(&mut mats, [0.28, 0.39, 0.21], 0.12);
     let wood = pigment(&mut mats, [0.27, 0.18, 0.13], 0.15);
@@ -74,7 +80,7 @@ pub fn setup(
                     .with_rotation(Quat::from_rotation_z(roll)),
             ));
         };
-    prop(&cube, &water, 300., -0.31, 0., 170., 0.4, 210., 0.);
+
     prop(&cube, &mud, 600., -0.16, 0., 40., 0.3, 40., 0.);
     for pt in [
         POST,
@@ -86,6 +92,9 @@ pub fn setup(
         GATE,
     ] {
         prop(&round, &bank, pt.x, -0.13, pt.z, 6., 0.23, 5., 0.);
+        if pt.z == POST.z {
+            continue;
+        }
         prop(
             &cube,
             &wood,
@@ -188,7 +197,7 @@ pub fn setup(
             0.,
         );
     }
-    for pt in [POST, SHRINE, REST] {
+    for pt in [SHRINE, REST] {
         prop(&round, &gold, pt.x + 1.1, 0.2, pt.z, 0.45, 0.6, 0.45, 0.);
     }
     for (pt, mat) in NODES {
@@ -210,11 +219,10 @@ pub fn setup(
             0.,
         );
     }
-    // Pell's overturned punt, the ferryman's boat and the dry causeway.
-    for (x, z) in [(POST.x - 1.5, POST.z - 1.5), (GATE.x + 1.4, GATE.z - 1.1)] {
-        prop(&round, &wood, x, 0.20, z, 0.85, 0.34, 2.35, 0.);
-        prop(&cube, &mud, x, 0.48, z, 1.0, 0.12, 0.35, 0.);
-    }
+    // The ferryman's boat and the dry causeway at the gate.
+    let (x, z) = (GATE.x + 1.4, GATE.z - 1.1);
+    prop(&round, &wood, x, 0.20, z, 0.85, 0.34, 2.35, 0.);
+    prop(&cube, &mud, x, 0.48, z, 1.0, 0.12, 0.35, 0.);
     for i in 0..8 {
         prop(
             &round,
@@ -252,7 +260,7 @@ pub fn setup(
         }
     }
     for (x, z, path, size) in [
-        (POST.x, POST.z - 1.5, "models/hooded_figure.glb", 1.),
+        (POST.x - 1.8, POST.z - 1.2, "models/hooded_figure.glb", 1.),
         (
             SHRINE.x + 1.3,
             SHRINE.z + 0.7,
@@ -503,13 +511,36 @@ pub fn setup(
     c.spawn((
         MarshHud,
         Text::new(""),
-        TextFont::from_font_size(16.),
-        TextColor(Color::srgb(0.87, 0.95, 0.92)),
+        TextFont::from_font_size(15.),
+        TextColor(Color::srgb(0.96, 0.89, 0.74)),
+        BackgroundColor(Color::srgba(0.066, 0.065, 0.085, 0.83)),
+        BorderColor::all(Color::srgb(0.55, 0.45, 0.33)),
         Node {
             position_type: PositionType::Absolute,
             top: px(20),
             right: px(18),
-            max_width: px(450),
+            max_width: px(372),
+            border: UiRect::right(px(2)),
+            padding: UiRect::axes(px(12), px(8)),
+            ..default()
+        },
+        Visibility::Hidden,
+    ));
+    c.spawn((
+        MarshPrompt,
+        Text::new(""),
+        TextFont::from_font_size(16.),
+        TextLayout::justify(Justify::Center),
+        TextColor(Color::srgb(0.98, 0.91, 0.77)),
+        BackgroundColor(Color::srgba(0.065, 0.061, 0.075, 0.83)),
+        BorderColor::all(Color::srgba(0.65, 0.52, 0.36, 0.8)),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: px(23),
+            left: percent(32.),
+            width: percent(36.),
+            padding: UiRect::axes(px(10), px(8)),
+            border: UiRect::bottom(px(1)),
             ..default()
         },
         Visibility::Hidden,
@@ -784,12 +815,18 @@ pub fn journal(
     keys: Res<ButtonInput<KeyCode>>,
     mut display: ResMut<DisplayState>,
     player: Query<&Transform, With<Player>>,
+    time: Res<Time>,
+    mut prompt: Query<(&mut Text, &mut Visibility), (With<MarshPrompt>, Without<MarshHud>)>,
     mut hud: Query<(&mut Text, &mut Visibility, &mut Node), With<MarshHud>>,
 ) {
     let Ok((mut text, mut vis, mut node)) = hud.single_mut() else {
         return;
     };
+    let Ok((mut prompt_text, mut prompt_vis)) = prompt.single_mut() else {
+        return;
+    };
     if !net.online() || flow.in_menu() {
+        *prompt_vis = Visibility::Hidden;
         *vis = Visibility::Hidden;
         return;
     }
@@ -811,6 +848,7 @@ pub fn journal(
     }
     if !marsh(net.region_x) && !rest(net.region_x) && m.drops.is_empty() && !display.inventory {
         *vis = Visibility::Hidden;
+        *prompt_vis = Visibility::Hidden;
         return;
     }
     *vis = Visibility::Visible;
@@ -832,7 +870,11 @@ pub fn journal(
     } else if range(POST) < 10. {
         (
             "THE LANTERN POST",
-            "E · Talk to Pell. The twin blue lanterns south of him lead to Greymere",
+            if range(POST) < 4.5 {
+                "E   Speak to Pell"
+            } else {
+                "Approach Pell at the blue lantern"
+            },
         )
     } else if range(BLIND) < 10. {
         ("HUNTER'S BLIND", "E · Search under the hide rack")
@@ -875,26 +917,50 @@ pub fn journal(
     {
         action = "E · Pick up fallen materials"
     }
-    let mut lines = format!(
-        "{name}\n{action}\nStamina {} · Shift dodge · Ctrl sprint · Q heal\nI pack · L {} drops",
-        m.stamina,
-        if display.filter { "rare" } else { "all" }
-    );
-    if m.rain && marsh(net.region_x) {
-        lines.push_str("\nWarm rain · Essence finds doubled");
+    if display.last_notice != m.notice {
+        display.last_notice = m.notice.clone();
+        display.notice_until = time.elapsed_secs() + 9.;
     }
+    let mut caption = action.replace(" · ", "   ");
     if m.dead {
-        lines.push_str("\nThe water holds you…");
-    } else if !m.notice.is_empty() {
-        lines.push('\n');
-        lines.push_str(&m.notice);
+        caption = "The water holds you…".into();
+    } else if !display.inventory && !m.notice.is_empty() && time.elapsed_secs() < display.notice_until {
+        caption = format!("{}\n{}", m.notice.replace(" · ", " / "), caption);
     }
-    if marsh(net.region_x) {
-        lines.push_str(&format!("\n{}", m.quest));
+    if **prompt_text != caption {
+        **prompt_text = caption;
+    }
+    *prompt_vis = Visibility::Visible;
+    let mut lines = if marsh(net.region_x) {
+        m.quest
+            .split_once(" · ")
+            .map_or(m.quest.as_str(), |(_, objective)| objective)
+            .to_owned()
+    } else {
+        name.to_owned()
+    };
+    if m.rain && marsh(net.region_x) {
+        lines.push_str("\nWarm rain / Double essence");
+    }
+    if m.stamina < 100 {
+        lines.push_str(&format!("\nStamina {}", m.stamina));
+    }
+    if !display.inventory && range(POST) < 10. {
+        lines.push_str("\nI   Pack & skills");
     }
     if display.inventory {
+        lines.push_str(&format!(
+            "\n{name}\nShift dodge / Ctrl sprint / Q heal\nI pack / L {} drops",
+            if display.filter { "rare" } else { "all" }
+        ));
+        if range(POST) < 12. {
+            lines.push_str("\nGreymere passage: twin blue lanterns south of Pell");
+        }
+        if !m.notice.is_empty() {
+            lines.push_str(&format!("\n{}", m.notice.replace(" · ", " / ")));
+        }
         for (name, n) in &m.inventory {
-            lines.push_str(&format!("\n{name} ×{n}"));
+            lines.push_str(&format!("\n{name} x{n}"));
         }
     }
     if **text != lines {
@@ -986,7 +1052,7 @@ pub fn mist(
         if original.is_none() {
             *original = Some(fog.clone());
         }
-        fog.color = Color::srgba(0.57, 0.61, 0.54, 0.86);
+        fog.color = Color::srgba(0.38, 0.39, 0.49, 0.91);
         fog.falloff = bevy::pbr::FogFalloff::Linear {
             start: if net.marsh.rain { 8. } else { 20. },
             end: 128. + (time.elapsed_secs() * 0.055).sin() * 17.,
