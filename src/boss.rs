@@ -47,6 +47,8 @@ pub struct WardenBoss {
     pub max_hp: i32,
     pub swing_cd: f32,
     pub hit_flash: f32,
+    /// Time remaining in the visible attack anticipation.
+    pub windup: f32,
 }
 
 #[derive(Resource, Default)]
@@ -145,6 +147,7 @@ pub fn tick_possession(
             max_hp: BOSS_MAX_HP,
             swing_cd: 0.85,
             hit_flash: 0.0,
+            windup: 0.0,
         });
     }
     if let Ok(mut text) = subtitle.single_mut() {
@@ -287,7 +290,7 @@ pub fn boss_fight(
         )
     };
 
-    let (mut boss_hp, mut boss_max, mut boss_dead, hit_player, dist) = {
+    let (mut boss_hp, mut boss_max, mut boss_dead, hit_player, dist, winding_up) = {
         let mut boss_q = set.p1();
         let Ok((mut boss_tf, mut boss, body)) = boss_q.single_mut() else {
             return;
@@ -298,24 +301,41 @@ pub fn boss_fight(
         let to_player = player_pos - boss_tf.translation;
         let flat = Vec3::new(to_player.x, 0.0, to_player.z);
         let dist = flat.length();
-        if dist > 0.4 {
+        // Give the player room to read and evade a committed strike. Movement
+        // stops during anticipation; range is checked again at impact.
+        let mut hit_player = false;
+        if boss.windup > 0.0 {
+            boss.windup = (boss.windup - dt).max(0.0);
+            let anticipation = (boss.windup / 0.55).clamp(0.0, 1.0);
+            boss_tf.rotation = boss_tf.rotation.slerp(
+                if dist > 0.01 {
+                    Quat::from_rotation_arc(Vec3::NEG_Z, flat / dist)
+                        * Quat::from_rotation_x(-0.24 * (1.0 - anticipation))
+                } else { boss_tf.rotation },
+                (dt * 6.0).min(1.0),
+            );
+            if boss.windup == 0.0 {
+                hit_player = dist <= BOSS_REACH && boss.hp > 0;
+                boss.swing_cd = BOSS_SWING_CD;
+            }
+        } else {
             let dir = flat.normalize_or_zero();
-            boss_tf.translation += dir * BOSS_SPEED * dt;
-            boss_tf.translation.y = body.home.translation.y;
-            if dir.length_squared() > 0.01 {
-                boss_tf.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, dir);
+            if dist > BOSS_REACH * 0.85 {
+                let step = (dist - BOSS_REACH * 0.85).min(BOSS_SPEED * dt);
+                boss_tf.translation += dir * step;
+            }
+            if dist > 0.01 {
+                let target = Quat::from_rotation_arc(Vec3::NEG_Z, dir);
+                boss_tf.rotation = boss_tf.rotation.slerp(target, (dt * 7.0).min(1.0));
+            }
+            if boss.swing_cd <= 0.0 && dist <= BOSS_REACH && boss.hp > 0 {
+                boss.windup = 0.55;
             }
         }
-        if boss.hit_flash > 0.0 {
-            boss_tf.translation.y = body.home.translation.y + boss.hit_flash * 0.12;
-        }
+        boss_tf.translation.y = body.home.translation.y
+            + if boss.hit_flash > 0.0 { boss.hit_flash * 0.12 } else { 0.0 };
 
-        let hit_player = boss.swing_cd <= 0.0 && dist <= BOSS_REACH && boss.hp > 0;
-        if hit_player {
-            boss.swing_cd = BOSS_SWING_CD;
-        }
-
-        (boss.hp, boss.max_hp, boss.hp <= 0, hit_player, dist)
+        (boss.hp, boss.max_hp, boss.hp <= 0, hit_player, dist, boss.windup > 0.0)
     };
 
     // Player actions + apply damage to boss in a second boss touch.
@@ -553,7 +573,7 @@ pub fn boss_fight(
             };
             **text = format!(
                 "Edda {:>3}/{:<3}  ·  You {:>3}/{:<3} HP  {:>3}/{:<3} MP  TP {:>4.0}{}\nLMB auto  1-8 abilities  R WS  [ ] job\n{bar}",
-                boss_hp, boss_max, hp, max_hp, mp, max_mp, tp, cast
+                boss_hp, boss_max, hp, max_hp, mp, max_mp, tp, if winding_up { format!("{cast}  ·  Edda winds up — move!") } else { cast }
             )
             .into();
         }
