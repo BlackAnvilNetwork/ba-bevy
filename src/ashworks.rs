@@ -51,24 +51,33 @@ pub fn spawn(
     let copper = pigment(0.47, 0.24, 0.12);
     let flame = pigment(1.0, 0.51, 0.08);
     let lantern = pigment(0.20, 0.75, 0.92);
+    // Twin blue lanterns mark the Greymere → Stillwater travel point. Keep them
+    // outside the Ashworks gallery so the road reads even before the yard is online.
+    for z in [GREYMERE_ROAD.z - 1.65, GREYMERE_ROAD.z + 1.65] {
+        for (y, size, material) in [
+            (1.15, Vec3::new(0.44, 2.3, 0.44), &iron),
+            (2.5, Vec3::splat(0.55), &lantern),
+        ] {
+            commands.spawn((
+                Mesh3d(cube.clone()),
+                MeshMaterial3d(material.clone()),
+                Transform::from_xyz(GREYMERE_ROAD.x, y, z).with_scale(size),
+            ));
+        }
+    }
+    // Bright chalk threshold under the posts — the "zone line" players look for.
+    let chalk = pigment(0.92, 0.88, 0.72);
+    commands.spawn((
+        Mesh3d(cube.clone()),
+        MeshMaterial3d(chalk),
+        Transform::from_xyz(GREYMERE_ROAD.x - 0.15, 0.04, GREYMERE_ROAD.z)
+            .with_scale(Vec3::new(0.22, 0.06, 2.4)),
+    ));
     // A roofless firing gallery follows the east road, leaving room to dodge
     // through either side. Coal-black brick, copper bands and ember lamps.
     commands
         .spawn((Gallery, Transform::default(), Visibility::Hidden))
         .with_children(|root| {
-            // Frame the eastbound road beyond the firing gallery.
-            for z in [GREYMERE_ROAD.z - 1.65, GREYMERE_ROAD.z + 1.65] {
-                for (y, size, material) in [
-                    (1.15, Vec3::new(0.44, 2.3, 0.44), &iron),
-                    (2.5, Vec3::splat(0.5), &lantern),
-                ] {
-                    root.spawn((
-                        Mesh3d(cube.clone()),
-                        MeshMaterial3d(material.clone()),
-                        Transform::from_xyz(GREYMERE_ROAD.x, y, z).with_scale(size),
-                    ));
-                }
-            }
             for x in [16., 19., 25.] {
                 for z in [-3.65, 0.65] {
                     for (y, w, h, d, material) in [
@@ -232,7 +241,7 @@ pub fn display(
     if Vec2::new(pos.x - GREYMERE_ROAD.x, pos.z - GREYMERE_ROAD.z).length() < TRAVEL_REACH {
         line.push_str("\nE · Travel to Stillwater Boneyard");
     } else {
-        line.push_str("\nStillwater Boneyard · Twin blue lanterns on the east road");
+        line.push_str("\nStillwater Boneyard · Twin lanterns in the north clearing");
     }
     for spec in &CONSTRUCTS {
         if Vec2::new(pos.x - spec.x, pos.z - spec.z).length() < 8. {

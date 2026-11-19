@@ -9,6 +9,7 @@ use bevy::{
 use crate::atmosphere::{self, StickAtmosphere};
 use crate::data::GameData;
 use crate::camera_rig::{CameraView,PlayerCamera};
+use ba_protocol::stillwater::{self, GATE, GREYMERE_ROAD, LANTERN_ROAD, POST, REST, SABLE_DOCK, TRAVEL_REACH};
 use crate::character::CharacterProfile;
 use crate::forge_menu::{Appearance, CharacterAppearance, CharacterName};
 use crate::rpg::Progression;
@@ -142,7 +143,6 @@ pub fn look_player(
 pub fn move_player(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
-    data: Res<GameData>,
     note: Res<NoteComposer>,
     mut player: Query<(&mut Transform, Option<&mut crate::rpg::Fighter>), With<Player>>,
 ) {
@@ -173,15 +173,39 @@ pub fn move_player(
         if let Some(mut f) = fighter {
             f.resting = false;
         }
-        let speed = if keys.pressed(KeyCode::ShiftLeft) {
+        let speed = if keys.pressed(KeyCode::KeyC) {
+            1.6
+        } else if keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight) {
             6.5
         } else {
             3.5
         };
         transform.translation += direction.normalize() * speed * time.delta_secs();
-        transform.translation.y = 1.65;
-        let bounds = &data.zone.bounds;
-        transform.translation.x = transform.translation.x.clamp(bounds.min_x, bounds.max_x);
-        transform.translation.z = transform.translation.z.clamp(bounds.min_z, bounds.max_z);
+        let (min_x, max_x, min_z, max_z) = stillwater::bounds(transform.translation.x);
+        transform.translation.x = transform.translation.x.clamp(min_x, max_x);
+        transform.translation.z = transform.translation.z.clamp(min_z, max_z);
+        transform.translation.y = stillwater::stand(transform.translation.x, transform.translation.z);
+        walk_zone_line(&mut transform);
+    }
+}
+
+fn walk_zone_line(transform: &mut Transform) {
+    let reach = |pose: ba_protocol::Pose| {
+        Vec2::new(transform.translation.x - pose.x, transform.translation.z - pose.z).length()
+            < TRAVEL_REACH
+    };
+    let dest = if reach(GREYMERE_ROAD) {
+        Some(POST)
+    } else if reach(LANTERN_ROAD) {
+        Some(stillwater::at(GREYMERE_ROAD.x, GREYMERE_ROAD.z + 6.))
+    } else if reach(SABLE_DOCK) {
+        Some(stillwater::at(GATE.x, GATE.z - 6.))
+    } else if reach(GATE) {
+        Some(REST)
+    } else {
+        None
+    };
+    if let Some(pose) = dest {
+        transform.translation = Vec3::new(pose.x, stillwater::stand(pose.x, pose.z), pose.z);
     }
 }

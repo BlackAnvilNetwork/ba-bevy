@@ -136,6 +136,19 @@ impl KitCatalog {
 
     /// Resolve a castable ability for this job (ability, WS, or none).
     pub fn resolve(&self, job: JobId, id: &str) -> Option<AbilitySpec> {
+        if id == "rest" {
+            return Some(AbilitySpec {
+                id: "rest".into(),
+                potency: 0,
+                mp: 0,
+                range: 0.0,
+                kind: AbilityKind::Buff,
+                recast: 0.5,
+                atk_mul: None,
+                duration: 0.0,
+                tp_cost: 0,
+            });
+        }
         if let Some(ws) = self.weapon_skills.get(id) {
             return Some(AbilitySpec {
                 id: ws.id.clone(),

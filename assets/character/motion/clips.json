@@ -1,0 +1,292 @@
+{
+  "method": "tide-motion generate + connect, retarget onto Anata export",
+  "map": "anata-exported.json",
+  "clips": [
+    {
+      "id": "idle",
+      "file": "character/motion/idle.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person stands still with arms relaxed at their sides."
+    },
+    {
+      "id": "walk",
+      "file": "character/motion/walk.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person walks forward at a constant speed without starting or stopping."
+    },
+    {
+      "id": "run",
+      "file": "character/motion/run.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person runs forward at a constant speed without slowing down."
+    },
+    {
+      "id": "crouch",
+      "file": "character/motion/crouch.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person stays crouched low to the ground."
+    },
+    {
+      "id": "crouch_walk",
+      "file": "character/motion/crouch_walk.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person walks forward while crouched, at a constant speed without starting or stopping."
+    },
+    {
+      "id": "jump",
+      "file": "character/motion/jump.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Spring up off a planted walking foot, hang in the air, then land."
+    },
+    {
+      "id": "punch",
+      "file": "character/motion/punch.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Right jab, left cross, right hook — boxing, closed fists, no props."
+    },
+    {
+      "id": "slash_1h",
+      "file": "character/motion/slash_1h.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Right-arm diagonal slash, then recover to guard."
+    },
+    {
+      "id": "slash_2h",
+      "file": "character/motion/slash_2h.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Both arms overhead, then a wide downward chop."
+    },
+    {
+      "id": "roll",
+      "file": "character/motion/roll.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "A person rolls forward on the ground then stands."
+    },
+    {
+      "id": "walk_to_run",
+      "file": "character/motion/walk_to_run.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "walk",
+      "to": "run"
+    },
+    {
+      "id": "run_to_walk",
+      "file": "character/motion/run_to_walk.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "run",
+      "to": "walk"
+    },
+    {
+      "id": "walk_to_jump",
+      "file": "character/motion/walk_to_jump.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "walk",
+      "to": "jump"
+    },
+    {
+      "id": "run_to_jump",
+      "file": "character/motion/run_to_jump.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "run",
+      "to": "jump"
+    },
+    {
+      "id": "jump_to_walk",
+      "file": "character/motion/jump_to_walk.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "jump",
+      "to": "walk"
+    },
+    {
+      "id": "jump_to_run",
+      "file": "character/motion/jump_to_run.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "jump",
+      "to": "run"
+    },
+    {
+      "id": "rest",
+      "file": "character/motion/rest.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person sits still on the ground in a relaxed idle rest, right knee up, left leg stretched straight, back upright, looking forward."
+    },
+    {
+      "id": "idle_to_walk",
+      "file": "character/motion/idle_to_walk.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "idle",
+      "to": "walk"
+    },
+    {
+      "id": "walk_to_idle",
+      "file": "character/motion/walk_to_idle.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "walk",
+      "to": "idle"
+    },
+    {
+      "id": "idle_to_rest",
+      "file": "character/motion/idle_to_rest.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "idle",
+      "to": "rest"
+    },
+    {
+      "id": "rest_to_idle",
+      "file": "character/motion/rest_to_idle.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "rest",
+      "to": "idle"
+    },
+    {
+      "id": "walk_punch",
+      "file": "character/motion/walk_punch.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Walk, then jab / cross / hook while still walking."
+    },
+    {
+      "id": "walk_jump",
+      "file": "character/motion/walk_jump.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Walk, then jump with both feet."
+    },
+    {
+      "id": "walk_back",
+      "file": "character/motion/walk_back.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person walks backward at a constant speed."
+    },
+    {
+      "id": "strafe_left",
+      "file": "character/motion/strafe_left.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person sidesteps to the left, facing forward, at a constant speed."
+    },
+    {
+      "id": "strafe_right",
+      "file": "character/motion/strafe_right.glb",
+      "loop": true,
+      "kind": "loco",
+      "prompt": "A person sidesteps to the right, facing forward, at a constant speed."
+    },
+    {
+      "id": "idle_to_crouch",
+      "file": "character/motion/idle_to_crouch.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "idle",
+      "to": "crouch"
+    },
+    {
+      "id": "crouch_to_idle",
+      "file": "character/motion/crouch_to_idle.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "crouch",
+      "to": "idle"
+    },
+    {
+      "id": "walk_slash_1h",
+      "file": "character/motion/walk_slash_1h.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Right-arm diagonal slash while walking, then recover to guard."
+    },
+    {
+      "id": "crouch_to_crouch_walk",
+      "file": "character/motion/crouch_to_crouch_walk.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "crouch",
+      "to": "crouch_walk"
+    },
+    {
+      "id": "crouch_walk_to_crouch",
+      "file": "character/motion/crouch_walk_to_crouch.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "crouch_walk",
+      "to": "crouch"
+    },
+    {
+      "id": "idle_to_walk_back",
+      "file": "character/motion/idle_to_walk_back.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "idle",
+      "to": "walk_back"
+    },
+    {
+      "id": "walk_back_to_idle",
+      "file": "character/motion/walk_back_to_idle.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "walk_back",
+      "to": "idle"
+    },
+    {
+      "id": "idle_to_strafe_left",
+      "file": "character/motion/idle_to_strafe_left.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "idle",
+      "to": "strafe_left"
+    },
+    {
+      "id": "strafe_left_to_idle",
+      "file": "character/motion/strafe_left_to_idle.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "strafe_left",
+      "to": "idle"
+    },
+    {
+      "id": "idle_to_strafe_right",
+      "file": "character/motion/idle_to_strafe_right.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "idle",
+      "to": "strafe_right"
+    },
+    {
+      "id": "strafe_right_to_idle",
+      "file": "character/motion/strafe_right_to_idle.glb",
+      "loop": false,
+      "kind": "bridge",
+      "from": "strafe_right",
+      "to": "idle"
+    },
+    {
+      "id": "walk_slash_2h",
+      "file": "character/motion/walk_slash_2h.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Both-arm overhead chop while walking, then recover."
+    }
+  ]
+}

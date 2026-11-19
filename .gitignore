@@ -30,4 +30,7 @@ Cargo.lock
 # Locally licensed Quixel exports
 /assets/megascans/
 
+# Locally licensed Dark Mod GLBs/textures
+/assets/darkmod/
+
 /.dream-loop/

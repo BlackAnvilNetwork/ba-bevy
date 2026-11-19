@@ -12,7 +12,7 @@ use crate::player::{NoteComposer, Player};
 use crate::rpg::{
     apply_ability_side_effects, apply_ws_side_effects, format_hotbar_line, hotbar_slot_pressed,
     mitigate_incoming_physical, mob_kill_xp, physical_damage, resolve_ability,
-    resolve_auto_attack, resolve_weapon_skill, tick_rest, tp_from_auto_hit, CastOutcome,
+    resolve_auto_attack, resolve_weapon_skill, tp_from_auto_hit, CastOutcome,
     CombatKits, DamageKind, Fighter, GrantXp, Progression, TargetRef, XpReason, WITNESS_ASH_XP,
 };
 use crate::scene::Warden;
@@ -270,7 +270,6 @@ pub fn boss_fight(
         };
         fighter.swing_cd = (fighter.swing_cd - dt).max(0.0);
         fighter.tick_buffs(now);
-        tick_rest(&mut prog, &mut fighter, dt);
         if prog.hp <= 0 {
             prog.hp = prog.vitals.max_hp;
         }
@@ -285,7 +284,7 @@ pub fn boss_fight(
             prog.level,
             grabbed && mouse.just_pressed(MouseButton::Left) && fighter.swing_cd <= 0.0,
             hotbar_slot_pressed(&keys),
-            keys.just_pressed(KeyCode::KeyR),
+            false,
             cast,
         )
     };

@@ -25,6 +25,16 @@ function lerp(t, min, max, newMin, newMax) {
   return newMin + progress * (newMax - newMin);
 }
 
+/** MToon traits often have roughness/metalness 0. Baking that into ORM makes
+ *  every exported character GLB shade as chrome in Bevy (roughness × 0). */
+function matteOrmColor(material) {
+  const rough = typeof material.roughness === "number" && material.roughness > 0.05
+    ? material.roughness
+    : 0.86;
+  const metal = typeof material.metalness === "number" ? material.metalness : 0;
+  return new THREE.Color(1, rough, metal);
+}
+
 const imageToMaterialMapping = {
   diffuse: ["map"],
   normal: ["normalMap"],
@@ -120,7 +130,7 @@ export const createTextureAtlasNode = async ({ meshes, atlasSize, mtoon, transpa
       }
       else {
         context.fillStyle = name === 'diffuse' ? `#${material.color.clone().getHexString()}` : name === 'normal' ? '#bcbcff' : name === 'orm' ?
-          `#${(new THREE.Color(material.aoMapIntensity, material.roughness, material.metalness)).getHexString()}` : '#7F7F7F';
+          `#${matteOrmColor(material).getHexString()}` : '#7F7F7F';
         context.fillRect(min.x * ATLAS_SIZE_PX, min.y * ATLAS_SIZE_PX, xTileSize, yTileSize);
       }
     });
@@ -438,7 +448,7 @@ export const createTextureAtlasBrowser = async ({ backColor, includeNonTexturedM
             clearColor = new THREE.Color(0xbcbcff);
             break;
           case 'orm':
-            clearColor = new THREE.Color(0, material.roughness, material.metalness);
+            clearColor = matteOrmColor(material);
             break;
           default:
             clearColor = new THREE.Color(1, 1, 1);
@@ -545,6 +555,8 @@ export const createTextureAtlasBrowser = async ({ backColor, includeNonTexturedM
       roughnessMap: textures["orm"],
       metalnessMap:  textures["orm"],
       normalMap: usesNormal ? textures["normal"]:null,
+      roughness: 0.86,
+      metalness: 0,
       transparent: transparentMaterial,
       side:side
     });

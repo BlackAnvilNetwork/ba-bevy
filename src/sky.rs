@@ -121,28 +121,13 @@ pub fn follow_sky_to_player(
 pub fn sync_sky_uniforms(
     atmo: Res<StickAtmosphere>,
     mut materials: ResMut<Assets<StickSkyMaterial>>,
-    player: Query<&Transform, With<crate::player::Player>>,
     skies: Query<&MeshMaterial3d<StickSkyMaterial>, With<StickSky>>,
 ) {
-    if !atmo.is_changed() && !atmo.is_added() {
-        // Still update time every frame
-    }
-    let in_marsh = player
-        .single()
-        .is_ok_and(|p| ba_protocol::stillwater::marsh(p.translation.x));
     for handle in &skies {
         if let Some(mut mat) = materials.get_mut(&handle.0) {
             mat.uniforms = StickSkyUniforms::from(&*atmo);
-            mat.uniforms.marsh = if player
-                .single()
-                .is_ok_and(|p| ba_protocol::stillwater::rest(p.translation.x))
-            {
-                2.0
-            } else if in_marsh {
-                1.0
-            } else {
-                0.0
-            };
+            // Cemetery dusk for every region — marsh/rest used to swap palettes.
+            mat.uniforms.marsh = 0.0;
         }
     }
 }

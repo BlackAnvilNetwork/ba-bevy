@@ -73,10 +73,10 @@ impl Pose {
  */
 pub const WALK_SPEED: f32 = 3.5;
 pub const SPRINT_SPEED: f32 = 6.5;
-pub const DEV_ZONE_MIN_X: f32 = -13.0;
-pub const DEV_ZONE_MAX_X: f32 = 30.0;
-pub const DEV_ZONE_MIN_Z: f32 = -6.6;
-pub const DEV_ZONE_MAX_Z: f32 = 9.0;
+pub const DEV_ZONE_MIN_X: f32 = -16.0;
+pub const DEV_ZONE_MAX_X: f32 = 32.0;
+pub const DEV_ZONE_MIN_Z: f32 = -14.0;
+pub const DEV_ZONE_MAX_Z: f32 = 20.0;
 pub const PLAYER_HEIGHT: f32 = 1.65;
 pub const TICK_DT: f32 = 1.0 / TICK_HZ as f32;
 
@@ -115,10 +115,12 @@ pub fn integrate_movement(pose: Pose, axes: MoveAxes, dt: f32) -> Pose {
     }
     let speed = if axes.sprint { SPRINT_SPEED } else { WALK_SPEED };
     let (x0,x1,z0,z1)=stillwater::bounds(pose.x);
+    let x = (pose.x + dx * speed * dt).clamp(x0, x1);
+    let z = (pose.z + dz * speed * dt).clamp(z0, z1);
     Pose {
-        x: (pose.x + dx * speed * dt).clamp(x0,x1),
-        y: PLAYER_HEIGHT,
-        z: (pose.z + dz * speed * dt).clamp(z0,z1),
+        x,
+        y: stillwater::stand(x, z),
+        z,
         yaw: axes.yaw,
     }
 }

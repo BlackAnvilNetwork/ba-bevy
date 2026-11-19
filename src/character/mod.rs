@@ -5,7 +5,9 @@
 
 mod avatar;
 mod animation;
+mod materials;
 pub use animation::{LocalEye, SwingPose, prepare_avatar_animation, bind_avatar_animators, update_avatar_animation, discover_avatar_bones, pose_humanoid_bones};
+pub use materials::matte_avatar_materials;
 
 pub use avatar::{
     attach_player_avatar, resolve_pending_avatars, HasPlayerAvatar,

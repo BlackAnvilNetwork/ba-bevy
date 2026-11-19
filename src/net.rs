@@ -444,7 +444,7 @@ pub fn send_local_move(
     let Some(tx) = net.tx.as_ref() else { return };
     if keys.just_pressed(KeyCode::KeyE) {let _=tx.send(ClientMessage::Interact);}
     if keys.just_pressed(KeyCode::KeyQ) {let _=tx.send(ClientMessage::Drink);}
-    if keys.just_pressed(KeyCode::ShiftLeft)||keys.just_pressed(KeyCode::Space) {
+    if keys.just_pressed(KeyCode::ShiftLeft) {
         if let Ok(tf)=player.single(){let (yaw,_,_)=tf.rotation.to_euler(EulerRot::YXZ);
             let _=tx.send(ClientMessage::Dodge{yaw,forward:(keys.pressed(KeyCode::KeyW) as i8-keys.pressed(KeyCode::KeyS) as i8) as f32,strafe:(keys.pressed(KeyCode::KeyD) as i8-keys.pressed(KeyCode::KeyA) as i8) as f32});}
     }
@@ -472,7 +472,7 @@ pub fn send_local_move(
         forward: (keys.pressed(KeyCode::KeyW) as i8 - keys.pressed(KeyCode::KeyS) as i8) as f32,
         strafe: (keys.pressed(KeyCode::KeyD) as i8 - keys.pressed(KeyCode::KeyA) as i8) as f32,
         yaw,
-        sprint: keys.pressed(KeyCode::ControlLeft),
+        sprint: keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight),
     };
     let seq = prediction.next_seq.saturating_add(1);
     if tx.send(ClientMessage::MoveIntent {

@@ -1,13 +1,19 @@
 //! Cael's working smithy and the fortified ferry courtyard.
-use super::Silt;
-use bevy::prelude::*;
+use super::{ClipCliffs, ClipLeaves, Silt};
+use ba_protocol::stillwater::ground;
+use bevy::{
+    image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
+    prelude::*,
+};
 use std::{
     collections::BTreeMap,
-    f32::consts::{FRAC_PI_2, PI},
+    f32::consts::{FRAC_PI_2, PI, TAU},
 };
 
 const V: fn(f32, f32, f32) -> Vec3 = Vec3::new;
 type Surface = usize;
+const DOOR_HINGE: Vec3 = Vec3::new(608.41, 1.16, 2.18);
+const DOOR_WIDTH: f32 = 1.32;
 
 struct Yard {
     cube: Mesh,
@@ -39,6 +45,74 @@ impl Yard {
     fn block(&mut self, m: Surface, at: Vec3, size: Vec3) {
         self.shape(false, m, at, size, Quat::IDENTITY);
     }
+
+    /// Vertical masonry: world UVs so a castle albedo tiles across the wall,
+    /// not as a stamped glyph on every block.
+    fn masonry(&mut self, material: Surface, at: Vec3, size: Vec3) {
+        let mut mesh = self.cube.clone().transformed_by(
+            self.frame.mul_transform(Transform::from_translation(at).with_scale(size)),
+        );
+        if let Some(uvs) = mesh.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| {
+            a.as_float3().map(|pos| {
+                let (mut min_x, mut max_x) = (f32::MAX, f32::MIN);
+                let (mut min_z, mut max_z) = (f32::MAX, f32::MIN);
+                for p in pos {
+                    min_x = min_x.min(p[0]);
+                    max_x = max_x.max(p[0]);
+                    min_z = min_z.min(p[2]);
+                    max_z = max_z.max(p[2]);
+                }
+                let along_x = (max_x - min_x) >= (max_z - min_z);
+                pos.iter()
+                    .map(|p| {
+                        if along_x {
+                            [p[0] * 0.28, p[1] * 0.28]
+                        } else {
+                            [p[2] * 0.28, p[1] * 0.28]
+                        }
+                    })
+                    .collect::<Vec<[f32; 2]>>()
+            })
+        }) {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        }
+        match self.batches.entry(material) {
+            std::collections::btree_map::Entry::Occupied(mut e) => {
+                e.get_mut().merge(&mesh).unwrap()
+            }
+            std::collections::btree_map::Entry::Vacant(e) => {
+                e.insert(mesh);
+            }
+        }
+    }
+
+    /// Courtyard sett: cube with world-XZ UVs so Dark Mod cobble reads as one bed.
+    fn sett(&mut self, material: Surface, at: Vec3, size: Vec3, yaw: f32) {
+        let mut mesh = self.cube.clone().transformed_by(
+            self.frame.mul_transform(
+                Transform::from_translation(at)
+                    .with_scale(size)
+                    .with_rotation(Quat::from_rotation_y(yaw)),
+            ),
+        );
+        if let Some(uvs) = mesh.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| {
+            a.as_float3().map(|pos| {
+                pos.iter()
+                    .map(|p| [p[0] * 0.42, p[2] * 0.42])
+                    .collect::<Vec<[f32; 2]>>()
+            })
+        }) {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        }
+        match self.batches.entry(material) {
+            std::collections::btree_map::Entry::Occupied(mut e) => {
+                e.get_mut().merge(&mesh).unwrap()
+            }
+            std::collections::btree_map::Entry::Vacant(e) => {
+                e.insert(mesh);
+            }
+        }
+    }
     fn beam(&mut self, m: Surface, a: Vec3, b: Vec3, w: f32, d: f32) {
         self.shape(
             false,
@@ -57,7 +131,16 @@ fn noise(i: i32, j: i32) -> f32 {
     (h >> 8) as f32 / 16777216.
 }
 
-fn stonework(y: &mut Yard, x: f32, z: f32, width: f32, rows: usize, depth: f32, base: f32) {
+fn stonework(
+    y: &mut Yard,
+    x: f32,
+    z: f32,
+    width: f32,
+    rows: usize,
+    depth: f32,
+    base: f32,
+    mat: Surface,
+) {
     for row in 0..rows {
         let mut edge = -width * 0.5;
         for j in 0.. {
@@ -65,8 +148,8 @@ fn stonework(y: &mut Yard, x: f32, z: f32, width: f32, rows: usize, depth: f32, 
             if w <= 0.01 {
                 break;
             }
-            y.block(
-                2 + (noise(j, row as i32) * 4.) as usize,
+            y.masonry(
+                mat,
                 V(x + edge + w * 0.5, base + row as f32 * 0.43 + 0.21, z),
                 V(w - 0.012, 0.42, depth + 0.07 * noise(row as i32, j + 7)),
             );
@@ -76,14 +159,78 @@ fn stonework(y: &mut Yard, x: f32, z: f32, width: f32, rows: usize, depth: f32, 
 }
 
 // A pegged oak truss under individually coursed overlapping slate.
-fn hall(y: &mut Yard, x: f32, z: f32, w: f32, d: f32, closed: bool) {
+fn hall(
+    y: &mut Yard,
+    x: f32,
+    z: f32,
+    w: f32,
+    d: f32,
+    closed: bool,
+    stone: Surface,
+    plaster: Surface,
+) {
     let eave = if closed { 4.3 } else { 3.28 };
     let rise = w * 0.39;
     let front = z + d * 0.5;
     if closed {
-        stonework(y, x, front - 0.3, w, 3, 0.58, 0.);
-        y.block(13, V(x, 2.82, front - 0.35), V(w - 0.14, 3., 0.45));
-        y.block(13, V(x, 2.23, z), V(w - 0.22, 4.23, d - 0.58));
+        let door_w = 1.32;
+        let door_h = 2.28;
+        let door_x = x + 0.17;
+        let half = w * 0.5;
+        let left_span = (door_x - door_w * 0.5) - (x - half);
+        let right_span = (x + half) - (door_x + door_w * 0.5);
+        stonework(
+            y,
+            x - half + left_span * 0.5,
+            front - 0.3,
+            left_span,
+            3,
+            0.58,
+            0.,
+            stone,
+        );
+        stonework(
+            y,
+            x + half - right_span * 0.5,
+            front - 0.3,
+            right_span,
+            3,
+            0.58,
+            0.,
+            stone,
+        );
+        y.block(
+            plaster,
+            V(x - half + left_span * 0.5, 2.55, front - 0.28),
+            V(left_span - 0.04, 3.5, 0.42),
+        );
+        y.block(
+            plaster,
+            V(x + half - right_span * 0.5, 2.55, front - 0.28),
+            V(right_span - 0.04, 3.5, 0.42),
+        );
+        y.block(
+            plaster,
+            V(door_x, door_h + 1.15, front - 0.28),
+            V(door_w + 0.16, 2.3, 0.42),
+        );
+        y.block(
+            plaster,
+            V(x, 2.45, z - d * 0.5 + 0.22),
+            V(w - 0.18, 4.7, 0.40),
+        );
+        y.block(
+            plaster,
+            V(x - half + 0.18, 2.45, z),
+            V(0.38, 4.7, d - 0.55),
+        );
+        y.block(
+            plaster,
+            V(x + half - 0.18, 2.45, z),
+            V(0.38, 4.7, d - 0.55),
+        );
+        y.block(0, V(x, 0.05, z), V(w - 0.55, 0.08, d - 0.6));
+        y.block(0, V(x, 4.05, z), V(w - 0.4, 0.10, d - 0.5));
         for j in -2..=2 {
             let xx = x + j as f32 * w / 5.;
             y.block(0, V(xx, 2.72, front), V(0.17, 3.25, 0.24));
@@ -99,7 +246,7 @@ fn hall(y: &mut Yard, x: f32, z: f32, w: f32, d: f32, closed: bool) {
             y.block(0, V(x, h, front), V(w, 0.18, 0.23));
         }
     } else {
-        stonework(y, x, z - d * 0.5, w, 6, 0.5, 0.);
+        stonework(y, x, z - d * 0.5, w, 6, 0.5, 0., stone);
     }
     for zz in [front, z, z - d * 0.5] {
         for side in [-1., 1.] {
@@ -188,25 +335,146 @@ fn lamp(y: &mut Yard, c: &mut Commands, p: Vec3, blue: bool) {
     ));
 }
 
-fn kit(c: &mut Commands, a: &AssetServer, pack: &str, name: &str, p: Vec3, scale: f32, yaw: f32) {
-    let fmt = if pack == "nature-kit" {
-        "GLTF format"
-    } else {
-        "GLB format"
-    };
+fn grove(c: &mut Commands, a: &AssetServer, name: &str, p: Vec3, scale: f32, yaw: f32) {
+    let mirror = if (yaw * 7.).fract() > 0.5 { -1. } else { 1. };
+    let wx = p.x + 600.;
+    let wz = p.z;
     c.spawn((
         Silt,
-        WorldAssetRoot(a.load(format!("kits/{pack}/Models/{fmt}/{name}.glb#Scene0"))),
-        Transform::from_translation(p + V(600., 0., 0.))
+        ClipLeaves,
+        WorldAssetRoot(a.load(format!("darkmod/trees/{name}.glb#Scene0"))),
+        Transform::from_translation(V(wx, ground(wx, wz) - scale * 14., wz))
+            .with_scale(Vec3::new(scale * mirror, scale, scale))
+            .with_rotation(Quat::from_euler(
+                EulerRot::YXZ,
+                yaw,
+                (scale - 0.03) * 1.4,
+                (yaw - 1.) * 0.04,
+            )),
+    ));
+}
+
+fn outcrop(c: &mut Commands, a: &AssetServer, name: &str, p: Vec3, scale: f32, yaw: f32) {
+    let wx = p.x + 600.;
+    let wz = p.z;
+    c.spawn((
+        Silt,
+        ClipCliffs,
+        WorldAssetRoot(a.load(format!("darkmod/rocks/{name}.glb#Scene0"))),
+        Transform::from_translation(V(wx, ground(wx, wz) - 0.7, wz))
             .with_scale(Vec3::splat(scale))
             .with_rotation(Quat::from_rotation_y(yaw)),
     ));
+}
+
+fn rest_floor() -> Mesh {
+    let cols = 48usize;
+    let rows = 48usize;
+    let (x0, x1, z0, z1) = (555., 645., -48., 48.);
+    let mut positions = Vec::with_capacity((cols + 1) * (rows + 1));
+    let mut uvs = Vec::with_capacity((cols + 1) * (rows + 1));
+    for j in 0..=rows {
+        let z = z0 + (z1 - z0) * j as f32 / rows as f32;
+        for i in 0..=cols {
+            let x = x0 + (x1 - x0) * i as f32 / cols as f32;
+            positions.push([x, ground(x, z), z]);
+            uvs.push([x * 0.1, z * 0.1]);
+        }
+    }
+    let mut indices = Vec::with_capacity(cols * rows * 6);
+    let stride = cols + 1;
+    for j in 0..rows {
+        for i in 0..cols {
+            let a = (j * stride + i) as u32;
+            let b = a + 1;
+            let c = a + stride as u32;
+            let d = c + 1;
+            indices.extend_from_slice(&[a, c, b, b, c, d]);
+        }
+    }
+    let mut normals = vec![[0., 1., 0.]; positions.len()];
+    for tri in indices.chunks(3) {
+        let pa = Vec3::from(positions[tri[0] as usize]);
+        let pb = Vec3::from(positions[tri[1] as usize]);
+        let pc = Vec3::from(positions[tri[2] as usize]);
+        let n = (pb - pa).cross(pc - pa);
+        for idx in tri {
+            let slot = &mut normals[*idx as usize];
+            *slot = (Vec3::from(*slot) + n).to_array();
+        }
+    }
+    for n in &mut normals {
+        *n = Vec3::from(*n).normalize_or_zero().to_array();
+    }
+    let mut mesh = Mesh::new(
+        bevy::mesh::PrimitiveTopology::TriangleList,
+        bevy::asset::RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(bevy::mesh::Indices::U32(indices));
+    mesh
+}
+
+fn oak_table(y: &mut Yard, x: f32, z: f32, yaw: f32) {
+    let rot = Quat::from_rotation_y(yaw);
+    y.shape(false, 0, V(x, 0.72, z), V(1.42, 0.08, 0.74), rot);
+    for (dx, dz) in [(-0.58, -0.28), (0.58, -0.28), (-0.58, 0.28), (0.58, 0.28)] {
+        y.shape(
+            false,
+            1,
+            V(x, 0.36, z) + rot * V(dx, 0., dz),
+            V(0.08, 0.72, 0.08),
+            rot,
+        );
+    }
+}
+
+fn oak_cask(y: &mut Yard, x: f32, z: f32, seed: i32) {
+    let n = noise(seed, 3);
+    for i in 0..5 {
+        let r = 0.28 + if i == 0 || i == 4 { -0.04 } else { 0.03 } + n * 0.05;
+        y.block(
+            i % 2,
+            V(x, 0.12 + i as f32 * 0.16, z),
+            V(r * 2., 0.16, r * 2.),
+        );
+    }
+}
+
+fn wagon(y: &mut Yard, x: f32, z: f32) {
+    y.block(0, V(x, 0.58, z), V(2.05, 0.12, 1.02));
+    y.block(1, V(x, 0.88, z + 0.46), V(1.9, 0.48, 0.08));
+    y.block(1, V(x, 0.88, z - 0.46), V(1.9, 0.48, 0.08));
+    y.block(0, V(x - 0.92, 0.82, z), V(0.08, 0.38, 0.92));
+    for (dx, dz) in [(-0.72, 0.58), (0.72, 0.58), (-0.72, -0.58), (0.72, -0.58)] {
+        y.shape(
+            false,
+            0,
+            V(x + dx, 0.36, z + dz),
+            V(0.12, 0.7, 0.7),
+            Quat::from_rotation_z(FRAC_PI_2),
+        );
+    }
 }
 
 #[derive(Component)]
 pub struct Cinder {
     origin: Vec3,
     phase: f32,
+}
+
+#[derive(Component)]
+pub struct InnDoor {
+    pub open: bool,
+    angle: f32,
+}
+
+#[derive(Component, Clone, Copy)]
+pub struct WallBox {
+    min: Vec2,
+    max: Vec2,
 }
 
 pub fn drift(time: Res<Time>, mut motes: Query<(&Cinder, &mut Transform)>) {
@@ -261,9 +529,63 @@ pub fn build(
     surface("", [0.25, 0.28, 0.095], 0.14);
     surface("", [0.35, 0.32, 0.12], 0.17);
     surface("", [0.74, 0.48, 0.22], 0.25);
+    let mut tile = |path: &'static str, tint: [f32; 3]| {
+        let img = assets
+            .load_builder()
+            .with_settings(|s: &mut ImageLoaderSettings| {
+                s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                    address_mode_u: ImageAddressMode::Repeat,
+                    address_mode_v: ImageAddressMode::Repeat,
+                    ..ImageSamplerDescriptor::linear()
+                });
+            })
+            .load(path);
+        let [r, g, b] = tint;
+        materials.push(mats.add(StandardMaterial {
+            base_color: Color::srgb(r, g, b),
+            base_color_texture: Some(img),
+            perceptual_roughness: 0.93,
+            ..default()
+        }));
+        materials.len() - 1
+    };
+    let cobble_mat = tile(
+        "darkmod/stone/cobblestones_irregular.png",
+        [0.78, 0.74, 0.68],
+    );
+    let castle_mat = tile("darkmod/stone/castle_blocks.jpg", [0.84, 0.82, 0.78]);
+    let plaster_mat = tile("darkmod/stone/inn_plaster.jpg", [0.94, 0.90, 0.82]);
+    let door_mat = mats.add(StandardMaterial {
+        base_color: Color::srgb(0.72, 0.55, 0.38),
+        base_color_texture: Some(assets.load("darkmod/stone/inn_door.jpg")),
+        perceptual_roughness: 0.88,
+        ..default()
+    });
+    let grass = assets
+        .load_builder()
+        .with_settings(|s: &mut ImageLoaderSettings| {
+            s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                address_mode_u: ImageAddressMode::Repeat,
+                address_mode_v: ImageAddressMode::Repeat,
+                ..ImageSamplerDescriptor::linear()
+            });
+        })
+        .load("darkmod/stone/dirt_leaves_roots_forest_floor_d.png");
+    c.spawn((
+        Silt,
+        Mesh3d(meshes.add(rest_floor())),
+        MeshMaterial3d(mats.add(StandardMaterial {
+            base_color: Color::srgb(0.48, 0.52, 0.36),
+            base_color_texture: Some(grass),
+            perceptual_roughness: 0.96,
+            cull_mode: None,
+            ..default()
+        })),
+        Transform::IDENTITY,
+    ));
     let mut y = Yard {
         cube: Cuboid::from_size(Vec3::ONE).into(),
-        cobble: Cylinder::new(0.5, 1.).mesh().resolution(8).build(),
+        cobble: Cylinder::new(0.5, 1.).mesh().resolution(5).build(),
         materials,
         batches: BTreeMap::new(),
         frame: Transform::IDENTITY,
@@ -277,7 +599,8 @@ pub fn build(
             );
         }
     }
-    // Irregular flagstones taper into the grass along the courtyard margins.
+    // Dark Mod cobble bed: mixed-size setts, world UVs, no stamped octagon grid.
+    y.sett(cobble_mat, V(0., 0.02, 1.2), V(22., 0.03, 28.), 0.07);
     for row in -27..33 {
         for col in -18..19 {
             let z = row as f32 * 0.59;
@@ -288,22 +611,47 @@ pub fn build(
                 continue;
             }
             let n = noise(row, col);
-            y.shape(
-                true,
-                2 + (n * 4.) as usize,
-                V(x + 0.048 * n, 0.042, z + 0.035 * n),
-                V(0.86 + 0.06 * n, 0.049 + n * 0.016, 0.59 + 0.035 * n),
-                Quat::from_rotation_y((noise(col, row) - 0.5) * 0.16),
+            let m = noise(col, row);
+            if n > 0.18 && full {
+                continue;
+            }
+            y.sett(
+                cobble_mat,
+                V(
+                    x + (n - 0.5) * 0.34,
+                    0.034 + n * 0.022,
+                    z + (m - 0.5) * 0.32,
+                ),
+                V(0.48 + n * 0.62, 0.036 + m * 0.028, 0.34 + n * 0.46),
+                m * TAU,
             );
         }
+    }
+    for j in 0..14 {
+        let n = noise(j, 41);
+        let m = noise(17, j);
+        c.spawn((
+            Silt,
+            WorldAssetRoot(assets.load(format!(
+                "darkmod/stones/cobblestone0{}.glb#Scene0",
+                1 + j % 2
+            ))),
+            Transform::from_xyz(
+                600. + (n - 0.5) * 16.,
+                -0.12,
+                (m - 0.5) * 18.,
+            )
+            .with_scale(Vec3::splat(0.055 + n * 0.04))
+            .with_rotation(Quat::from_rotation_y(m * TAU)),
+        ));
     }
     // The smithy sits obliquely on the old wall line, exposing its open side.
     let pivot = V(-5.7, 0., 2.95);
     let angle = Quat::from_rotation_y(-0.34);
     y.frame = Transform::from_translation(pivot - angle * pivot).with_rotation(angle);
-    hall(&mut y, -5.7, -0.65, 7.4, 7.2, false);
+    hall(&mut y, -5.7, -0.65, 7.4, 7.2, false, castle_mat, plaster_mat);
     y.frame = Transform::IDENTITY;
-    hall(&mut y, 8.9, -1.9, 6.8, 7.9, true);
+    hall(&mut y, 8.9, -1.9, 6.8, 7.9, true, castle_mat, plaster_mat);
     // Low curtain returns enclose the courtyard beyond the smithy and inn.
     for side in [-1.0, 1.0] {
         for bay in 0..6 {
@@ -311,8 +659,8 @@ pub fn build(
             for course in 0..8 {
                 for j in 0..4 {
                     let offset = (course % 2) as f32 * 0.38;
-                    y.block(
-                        2 + (course + j) % 4,
+                    y.masonry(
+                        castle_mat,
                         V(
                             side * 16.5,
                             course as f32 * 0.40 + 0.2,
@@ -322,16 +670,16 @@ pub fn build(
                     );
                 }
             }
-            y.block(3, V(side * 16.5, 1.72, z), V(1.16, 3.44, 0.72));
-            y.block(4, V(side * 16.5, 3.49, z), V(1.23, 0.17, 0.85));
-            y.block(2, V(side * 16.5, 3.43, z + 1.6), V(0.79, 0.50, 0.91));
+            y.masonry(castle_mat, V(side * 16.5, 1.72, z), V(1.16, 3.44, 0.72));
+            y.masonry(castle_mat, V(side * 16.5, 3.49, z), V(1.23, 0.17, 0.85));
+            y.masonry(castle_mat, V(side * 16.5, 3.43, z + 1.6), V(0.79, 0.50, 0.91));
         }
     }
     // An arched fire mouth, hood and brick flue behind the open colonnade.
     let fx = -5.45;
     let fz = -1.1;
     for side in [-1., 1.] {
-        stonework(&mut y, fx + side * 1.05, fz, 0.58, 4, 1.35, 0.);
+        stonework(&mut y, fx + side * 1.05, fz, 0.58, 4, 1.35, 0., castle_mat);
     }
     for j in 0..11 {
         let ang = (j as f32 + 0.5) * PI / 11.;
@@ -343,8 +691,8 @@ pub fn build(
             Quat::from_rotation_z(ang),
         );
     }
-    stonework(&mut y, fx, fz - 0.45, 1.40, 13, 0.97, 2.3);
-    y.block(3, V(fx, 7.89, fz - 0.45), V(1.66, 0.25, 1.2));
+    stonework(&mut y, fx, fz - 0.45, 1.40, 13, 0.97, 2.3, castle_mat);
+    y.masonry(castle_mat, V(fx, 7.89, fz - 0.45), V(1.66, 0.25, 1.2));
     y.block(12, V(fx, 1.14, fz - 0.54), V(1.8, 2., 0.17));
     y.block(3, V(fx, 0.43, fz + 0.3), V(2.85, 0.8, 1.55));
     // Hot brick backing follows the vaulted opening behind the bed of coke.
@@ -458,15 +806,33 @@ pub fn build(
         }
         y.block(0, V(xx, 2.60, front + 0.18), V(1.40, 0.14, 0.44));
     }
-    for j in 0..6 {
-        y.block(
-            j % 2,
-            V(8.62 + j as f32 * 0.18, 1.15, front + 0.05),
-            V(0.176, 2.26, 0.22),
-        );
-    }
-    for h in [0.65, 1.72] {
-        y.block(12, V(9.07, h, front + 0.19), V(1.07, 0.09, 0.07));
+    let door_mesh = meshes.add(Cuboid::from_size(Vec3::new(1.32, 2.28, 0.12)));
+    c.spawn((
+        Silt,
+        InnDoor {
+            open: false,
+            angle: 0.,
+        },
+        Transform::from_xyz(DOOR_HINGE.x, DOOR_HINGE.y, DOOR_HINGE.z),
+        Visibility::default(),
+        children![(
+            Mesh3d(door_mesh),
+            MeshMaterial3d(door_mat),
+            Transform::from_xyz(DOOR_WIDTH * 0.5, 0., 0.),
+        )],
+    ));
+    c.spawn((
+        Silt,
+        PointLight {
+            color: Color::srgb(1., 0.72, 0.42),
+            intensity: 42000.,
+            range: 8.,
+            ..default()
+        },
+        Transform::from_xyz(608.9, 2.35, -1.7),
+    ));
+    for (x, z) in [(7.35, -2.55), (10.55, -3.35)] {
+        oak_table(&mut y, x, z, 0.2);
     }
     for (xx, zz, hh) in [(-5.7, 3.24, 3.48), (11.4, 2.34, 3.91)] {
         y.block(14, V(xx, hh, zz), V(1.05, 1.45, 0.08));
@@ -493,11 +859,11 @@ pub fn build(
     // Curtain wall with a recessed plank gate, crenels and roofed watchtowers.
     let gz = -11.;
     for (xx, w) in [(-8.35, 21.3), (12.25, 14.)] {
-        stonework(&mut y, xx, gz, w, 10, 1.08, 0.);
+        stonework(&mut y, xx, gz, w, 10, 1.08, 0., castle_mat);
     }
     for j in -18..20 {
-        y.block(
-            2 + (j + 19) as usize % 4,
+        y.masonry(
+            castle_mat,
             V(j as f32, 4.52, gz),
             V(0.66, 0.62, 1.1),
         );
@@ -525,10 +891,38 @@ pub fn build(
     for xx in [1.26, 6.22] {
         lamp(&mut y, &mut c, V(xx, 2.56, gz + 0.89), false);
     }
-    for (xx, zz, h) in [(2.6, -21., 11.2), (13., -26., 7.5), (-16., -20., 7.)] {
-        y.block(3, V(xx, h * 0.5, zz), V(2.9, h, 2.9));
+    for j in -10..14 {
+        if noise(j, 61) < 0.18 {
+            continue;
+        }
+        y.masonry(
+            castle_mat,
+            V(
+                -19.4 + (noise(j, 4) - 0.5) * 0.5,
+                1.55 + noise(j, 8) * 0.4,
+                j as f32 * 1.15,
+            ),
+            V(
+                0.92 + noise(j, 11) * 0.28,
+                3.05 + noise(j, 15) * 1.1,
+                1.08,
+            ),
+        );
+    }
+    for (xx, zz, h) in [
+        (2.6, -21., 11.2),
+        (13., -26., 7.5),
+        (-16., -20., 7.),
+        (-22., 7., 8.4),
+        (-18., 14., 6.8),
+    ] {
+        y.masonry(castle_mat, V(xx, h * 0.5, zz), V(2.9, h, 2.9));
         for s in [-1., 1.] {
-            y.block(4, V(xx + s * 1.32, h * 0.5, zz + 1.42), V(0.26, h, 0.23));
+            y.masonry(
+                castle_mat,
+                V(xx + s * 1.32, h * 0.5, zz + 1.42),
+                V(0.26, h, 0.23),
+            );
         }
         y.block(1, V(xx, h + 0.1, zz), V(3.3, 0.28, 3.3));
         y.block(0, V(xx, h + 0.74, zz), V(2.92, 1.20, 2.92));
@@ -545,20 +939,63 @@ pub fn build(
         }
         y.block(12, V(xx, h + 3.34, zz), V(0.09, 1., 0.09));
     }
-    for j in 0..58 {
-        let x = j as f32 * 1.05 - 30.;
+    const PINES: [&str; 8] = [
+        "spruce_01a",
+        "spruce_01b",
+        "spruce_01c",
+        "spruce_01d",
+        "spruce_01e",
+        "pine_12",
+        "pine_20",
+        "pine_30",
+    ];
+    for j in 0..52 {
         let n = noise(j, 81);
-        kit(
+        let a = j as f32 / 52. * TAU + (n - 0.5) * 0.28;
+        let r = 18.5 + noise(j, 3) * 6.2;
+        let x = a.cos() * r;
+        let z = a.sin() * r;
+        if z > 9. && x.abs() < 7. {
+            continue;
+        }
+        grove(
             &mut c,
             &assets,
-            "nature-kit",
-            "tree_pineTallA",
-            V(x, 0., -18. - noise(32, j) * 11.),
-            4. + n * 3.4,
-            n * 6.,
+            PINES[j as usize % PINES.len()],
+            V(x, 0., z),
+            0.028 + n * 0.018,
+            n * 6. + noise(j, 9) * 1.4,
         );
     }
-    for (x, z) in [
+    const ROCKS: [&str; 8] = [
+        "cliffrock_01",
+        "cliffrock_02",
+        "cliffrock_03",
+        "cliffrock_04",
+        "cliffrock_05",
+        "cliffrock_06",
+        "cliffrock_07",
+        "cliffrock_08",
+    ];
+    for j in 0..18 {
+        let n = noise(j, 21);
+        let a = j as f32 / 18. * TAU + (n - 0.5) * 0.3;
+        let r = 22. + noise(j, 7) * 5.;
+        let x = a.cos() * r;
+        let z = a.sin() * r;
+        if z > 10. && x.abs() < 8. {
+            continue;
+        }
+        outcrop(
+            &mut c,
+            &assets,
+            ROCKS[j as usize % ROCKS.len()],
+            V(x, 0., z),
+            0.022 + n * 0.02,
+            a + PI,
+        );
+    }
+    for (i, (x, z)) in [
         (-7.9, 4.2),
         (-6.92, 4.33),
         (-8.5, 3.4),
@@ -566,65 +1003,29 @@ pub fn build(
         (6.9, 3.05),
         (7.85, 2.96),
         (0.8, -9.8),
-    ] {
-        kit(
-            &mut c,
-            &assets,
-            "mini-dungeon",
-            "barrel",
-            V(x, 0.06, z),
-            2.1,
-            0.32 * x,
-        );
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        oak_cask(&mut y, x + (noise(i as i32, 2) - 0.5) * 0.2, z, i as i32);
     }
     for (x, z) in [(-4., 0.7), (-7.1, -0.4), (-3.4, -2.9)] {
-        kit(
-            &mut c,
-            &assets,
-            "mini-dungeon",
-            "table",
-            V(x, 0.06, z),
-            2.3,
-            0.,
-        );
-        kit(
-            &mut c,
-            &assets,
-            "mini-dungeon",
-            "pot",
-            V(x + 0.37, 0.79, z),
-            0.61,
-            0.36,
-        );
+        oak_table(&mut y, x, z, 0.);
+        y.block(1, V(x + 0.37, 0.86, z), V(0.22, 0.18, 0.22));
+        y.block(0, V(x + 0.37, 1.02, z), V(0.16, 0.16, 0.16));
     }
-    kit(
-        &mut c,
-        &assets,
-        "fantasy-town-kit",
-        "cart",
-        V(6.6, 0.06, -3.1),
-        2.65,
-        -0.5,
-    );
-    kit(
-        &mut c,
-        &assets,
-        "fantasy-town-kit",
-        "wheel",
-        V(-9.83, 0.06, 2.8),
-        3.,
-        FRAC_PI_2,
+    wagon(&mut y, 6.6, -3.1);
+    y.shape(
+        false,
+        0,
+        V(-9.83, 0.38, 2.8),
+        V(0.12, 0.74, 0.74),
+        Quat::from_rotation_z(FRAC_PI_2),
     );
     for j in 0..7 {
-        kit(
-            &mut c,
-            &assets,
-            "mini-dungeon",
-            "weapon-sword",
-            V(-8. + j as f32 * 0.35, 1.84, -0.37),
-            1.65,
-            0.14 * j as f32,
-        );
+        let x = -8. + j as f32 * 0.35 + (noise(j, 5) - 0.5) * 0.08;
+        y.block(12, V(x, 1.84, -0.37), V(0.04, 0.04, 0.72));
+        y.block(10, V(x, 1.84, -0.72), V(0.12, 0.04, 0.08));
     }
     y.block(0, V(-6.95, 1.8, -0.53), V(2.75, 0.16, 0.21));
     // Split firewood stacked under the smithy eaves.
@@ -642,7 +1043,7 @@ pub fn build(
     }
     // The ferry's chained lanterns bracket its walkable landing.
     for (x, z) in [(-1.95, 15.), (1.95, 15.), (3.55, 11.1)] {
-        stonework(&mut y, x, z, 0.84, 2, 0.82, 0.);
+        stonework(&mut y, x, z, 0.84, 2, 0.82, 0., castle_mat);
         y.block(0, V(x, 1.47, z), V(0.21, 1.6, 0.21));
         y.block(1, V(x - 0.23, 2.22, z), V(0.69, 0.14, 0.18));
         lamp(&mut y, &mut c, V(x - 0.46, 1.70, z), true);
@@ -667,21 +1068,20 @@ pub fn build(
             );
         }
     }
-    for j in 0..95 {
-        let x = noise(j, 14) * 35. - 17.5;
-        let z = noise(6, j) * 33. - 15.;
-        if x.abs() < 3.5 || (z < 5. && z > -10. && x.abs() < 9.) {
-            continue;
-        }
-        kit(
-            &mut c,
-            &assets,
-            "nature-kit",
-            "grass",
-            V(x, 0.06, z),
-            0.50 + noise(j, 7) * 0.55,
-            noise(j, 15) * 6.,
-        );
+    for (minx, maxx, minz, maxz) in [
+        (605.35, 605.88, -5.95, 2.20),
+        (611.92, 612.45, -5.95, 2.20),
+        (605.35, 612.45, -6.15, -5.50),
+        (605.35, 608.41, 1.88, 2.38),
+        (609.73, 612.45, 1.88, 2.38),
+    ] {
+        c.spawn((
+            Silt,
+            WallBox {
+                min: Vec2::new(minx, minz),
+                max: Vec2::new(maxx, maxz),
+            },
+        ));
     }
     for (mat, mesh) in y.batches {
         c.spawn((
@@ -690,5 +1090,84 @@ pub fn build(
             MeshMaterial3d(y.materials[mat].clone()),
             Transform::from_xyz(600., 0., 0.),
         ));
+    }
+}
+
+pub fn swing_door(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    note: Res<crate::player::NoteComposer>,
+    player: Query<&Transform, With<crate::player::Player>>,
+    mut doors: Query<(&mut InnDoor, &mut Transform), Without<crate::player::Player>>,
+) {
+    if note.active {
+        return;
+    }
+    let Ok(player) = player.single() else {
+        return;
+    };
+    for (mut door, mut tf) in &mut doors {
+        let near = player.translation.xz().distance(DOOR_HINGE.xz()) < 2.6;
+        if near && keys.just_pressed(KeyCode::KeyE) {
+            door.open = !door.open;
+        }
+        let target = if door.open { -1.45 } else { 0. };
+        door.angle += (target - door.angle) * (1. - (-time.delta_secs() * 8.).exp());
+        tf.rotation = Quat::from_rotation_y(door.angle);
+    }
+}
+
+pub fn block_player(
+    walls: Query<&WallBox>,
+    doors: Query<&InnDoor>,
+    mut player: Query<&mut Transform, With<crate::player::Player>>,
+) {
+    let Ok(mut tf) = player.single_mut() else {
+        return;
+    };
+    let p = &mut tf.translation;
+    if (p.x - 609.).abs() > 20. {
+        return;
+    }
+    let radius = 0.38;
+    let mut push = |min: Vec2, max: Vec2| {
+        let cx = p.x.clamp(min.x, max.x);
+        let cz = p.z.clamp(min.y, max.y);
+        let dx = p.x - cx;
+        let dz = p.z - cz;
+        let d2 = dx * dx + dz * dz;
+        if d2 >= radius * radius {
+            return;
+        }
+        if d2 < 1e-6 {
+            let left = p.x - min.x;
+            let right = max.x - p.x;
+            let south = p.z - min.y;
+            let north = max.y - p.z;
+            let m = left.min(right).min(south).min(north);
+            if m == left {
+                p.x = min.x - radius;
+            } else if m == right {
+                p.x = max.x + radius;
+            } else if m == south {
+                p.z = min.y - radius;
+            } else {
+                p.z = max.y + radius;
+            }
+        } else {
+            let d = d2.sqrt();
+            let k = (radius - d) / d;
+            p.x += dx * k;
+            p.z += dz * k;
+        }
+    };
+    for wall in &walls {
+        push(wall.min, wall.max);
+    }
+    if doors.iter().any(|d| !d.open) {
+        push(
+            Vec2::new(DOOR_HINGE.x, DOOR_HINGE.z - 0.16),
+            Vec2::new(DOOR_HINGE.x + DOOR_WIDTH, DOOR_HINGE.z + 0.16),
+        );
     }
 }

@@ -52,6 +52,14 @@ export function buildBaAvatarAnimations(model) {
   const rightLeg = bones.find((bone) => boneIs(bone, "leg", "right"))
   const leftArm = bones.find((bone) => boneIs(bone, "arm", "left"))
   const rightArm = bones.find((bone) => boneIs(bone, "arm", "right"))
+  const named = (needles) => bones.find((bone) => {
+    const key = normalizedName(bone.name)
+    return needles.some((name) => key.includes(name))
+  })
+  const leftKnee = named(["leftlowerleg", "leftcalf", "leftshin", "bipllowerleg", "lowerlegl"])
+  const rightKnee = named(["rightlowerleg", "rightcalf", "rightshin", "biprlowerleg", "lowerlegr"])
+  const leftFore = named(["leftlowerarm", "leftforearm", "bipllowerarm", "forearml"])
+  const rightFore = named(["rightlowerarm", "rightforearm", "biprlowerarm", "forearmr"])
 
   // GLTFExporter target lookups use exact Object3D bone names. Never export
   // animations referencing a bone omitted by the optimized model.
@@ -73,8 +81,10 @@ export function buildBaAvatarAnimations(model) {
   }
 
   const breathing = [0, 0.7, 1, 0.7, 0, -0.6, -1, -0.6, 0]
-  const gait = [0, 1, 0, -1, 0]
+  const gait = [0, 0.55, 1, 0.45, 0, -0.55, -1, -0.45, 0]
   const invert = gait.map((x) => -x)
+  const lift = [0.12, 0.85, 0.55, 0.18, 0.1, 0.1, 0.12, 0.14, 0.12]
+  const liftInvert = [0.1, 0.1, 0.12, 0.14, 0.12, 0.85, 0.55, 0.18, 0.1]
   const still = [0, 0, 0, 0, 0, 0, 0, 0, 0]
   // VRM humanoid arm axes: left arm points to the model's left in bind pose,
   // right arm points to its right. A ~60° turn down removes the T-pose without
@@ -91,17 +101,22 @@ export function buildBaAvatarAnimations(model) {
   ].filter(Boolean))
 
   const walkTracks = [
-    track(leftLeg, 0.8, gait, 0.30),
-    track(rightLeg, 0.8, invert, 0.30),
-    track(leftArm, 0.8, invert, 0.18, X_AXIS, leftRest),
-    track(rightArm, 0.8, gait, 0.18, X_AXIS, rightRest),
+    track(torso, 1.05, gait, 0.05, Z_AXIS),
+    track(leftLeg, 1.05, gait, 0.42),
+    track(rightLeg, 1.05, invert, 0.42),
+    track(leftKnee, 1.05, lift, 0.55),
+    track(rightKnee, 1.05, liftInvert, 0.55),
+    track(leftArm, 1.05, invert, 0.28, X_AXIS, leftRest),
+    track(rightArm, 1.05, gait, 0.28, X_AXIS, rightRest),
+    track(leftFore, 1.05, invert, 0.12, X_AXIS, 0.35),
+    track(rightFore, 1.05, gait, 0.12, X_AXIS, -0.35),
   ].filter(Boolean)
   // Some imported rigs only expose the torso. Preserve a stable animation
   // rather than binding tracks to nonexistent bones.
   if (!walkTracks.length) {
-    walkTracks.push(track(torso, 0.8, gait, 0.045, Z_AXIS))
+    walkTracks.push(track(torso, 1.05, gait, 0.045, Z_AXIS))
   }
-  const walking = new AnimationClip("BA_Walk", 0.8, walkTracks)
+  const walking = new AnimationClip("BA_Walk", 1.05, walkTracks)
   if (!idle.tracks.length || !walking.tracks.length) {
     throw new Error("Black Anvil could not build animation tracks for this rig")
   }

@@ -38,7 +38,7 @@ use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode};
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
     bind_avatar_animators, update_avatar_animation,
-    discover_avatar_bones, pose_humanoid_bones,
+    discover_avatar_bones, pose_humanoid_bones, matte_avatar_materials,
 };
 use data::load_game_data;
 use net::{
@@ -59,7 +59,8 @@ use forge_vfx::{setup_forge_vfx, tick_forge_vfx};
 use pixel_present::{attach_pixel_camera, fit_pixel_present, point_ui_at_present};
 use player::{grab_cursor, look_player, move_player, spawn_player, NoteComposer};
 use rpg::{
-    apply_xp_grants, cycle_job, ensure_fighter, load_combat_kits, sync_hotbar_on_level, GrantXp,
+    apply_rest, apply_xp_grants, cycle_job, ensure_fighter, load_combat_kits, sync_hotbar_on_level,
+    GrantXp,
     PlayerLeveledUp,
 };
 use scene::{spawn_opening_scene, tick_fireflies};
@@ -166,6 +167,7 @@ fn main() {
             (
                 attach_player_avatar,
                 resolve_pending_avatars.after(attach_player_avatar),
+                matte_avatar_materials.after(resolve_pending_avatars),
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
                 send_local_move.run_if(in_yard).after(look_player),
@@ -211,6 +213,7 @@ fn main() {
                 tick_possession.after(on_possess_request).run_if(in_yard),
                 tick_warden_acting.run_if(in_yard),
                 ensure_fighter.run_if(in_yard),
+                apply_rest.after(ensure_fighter).run_if(in_yard),
                 sync_hotbar_on_level.run_if(in_yard),
             ),
         )
@@ -258,12 +261,19 @@ fn main() {
         .add_plugins(MaterialPlugin::<stillwater::lantern_post::FenWater>::default())
         .add_systems(Startup, (stillwater::lantern_post::build, stillwater::sable_rest::build))
         .add_systems(Update, stillwater::sable_rest::drift)
+        .add_systems(
+            Update,
+            (
+                stillwater::sable_rest::swing_door,
+                stillwater::sable_rest::block_player.after(move_player),
+            ),
+        )
         .add_systems(Update, stillwater::lantern_post::flicker)
         .init_resource::<stillwater::DisplayState>()
         .add_systems(Startup,(stillwater::setup,ashworks::spawn))
-        .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::edda_animation,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal).after(apply_zone_snapshots))
+        .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::edda_animation,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal,stillwater::fix_zero_roughness,stillwater::dress_darkmod).after(apply_zone_snapshots))
         .add_systems(Update,stillwater::camera_feedback.after(apply_camera_mode))
-        .add_systems(Update, (ashworks::display, ashworks::gallery_visibility).after(apply_zone_snapshots))
+        .add_systems(Update, (ashworks::display, ashworks::gallery_visibility, stillwater::silt_visibility).after(apply_zone_snapshots))
         // Bevy evaluates glTF animation in PostUpdate. Apply camera-specific
         // shoulder/leg posing afterwards and before transform propagation so
         // the real skinning rig cannot be reset to bind/T-pose by the loader.

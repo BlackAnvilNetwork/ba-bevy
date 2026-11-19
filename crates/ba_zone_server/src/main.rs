@@ -258,15 +258,15 @@ fn tick_movement(w: &mut World, now: Instant) {
         if w.tick%2==0 {j.stamina=(j.stamina+1).min(100);}
         if w.tick<j.roll_until {
             for _ in 0..2 {player.pose=integrate_movement(player.pose,j.roll,DT);}
-            continue
+        } else if w.tick>=j.freeze {
+            if let Some(cmd) = player.movement {
+                if now.duration_since(cmd.received_at) <= INPUT_TIMEOUT {
+                    player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, if w.tick<j.slow {DT*0.45}else{DT});
+                    player.last_input_seq = cmd.seq;
+                }
+            }
         }
-        if w.tick<j.freeze {continue}
-        let Some(cmd) = player.movement else { continue };
-        if player.hp <= 0 || now.duration_since(cmd.received_at) > INPUT_TIMEOUT {
-            continue;
-        }
-        player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, if w.tick<j.slow {DT*0.45}else{DT});
-        player.last_input_seq = cmd.seq;
+        stillwater::cross_if_ready(player);
     }
 }
 
@@ -869,7 +869,7 @@ fn clamp_pose(mut pose: Pose) -> Pose {
     let (min_x, max_x, min_z, max_z) = sw::bounds(pose.x);
     pose.x = pose.x.clamp(min_x, max_x);
     pose.z = pose.z.clamp(min_z, max_z);
-    pose.y = 1.65;
+    pose.y = sw::stand(pose.x, pose.z);
     pose
 }
 

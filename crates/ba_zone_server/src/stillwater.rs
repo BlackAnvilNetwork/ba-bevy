@@ -112,7 +112,7 @@ fn quest(p: &Player) -> &'static str {
     } else if count(p, YOKE) == 0 {
         "The Ox That Wouldn't Lie Down · Find the elite east of the ribs"
     } else {
-        "The Drowned Gate · Level 3, three iron, the yoke and Edda's Book"
+        "The Drowned Gate · Cross the northern arch whenever you are ready"
     }
 }
 fn speak(p: &mut Player) {
@@ -330,6 +330,55 @@ fn travel(p: &mut Player, destination: Pose, notice: &str) {
     p.journey.notice = notice.into();
 }
 
+/// Walk-in zone lines. Greymere east, Pell's south lanterns, the Drowned Gate,
+/// and Sable's dock all fire with no Edda / book / iron check.
+pub fn cross_if_ready(p: &mut Player) -> bool {
+    let here = p.pose;
+    let at_waystone = |pt| dist_xz(here, pt) < TRAVEL_REACH;
+    if at_waystone(GREYMERE_ROAD) {
+        travel(
+            p,
+            POST,
+            "Stillwater Boneyard · Pell waits at the Lantern Post.",
+        );
+        true
+    } else if at_waystone(LANTERN_ROAD) {
+        travel(
+            p,
+            at(GREYMERE_ROAD.x, GREYMERE_ROAD.z + 6.),
+            "Greymere · You arrive beside the east road.",
+        );
+        true
+    } else if at_waystone(SABLE_DOCK) {
+        travel(
+            p,
+            at(GATE.x, GATE.z - 6.),
+            "Stillwater Boneyard · The ferryman sets you down beyond the Drowned Gate.",
+        );
+        true
+    } else if at_waystone(GATE) {
+        if flag(p, "@crossed") {
+            gold(p, 200);
+            for (item, n) in [
+                ("Cold Iron", 2),
+                ("Beast Hide", 2),
+                ("Stillwater Essence", 1),
+                ("Peat", 2),
+            ] {
+                add(p, item, n);
+            }
+        }
+        travel(
+            p,
+            REST,
+            "The ferryman poles north to Sable Rest. Cael tends the field forge.",
+        );
+        true
+    } else {
+        false
+    }
+}
+
 pub fn interact(p: &mut Player, tick: u64, blind_clear: bool) {
     if p.hp <= 0 || tick < p.journey.next_action {
         return;
@@ -362,54 +411,8 @@ pub fn interact(p: &mut Player, tick: u64, blind_clear: bool) {
     }
     let here = p.pose;
     let near = |pt| dist_xz(here, pt) < 4.5;
-    let at_waystone = |pt| dist_xz(here, pt) < TRAVEL_REACH;
-    if at_waystone(GREYMERE_ROAD) {
-        travel(
-            p,
-            POST,
-            "Stillwater Boneyard · Pell waits at the Lantern Post.",
-        );
-    } else if at_waystone(LANTERN_ROAD) {
-        travel(
-            p,
-            at(GREYMERE_ROAD.x, GREYMERE_ROAD.z + 6.),
-            "Greymere · You arrive beside the east road.",
-        );
-    } else if at_waystone(SABLE_DOCK) {
-        travel(
-            p,
-            at(GATE.x, GATE.z - 6.),
-            "Stillwater Boneyard · The ferryman sets you down beyond the Drowned Gate.",
-        );
-    } else if at_waystone(GATE) {
-        let unlocked = count(p, "@crossed") > 0;
-        if unlocked
-            || (count(p, BOOK) > 0
-                && count(p, YOKE) > 0
-                && count(p, "Cold Iron") >= 3
-                && p.level >= 3)
-        {
-            if flag(p, "@crossed") {
-                gold(p, 200);
-                for (item, n) in [
-                    ("Cold Iron", 2),
-                    ("Beast Hide", 2),
-                    ("Stillwater Essence", 1),
-                    ("Peat", 2),
-                ] {
-                    add(p, item, n);
-                }
-            }
-            travel(
-                p,
-                REST,
-                "The ferryman poles north to Sable Rest. Cael tends the field forge.",
-            );
-        } else {
-            p.journey.notice =
-                "The Drowned Gate awaits level 3, the Ox's Yoke, three Cold Iron and Edda's Book."
-                    .into();
-        }
+    if cross_if_ready(p) {
+        return;
     } else if near(REST) {
         if count(p, "Peat") >= 1 && count(p, "Cold Iron") >= 4 && count(p, "Cael's Iron Edge") == 0
         {

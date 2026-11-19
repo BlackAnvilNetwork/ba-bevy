@@ -2,12 +2,12 @@
     "zoneId":  "zone_greymere_yard",
     "displayName":  "Greymere Yard",
     "role":  "opening",
-    "notes":  "Playable footprint mirrors the stick camp: about 28m wide, rear mass to the north, open south, exit on the east. Props are Kenney CC0 (graveyard, fantasy town, castle, mini dungeon). Cinder Gate is the next road and is not built.",
+    "notes":  "Playable footprint is the bowl floor: about 48m east-west, 34m north-south. Rear mass to the north, open south, exit at the twin lanterns in the north clearing. Hills sit past the walkable edge. Props are generative ashlar or Dark Mod. Cinder Gate is the next road and is not built.",
     "bounds":  {
-                   "minX":  -13,
-                   "maxX":  30,
-                   "minZ":  -6.6,
-                   "maxZ":  9
+                   "minX":  -16,
+                   "maxX":  32,
+                   "minZ":  -14,
+                   "maxZ":  20
                },
     "spawn":  {
                   "at":  [
@@ -25,14 +25,14 @@
                   {
                       "id":  "chalk_east",
                       "toZoneId":  "zone_cinder_gate",
-                      "hint":  "The chalk line is the edge of Greymere. Cinder Gate is shut beyond it.",
+                      "hint":  "N clearing at the twin lanterns · Stillwater Boneyard",
                       "min":  [
-                                  27.6,
-                                  -2.2
+                                  17.1,
+                                  -6.2
                               ],
                       "max":  [
-                                  29.6,
-                                  -0.8
+                                  19.1,
+                                  -4.8
                               ]
                   }
               ],
@@ -765,56 +765,45 @@
                       "scale":  1
                   },
                   {
-                      "model":  "kits/graveyard-kit/Models/GLB format/fence-gate.glb",
-                      "name":  "LineGate",
+                      "model":  "darkmod/arches/stone_arch01.glb",
+                      "name":  "TravelArch",
                       "at":  [
-                                 28.35,
-                                 0,
-                                 -1.5
+                                 17.6,
+                                 -1.45,
+                                 -5.5
                              ],
                       "rotY":  1.5707963267948966,
-                      "scale":  1
+                      "scale":  0.013
                   },
                   {
-                      "model":  "kits/graveyard-kit/Models/GLB format/pillar-square.glb",
-                      "name":  "LinePostNorth",
+                      "model":  "darkmod/lights/standing_lantern02.glb",
+                      "name":  "TravelLanternNorth",
                       "at":  [
-                                 28.35,
-                                 0,
-                                 -2.15
+                                 17.5,
+                                 -0.85,
+                                 -7.15
                              ],
                       "rotY":  0,
-                      "scale":  1.15
+                      "scale":  0.35
                   },
                   {
-                      "model":  "kits/graveyard-kit/Models/GLB format/pillar-square.glb",
-                      "name":  "LinePostSouth",
+                      "model":  "darkmod/lights/standing_lantern02.glb",
+                      "name":  "TravelLanternSouth",
                       "at":  [
-                                 28.35,
-                                 0,
-                                 -0.85
+                                 17.5,
+                                 -0.85,
+                                 -3.85
                              ],
-                      "rotY":  0,
-                      "scale":  1.15
-                  },
-                  {
-                      "model":  "kits/graveyard-kit/Models/GLB format/lantern-candle.glb",
-                      "name":  "LineLantern",
-                      "at":  [
-                                 28.15,
-                                 0,
-                                 -2.45
-                             ],
-                      "rotY":  0,
-                      "scale":  1.5
+                      "rotY":  3.141592653589793,
+                      "scale":  0.35
                   },
                   {
                       "model":  "primitive:chalk",
                       "name":  "ChalkNorth",
                       "at":  [
-                                 27.9,
+                                 17.4,
                                  0.025,
-                                 -3.15
+                                 -7.15
                              ],
                       "rotY":  0,
                       "scale":  1,
@@ -828,9 +817,9 @@
                       "model":  "primitive:chalk",
                       "name":  "ChalkSouth",
                       "at":  [
-                                 27.9,
+                                 17.4,
                                  0.025,
-                                 1.7
+                                 -2.3
                              ],
                       "rotY":  0,
                       "scale":  1,
@@ -844,9 +833,9 @@
                       "model":  "primitive:chalk",
                       "name":  "ChalkGate",
                       "at":  [
-                                 27.9,
+                                 17.4,
                                  0.025,
-                                 -1.5
+                                 -5.5
                              ],
                       "rotY":  0,
                       "scale":  1,

@@ -56,10 +56,10 @@ pub struct ZoneBounds {
 impl Default for ZoneBounds {
     fn default() -> Self {
         Self {
-            min_x: -13.0,
-            max_x: 14.2,
-            min_z: -6.6,
-            max_z: 8.2,
+            min_x: -16.0,
+            max_x: 32.0,
+            min_z: -14.0,
+            max_z: 20.0,
         }
     }
 }

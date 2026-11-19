@@ -97,10 +97,12 @@ pub fn apply_camera_mode(
     if let Projection::Perspective(ref mut perspective) = *projection {
         // Fingers on the actual skinned model can be closer to the eyes than
         // Bevy's default 10cm clipping plane. Do not clip the real hands.
-        perspective.near = if view.mode == CameraMode::FirstPerson {
-            0.025
+        let first = view.mode == CameraMode::FirstPerson;
+        perspective.near = if first { 0.02 } else { 0.1 };
+        perspective.fov = if first {
+            70.0_f32.to_radians()
         } else {
-            0.1
+            75.0_f32.to_radians()
         };
     }
 

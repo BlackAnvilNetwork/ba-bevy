@@ -1,7 +1,12 @@
 //! Stillwater landmarks and presentation of the authoritative marsh snapshot.
 use crate::{forge_menu::GameFlow, net::ZoneNet, player::Player};
 use ba_protocol::stillwater::*;
-use bevy::prelude::*;
+use bevy::{
+    image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
+    light::{NotShadowCaster, NotShadowReceiver},
+    math::Affine2,
+    prelude::*,
+};
 
 pub mod lantern_post;
 pub mod sable_rest;
@@ -12,6 +17,12 @@ pub struct MarshHud;
 pub struct MarshPrompt;
 #[derive(Component)]
 pub struct Silt;
+/// Dark Mod leaf cards ship as Blend; clip them so foliage is solid.
+#[derive(Component)]
+pub struct ClipLeaves;
+/// Cliff GLBs ship a shiny collision hull; dress the rock and hide the hull.
+#[derive(Component)]
+pub struct ClipCliffs;
 #[derive(Component)]
 pub struct Actor(u32);
 #[derive(Component)]
@@ -39,6 +50,400 @@ pub struct DisplayState {
     landed: std::collections::HashSet<(i32, i32)>,
 }
 
+fn forest_floor() -> Mesh {
+    let cols = 72usize;
+    let rows = 88usize;
+    let (x0, x1, z0, z1) = (145., 470., -230., 240.);
+    let mut positions = Vec::with_capacity((cols + 1) * (rows + 1));
+    let mut uvs = Vec::with_capacity((cols + 1) * (rows + 1));
+    for j in 0..=rows {
+        let z = z0 + (z1 - z0) * j as f32 / rows as f32;
+        for i in 0..=cols {
+            let x = x0 + (x1 - x0) * i as f32 / cols as f32;
+            positions.push([x, ground(x, z), z]);
+            uvs.push([x * 0.09, z * 0.09]);
+        }
+    }
+    let mut indices = Vec::with_capacity(cols * rows * 6);
+    let stride = cols + 1;
+    for j in 0..rows {
+        for i in 0..cols {
+            let a = (j * stride + i) as u32;
+            let b = a + 1;
+            let c = a + stride as u32;
+            let d = c + 1;
+            indices.extend_from_slice(&[a, c, b, b, c, d]);
+        }
+    }
+    let mut normals = vec![[0., 1., 0.]; positions.len()];
+    for tri in indices.chunks(3) {
+        let a = Vec3::from(positions[tri[0] as usize]);
+        let b = Vec3::from(positions[tri[1] as usize]);
+        let c = Vec3::from(positions[tri[2] as usize]);
+        let n = (b - a).cross(c - a);
+        for idx in tri {
+            let slot = &mut normals[*idx as usize];
+            *slot = (Vec3::from(*slot) + n).to_array();
+        }
+    }
+    for n in &mut normals {
+        *n = Vec3::from(*n).normalize_or_zero().to_array();
+    }
+    let mut mesh = Mesh::new(
+        bevy::mesh::PrimitiveTopology::TriangleList,
+        bevy::asset::RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(bevy::mesh::Indices::U32(indices));
+    mesh
+}
+
+fn plant_forest(
+    c: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    mats: &mut Assets<StandardMaterial>,
+    assets: &AssetServer,
+) {
+    let grass = assets
+        .load_builder()
+        .with_settings(|s: &mut ImageLoaderSettings| {
+            s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                address_mode_u: ImageAddressMode::Repeat,
+                address_mode_v: ImageAddressMode::Repeat,
+                ..ImageSamplerDescriptor::linear()
+            });
+        })
+        .load("darkmod/stone/dirt_leaves_roots_forest_floor_d.png");
+    c.spawn((
+        Silt,
+        Mesh3d(meshes.add(forest_floor())),
+        MeshMaterial3d(mats.add(StandardMaterial {
+            base_color: Color::srgb(0.55, 0.62, 0.42),
+            base_color_texture: Some(grass),
+            perceptual_roughness: 0.96,
+            cull_mode: None,
+            ..default()
+        })),
+        Transform::IDENTITY,
+    ));
+    // Alpha-masked Dark Mod keepers. Birches repeat so they stay the majority.
+    const GROVE: &[(&str, f32)] = &[
+        ("birch_02", 0.034),
+        ("birch_03", 0.036),
+        ("birch_04", 0.038),
+        ("birch_05", 0.034),
+        ("birch_06", 0.040),
+        ("birch_03", 0.035),
+        ("birch_04", 0.037),
+        ("birch_05", 0.033),
+        ("tree_dm", 0.038),
+        ("tree_dm01", 0.036),
+        ("tree_dm02", 0.036),
+        ("tree_dm_small01", 0.044),
+        ("tree_dm_small02", 0.044),
+        ("tree_02", 0.032),
+        ("tree_02_large", 0.026),
+        ("tree_02_small", 0.038),
+        ("tree_04_large", 0.026),
+        ("tree_04_small", 0.036),
+        ("tree_05_large", 0.026),
+        ("tree_05_small", 0.036),
+        ("tree_06_large", 0.026),
+        ("tree_06_small", 0.036),
+        ("tree_old_01", 0.030),
+        ("tree_old_02", 0.030),
+        ("spruce_01a", 0.032),
+        ("spruce_01c", 0.032),
+        ("tree_07_young", 0.044),
+    ];
+    for gx in 0..24 {
+        for gz in 0..32 {
+            let i = gx * 32 + gz;
+            let jitter = {
+                let mut h = (i as u32).wrapping_mul(0x9e3779b9);
+                h ^= h >> 16;
+                h = h.wrapping_mul(0x7feb352d);
+                (h >> 8) as f32 / 16777216.
+            };
+            let sway = {
+                let mut h = ((i + 91) as u32).wrapping_mul(0x85ebca6b);
+                h ^= h >> 13;
+                (h >> 8) as f32 / 16777216.
+            };
+            if jitter < 0.05 {
+                continue;
+            }
+            let x = 168. + gx as f32 * 11.2 + (jitter - 0.5) * 5.2;
+            let z = -172. + gz as f32 * 12. + (sway - 0.5) * 5.;
+            if (x - POST.x).hypot(z - POST.z) < 14.
+                || (x - GATE.x).hypot(z - GATE.z) < 12.
+                || (x - SHRINE.x).hypot(z - SHRINE.z) < 10.
+                || (x - 300.).abs() < 5.5
+                || x < 210.
+            {
+                continue;
+            }
+            let spin = {
+                let mut h = ((i + 211) as u32).wrapping_mul(0xc2b2ae35);
+                h ^= h >> 16;
+                (h >> 8) as f32 / 16777216.
+            };
+            let (name, base) = GROVE[(i * 17 + 3) % GROVE.len()];
+            let scale = base * (0.82 + jitter * 0.38);
+            let yaw = spin * std::f32::consts::TAU;
+            let tilt = (sway - 0.5) * 0.14;
+            let roll = (jitter - 0.5) * 0.11;
+            c.spawn((
+                Silt,
+                ClipLeaves,
+                WorldAssetRoot(
+                    assets.load(format!("darkmod/trees/{name}.glb#Scene0")),
+                ),
+                Transform::from_xyz(x, ground(x, z) - scale * 16., z)
+                    .with_scale(Vec3::new(
+                        scale * if spin > 0.5 { -1. } else { 1. },
+                        scale,
+                        scale,
+                    ))
+                    .with_rotation(Quat::from_euler(EulerRot::YXZ, yaw, tilt, roll)),
+            ));
+        }
+    }
+    ring_cliffs(c, assets);
+}
+
+fn ring_cliffs(c: &mut Commands, assets: &AssetServer) {
+    const ROCKS: &[&str] = &[
+        "cliffrock_01",
+        "cliffrock_02",
+        "cliffrock_03",
+        "cliffrock_04",
+        "cliffrock_05",
+        "cliffrock_06",
+        "cliffrock_07",
+        "cliffrock_08",
+    ];
+    let mut k = 0usize;
+    // Outcrops on the outer bowl. These GLBs are huge; keep them small and far
+    // so the forest is not inside a hollow cliff.
+    for i in 0..22 {
+        let n = {
+            let mut h = (i as u32).wrapping_mul(0x9e3779b9);
+            h ^= h >> 16;
+            (h >> 8) as f32 / 16777216.
+        };
+        let a = i as f32 / 22. * std::f32::consts::TAU + (n - 0.5) * 0.2;
+        let radius = 158. + n * 16.;
+        let x = 300. + a.cos() * radius;
+        let z = 5. + a.sin() * radius;
+        if x < 222. {
+            continue;
+        }
+        let scale = 0.038 + n * 0.034;
+        c.spawn((
+            Silt,
+            ClipCliffs,
+            WorldAssetRoot(
+                assets.load(format!("darkmod/rocks/{}.glb#Scene0", ROCKS[k % ROCKS.len()])),
+            ),
+            Transform::from_xyz(x, ground(x, z) - 1.1, z)
+                .with_scale(Vec3::splat(scale))
+                .with_rotation(Quat::from_rotation_y(a + std::f32::consts::PI)),
+            NotShadowCaster,
+            NotShadowReceiver,
+        ));
+        k += 1;
+    }
+}
+
+pub fn silt_visibility(
+    player: Query<&Transform, With<Player>>,
+    mut silt: Query<&mut Visibility, With<Silt>>,
+) {
+    let x = player.single().map(|t| t.translation.x).unwrap_or(0.);
+    let vis = if marsh(x) || rest(x) {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    for mut v in &mut silt {
+        *v = vis;
+    }
+}
+
+/// Dark Mod GLBs ship metallic 0 / roughness 0, which reads as chrome.
+pub fn fix_zero_roughness(mut materials: ResMut<Assets<StandardMaterial>>) {
+    for (_, mat) in materials.iter_mut() {
+        if mat.metallic <= 0.02 && mat.perceptual_roughness <= 0.08 {
+            mat.metallic = 0.0;
+            mat.perceptual_roughness = 0.9;
+        }
+    }
+}
+
+fn texture_is_cutout(img: &Image) -> bool {
+    let Some(data) = img.data.as_ref() else {
+        return false;
+    };
+    if data.len() < 4 {
+        return false;
+    }
+    let stride = if data.len() % 4 == 0 { 4 } else { 1 };
+    if stride != 4 {
+        return false;
+    }
+    let mut cut = 0u32;
+    let mut n = 0u32;
+    for px in data.chunks_exact(4).step_by(19) {
+        n += 1;
+        if px[3] < 115 {
+            cut += 1;
+        }
+    }
+    n > 0 && cut as f32 / n as f32 > 0.12
+}
+
+fn hull_name(name: &str) -> bool {
+    ["collision", "clip", "shadow", "nodraw", "playerclip", "monsterclip"]
+        .iter()
+        .any(|k| name.contains(k))
+}
+
+pub fn dress_darkmod(
+    roots: Query<Entity, Or<(With<ClipLeaves>, With<ClipCliffs>)>>,
+    children: Query<&Children>,
+    mesh_mats: Query<&MeshMaterial3d<StandardMaterial>>,
+    names: Query<&Name>,
+    images: Res<Assets<Image>>,
+    assets: Res<AssetServer>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut commands: Commands,
+    mut seen: Local<std::collections::HashSet<Entity>>,
+) {
+    let masonry = assets.load("darkmod/stone/castle_blocks.jpg");
+    for root in &roots {
+        let mut stack = vec![root];
+        let mut ents = Vec::new();
+        while let Some(entity) = stack.pop() {
+            if let Ok(ch) = children.get(entity) {
+                stack.extend(ch.iter());
+            }
+            ents.push(entity);
+        }
+        let mut textured = false;
+        let mut hulls = Vec::new();
+        let mut bare = Vec::new();
+        let mut paint = Vec::new();
+        for &entity in &ents {
+            commands
+                .entity(entity)
+                .insert((NotShadowCaster, NotShadowReceiver));
+            if seen.contains(&entity) {
+                if mesh_mats.get(entity).ok().and_then(|h| materials.get(&h.0)).is_some_and(|m| {
+                    m.base_color_texture.is_some()
+                }) {
+                    textured = true;
+                }
+                continue;
+            }
+            let named = names
+                .get(entity)
+                .map(|n| n.as_str().to_lowercase())
+                .unwrap_or_default();
+            let Ok(handle) = mesh_mats.get(entity) else {
+                continue;
+            };
+            let Some(mat) = materials.get(&handle.0) else {
+                continue;
+            };
+            let tex = mat.base_color_texture.clone();
+            let path = tex
+                .as_ref()
+                .and_then(|t| assets.get_path(t))
+                .map(|p| p.to_string().to_lowercase())
+                .unwrap_or_default();
+            if hull_name(&named) || hull_name(&path) {
+                hulls.push(entity);
+                continue;
+            }
+            if tex.is_none() {
+                bare.push(entity);
+                continue;
+            }
+            textured = true;
+            paint.push((entity, handle.0.clone(), path, tex.unwrap()));
+        }
+        for entity in hulls {
+            commands.entity(entity).insert(Visibility::Hidden);
+            seen.insert(entity);
+        }
+        if textured {
+            for entity in bare {
+                commands.entity(entity).insert(Visibility::Hidden);
+                seen.insert(entity);
+            }
+        } else {
+            for entity in bare {
+                let Ok(handle) = mesh_mats.get(entity) else {
+                    continue;
+                };
+                let Some(mut mat) = materials.get_mut(&handle.0) else {
+                    continue;
+                };
+                mat.base_color_texture = Some(masonry.clone());
+                mat.base_color = Color::srgb(0.84, 0.82, 0.78);
+                mat.alpha_mode = AlphaMode::Opaque;
+                mat.metallic = 0.0;
+                mat.perceptual_roughness = 0.93;
+                mat.occlusion_texture = None;
+                mat.cull_mode = None;
+                mat.double_sided = true;
+                mat.unlit = false;
+                seen.insert(entity);
+            }
+        }
+        for (entity, handle, path, tex) in paint {
+            let Some(mut mat) = materials.get_mut(&handle) else {
+                continue;
+            };
+            mat.metallic = 0.0;
+            mat.occlusion_texture = None;
+            mat.cull_mode = None;
+            mat.double_sided = true;
+            if mat.perceptual_roughness <= 0.08 {
+                mat.perceptual_roughness = 0.9;
+            }
+            let bark = path.contains("stem")
+                || path.contains("trunk")
+                || path.contains("bark")
+                || path.contains("wood");
+            let mut pending = false;
+            let foliage = !bark
+                && (path.contains("leaf")
+                    || path.contains("foliage")
+                    || path.contains("branch")
+                    || path.contains("needl")
+                    || match images.get(&tex) {
+                        Some(img) => texture_is_cutout(img),
+                        None => {
+                            pending = true;
+                            false
+                        }
+                    });
+            if foliage {
+                mat.alpha_mode = AlphaMode::Mask(0.45);
+            } else {
+                mat.alpha_mode = AlphaMode::Opaque;
+            }
+            if !pending {
+                seen.insert(entity);
+            }
+        }
+    }
+}
+
 fn pigment(m: &mut Assets<StandardMaterial>, rgb: [f32; 3], glow: f32) -> Handle<StandardMaterial> {
     let [r, g, b] = rgb;
     m.add(StandardMaterial {
@@ -47,6 +452,47 @@ fn pigment(m: &mut Assets<StandardMaterial>, rgb: [f32; 3], glow: f32) -> Handle
         perceptual_roughness: 0.85,
         ..default()
     })
+}
+
+fn repeat_tex(assets: &AssetServer, path: &'static str) -> Handle<Image> {
+    assets
+        .load_builder()
+        .with_settings(|s: &mut ImageLoaderSettings| {
+            s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                address_mode_u: ImageAddressMode::Repeat,
+                address_mode_v: ImageAddressMode::Repeat,
+                ..ImageSamplerDescriptor::linear()
+            });
+        })
+        .load(path)
+}
+
+fn world_uvs(mesh: &mut Mesh, scale: f32) {
+    let Some(uvs) = mesh.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| {
+        a.as_float3().map(|pos| {
+            let (mut min_x, mut max_x) = (f32::MAX, f32::MIN);
+            let (mut min_z, mut max_z) = (f32::MAX, f32::MIN);
+            for p in pos {
+                min_x = min_x.min(p[0]);
+                max_x = max_x.max(p[0]);
+                min_z = min_z.min(p[2]);
+                max_z = max_z.max(p[2]);
+            }
+            let along_x = (max_x - min_x) >= (max_z - min_z);
+            pos.iter()
+                .map(|p| {
+                    if along_x {
+                        [p[0] * scale, p[1] * scale]
+                    } else {
+                        [p[2] * scale, p[1] * scale]
+                    }
+                })
+                .collect::<Vec<[f32; 2]>>()
+        })
+    }) else {
+        return;
+    };
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 }
 pub fn setup(
     mut c: Commands,
@@ -62,7 +508,13 @@ pub fn setup(
     let mud = pigment(&mut mats, [0.32, 0.29, 0.20], 0.12);
     let reed = pigment(&mut mats, [0.28, 0.39, 0.21], 0.12);
     let wood = pigment(&mut mats, [0.27, 0.18, 0.13], 0.15);
-    let bone = pigment(&mut mats, [0.78, 0.75, 0.58], 0.25);
+    let bone = mats.add(StandardMaterial {
+        base_color: Color::srgb(0.94, 0.88, 0.74),
+        base_color_texture: Some(repeat_tex(&assets, "darkmod/stone/bone.jpg")),
+        perceptual_roughness: 0.88,
+        uv_transform: Affine2::from_scale(Vec2::splat(1.8)),
+        ..default()
+    });
     let blue = pigment(&mut mats, [0.20, 0.75, 0.92], 2.);
     let gold = pigment(&mut mats, [1., 0.56, 0.12], 2.);
     let white = pigment(&mut mats, [0.94, 0.94, 0.87], 1.5);
@@ -70,6 +522,7 @@ pub fn setup(
     let rare = pigment(&mut mats, [0.24, 0.68, 1.], 2.5);
     let bank = scans.surface("bank", &assets, &mut mats, &mud);
     let masonry = scans.surface("gate", &assets, &mut mats, &mud);
+    plant_forest(&mut c, &mut meshes, &mut mats, &assets);
     let mut prop =
         |mesh: &Handle<Mesh>, mat: &Handle<StandardMaterial>, x, y, z, w, h, d, roll: f32| {
             c.spawn((
@@ -82,7 +535,7 @@ pub fn setup(
             ));
         };
 
-    prop(&cube, &mud, 600., -0.16, 0., 40., 0.3, 40., 0.);
+    // Sable Rest ground is the bowl mesh in sable_rest::build, not a flat pad.
     for pt in [
         POST,
         SHRINE,
@@ -136,11 +589,39 @@ pub fn setup(
             );
         }
     }
+    struct Ossuary {
+        cube: Mesh,
+        round: Mesh,
+        batch: Option<Mesh>,
+    }
+    impl Ossuary {
+        fn add(&mut self, sphere: bool, x: f32, y: f32, z: f32, w: f32, h: f32, d: f32, roll: f32) {
+            let mut mesh = (if sphere { &self.round } else { &self.cube })
+                .clone()
+                .transformed_by(
+                    Transform::from_xyz(x, y, z)
+                        .with_scale(Vec3::new(w, h, d))
+                        .with_rotation(Quat::from_rotation_z(roll)),
+                );
+            world_uvs(&mut mesh, 0.22);
+            match &mut self.batch {
+                Some(b) => {
+                    let _ = b.merge(&mesh);
+                }
+                None => self.batch = Some(mesh),
+            }
+        }
+    }
+    let mut ossuary = Ossuary {
+        cube: Cuboid::from_size(Vec3::ONE).into(),
+        round: Sphere::new(1.).mesh().uv(10, 7),
+        batch: None,
+    };
     // Each rib is a tapered arc that rises from either bank of the spine.
     for i in 0..9 {
         let z = 8. - i as f32 * 2.05;
         let height = 7. + (i as f32 * 0.4).sin() * 3.;
-        prop(&round, &bone, 300., height, z, 0.75, 0.75, 1.5, 0.);
+        ossuary.add(true, 300., height, z, 0.75, 0.75, 1.5, 0.);
         for side in [-1., 1.] {
             for n in 0..6 {
                 let pt = |j: f32| {
@@ -151,9 +632,8 @@ pub fn setup(
                 let b = pt(n as f32 + 1.);
                 let mid = (a + b) / 2.;
                 let v = b - a;
-                prop(
-                    &cube,
-                    &bone,
+                ossuary.add(
+                    false,
                     mid.x,
                     mid.y,
                     z,
@@ -165,19 +645,13 @@ pub fn setup(
             }
         }
     }
-    prop(&round, &bone, 300., 7.2, -11., 2.8, 1.8, 3.5, 0.);
+    ossuary.add(true, 300., 7.2, -11., 2.8, 1.8, 3.5, 0.);
     for side in [-1., 1.] {
-        prop(
-            &cube,
-            &bone,
-            300. + side * 3.,
-            8.3,
-            -11.,
-            0.65,
-            4.5,
-            0.65,
-            -side * 1.0,
-        );
+        ossuary.add(false, 300. + side * 3., 8.3, -11., 0.65, 4.5, 0.65, -side * 1.0);
+    }
+    let ossuary_mesh = ossuary.batch.map(|mesh| meshes.add(mesh));
+    if let Some(ref handle) = ossuary_mesh {
+        prop(handle, &bone, 0., 0., 0., 1., 1., 1., 0.);
     }
     for z in [-98., -96.] {
         for x in [297., 303.] {
@@ -254,43 +728,63 @@ pub fn setup(
     for site in [LANTERN_ROAD, GATE] {
         for side in [-1., 1.] {
             let x = site.x + side * 1.65;
-            prop(&cube, &bone, x, 1.15, site.z, 0.44, 2.3, 0.44, 0.);
+            prop(&cube, &wood, x, 1.15, site.z, 0.44, 2.3, 0.44, 0.);
             prop(&cube, &blue, x, 2.5, site.z, 0.48, 0.5, 0.48, 0.);
         }
     }
-    for (x, z, path, size) in [
-        (POST.x - 1.8, POST.z - 1.2, "models/hooded_figure.glb", 1.),
-        (
-            SHRINE.x + 1.3,
-            SHRINE.z + 0.7,
-            "models/hooded_figure.glb",
-            1.,
-        ),
-        (
-            SHRINE.x,
-            SHRINE.z,
-            "kits/mini-dungeon/Models/GLB format/pot.glb",
-            2.,
-        ),
-        (
-            BLIND.x,
-            BLIND.z,
-            "kits/mini-dungeon/Models/GLB format/wood-structure.glb",
-            2.,
-        ),
-        (GATE.x + 1.5, GATE.z, "models/hooded_figure.glb", 1.),
-        (REST.x - 0.9, REST.z - 1.9, "models/hooded_figure.glb", 1.),
-        (
-            REST.x - 2.8,
-            REST.z - 1.1,
-            "kits/mini-dungeon/Models/GLB format/table.glb",
-            2.,
-        ),
+    // Shrine urn, hunter's lean-to, and rest table — generative, not Kenney.
+    prop(&round, &mud, SHRINE.x, 0.22, SHRINE.z, 0.32, 0.18, 0.32, 0.);
+    prop(&round, &wood, SHRINE.x, 0.48, SHRINE.z, 0.28, 0.34, 0.28, 0.);
+    prop(&round, &gold, SHRINE.x, 0.72, SHRINE.z, 0.16, 0.12, 0.16, 0.);
+    for (dx, dz, yaw) in [(0., 0.9, 0.), (0.85, 0., 1.2), (-0.7, 0.4, -0.7)] {
+        prop(
+            &cube,
+            &wood,
+            BLIND.x + dx,
+            0.85,
+            BLIND.z + dz,
+            1.35,
+            1.55,
+            0.12,
+            yaw,
+        );
+    }
+    prop(&cube, &wood, BLIND.x, 1.55, BLIND.z, 1.7, 0.1, 1.4, 0.18);
+    prop(&cube, &wood, REST.x - 2.8, 0.72, REST.z - 1.1, 1.45, 0.08, 0.72, 0.);
+    for side in [-0.58, 0.58] {
+        prop(
+            &cube,
+            &wood,
+            REST.x - 2.8 + side,
+            0.36,
+            REST.z - 1.1 + 0.24,
+            0.08,
+            0.72,
+            0.08,
+            0.,
+        );
+        prop(
+            &cube,
+            &wood,
+            REST.x - 2.8 + side,
+            0.36,
+            REST.z - 1.1 - 0.24,
+            0.08,
+            0.72,
+            0.08,
+            0.,
+        );
+    }
+    for (x, z) in [
+        (POST.x - 1.8, POST.z - 1.2),
+        (SHRINE.x + 1.3, SHRINE.z + 0.7),
+        (GATE.x + 1.5, GATE.z),
+        (REST.x - 0.9, REST.z - 1.9),
     ] {
         c.spawn((
             Silt,
-            WorldAssetRoot(assets.load(format!("{path}#Scene0"))),
-            Transform::from_xyz(x, 0., z).with_scale(Vec3::splat(size)),
+            WorldAssetRoot(assets.load("models/hooded_figure.glb#Scene0")),
+            Transform::from_xyz(x, 0., z),
         ));
     }
     for (slot, sites) in [
@@ -305,7 +799,7 @@ pub fn setup(
                 c.spawn((
                     Silt,
                     WorldAssetRoot(scene.0.clone()),
-                    Transform::from_xyz(x, -0.12, z)
+                    Transform::from_xyz(x, ground(x, z) - 0.12, z)
                         .with_rotation(Quat::from_rotation_y(i as f32 * 1.7)),
                 ));
             }
@@ -341,21 +835,14 @@ pub fn setup(
     .into_iter()
     .enumerate()
     {
-        let asset = if i % 3 == 0 {
-            "pine-fall-crooked"
-        } else if i % 3 == 1 {
-            "rocks"
-        } else {
-            "pine-crooked"
-        };
+        let birch = ["birch_03", "birch_04", "birch_05", "birch_06"][i % 4];
         c.spawn((
             Silt,
-            WorldAssetRoot(assets.load(format!(
-                "kits/graveyard-kit/Models/GLB format/{asset}.glb#Scene0"
-            ))),
-            Transform::from_xyz(x, -0.13, z)
+            ClipLeaves,
+            WorldAssetRoot(assets.load(format!("darkmod/trees/{birch}.glb#Scene0"))),
+            Transform::from_xyz(x, ground(x, z) - 0.13, z)
                 .with_rotation(Quat::from_rotation_y(i as f32))
-                .with_scale(Vec3::splat(2.2)),
+                .with_scale(Vec3::splat(0.034 + (i % 3) as f32 * 0.006)),
         ));
     }
     // Authored Idle_Sword, Walk, Sword_Slash and Death in the shipped hooded figure.
@@ -380,7 +867,7 @@ pub fn setup(
         } else {
             e.with_children(|root| {
                 let (length, girth, height, color) = match foe.id {
-                    OX => (2.3, 1.2, 1.7, &mud),
+                    OX => (2.3, 1.2, 1.7, &bone),
                     70000..=70001 | 70012..=70013 => (0.92, 0.38, 0.62, &wood),
                     70002..=70004 => (0.75, 0.85, 0.48, &reed),
                     70008..=70009 => (1.55, 0.23, 0.24, &bone),
@@ -647,7 +1134,9 @@ pub fn animate(
         let crouch = e.windup * 0.32;
         *tf = Transform::from_xyz(
             e.x,
-            if e.submerged { -0.45 } else { 0.03 } + (elapsed * 3. + e.x).sin().abs() * 0.045
+            ground(e.x, e.z)
+                + if e.submerged { -0.45 } else { 0.03 }
+                + (elapsed * 3. + e.x).sin().abs() * 0.045
                 - collapse * 0.4,
             e.z,
         )
@@ -814,6 +1303,7 @@ pub fn journal(
     keys: Res<ButtonInput<KeyCode>>,
     mut display: ResMut<DisplayState>,
     player: Query<&Transform, With<Player>>,
+    doors: Query<&sable_rest::InnDoor>,
     time: Res<Time>,
     mut prompt: Query<(&mut Text, &mut Visibility), (With<MarshPrompt>, Without<MarshHud>)>,
     mut hud: Query<(&mut Text, &mut Visibility, &mut Node), With<MarshHud>>,
@@ -904,6 +1394,17 @@ pub fn journal(
     } else if range(REST) < 4.5 {
         action = "E · Forge Cael’s Iron Edge · 4 Cold Iron + 1 Peat";
     }
+    if rest(net.region_x)
+        && at.distance(Vec2::new(608.41, 2.18)) < 2.6
+    {
+        if let Ok(door) = doors.single() {
+            action = if door.open {
+                "E · Close the inn door"
+            } else {
+                "E · Open the inn door"
+            };
+        }
+    }
     if HERONS.iter().any(|&p| range(p) < 4.5) {
         action = "E · Listen to the heron"
     }
@@ -949,7 +1450,7 @@ pub fn journal(
     }
     if display.inventory {
         lines.push_str(&format!(
-            "\n{name}\nShift dodge / Ctrl sprint / Q heal\nI pack / L {} drops",
+            "\n{name}\nShift roll / Space jump / Ctrl sprint / C crouch / R rest / Q heal\nI pack / L {} drops",
             if display.filter { "rare" } else { "all" }
         ));
         if range(POST) < 12. {
@@ -1039,26 +1540,14 @@ pub fn edda_animation(
     }
 }
 pub fn mist(
-    net: Res<ZoneNet>,
-    time: Res<Time>,
+    atmo: Res<crate::atmosphere::StickAtmosphere>,
     mut cameras: Query<&mut bevy::pbr::DistanceFog, With<Camera3d>>,
-    mut original: Local<Option<bevy::pbr::DistanceFog>>,
 ) {
     let Ok(mut fog) = cameras.single_mut() else {
         return;
     };
-    if net.online() && marsh(net.region_x) {
-        if original.is_none() {
-            *original = Some(fog.clone());
-        }
-        fog.color = Color::srgba(0.38, 0.39, 0.49, 0.91);
-        fog.falloff = bevy::pbr::FogFalloff::Linear {
-            start: if net.marsh.rain { 8. } else { 20. },
-            end: 128. + (time.elapsed_secs() * 0.055).sin() * 17.,
-        };
-    } else if let Some(old) = original.take() {
-        *fog = old;
-    }
+    let reach = crate::atmosphere::fog_visibility(&atmo);
+    *fog = crate::atmosphere::distance_fog(&atmo, reach);
 }
 
 #[derive(Component)]

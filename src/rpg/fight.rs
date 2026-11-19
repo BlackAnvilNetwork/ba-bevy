@@ -95,7 +95,9 @@ impl Fighter {
     pub fn note_cast(&mut self, label: &str, now: f32) {
         self.last_cast_label = label.to_string();
         self.last_cast_until = now + 2.2;
-        self.resting = false;
+        if label != "Rest" {
+            self.resting = false;
+        }
     }
 }
 
@@ -491,6 +493,9 @@ pub fn apply_ability_side_effects(
     }
 
     fighter.note_cast(&def.label, now);
+    if def.id == "rest" {
+        fighter.resting = true;
+    }
 }
 
 pub fn apply_ws_side_effects(fighter: &mut Fighter, ws: &WeaponSkillDef, now: f32) {
@@ -502,6 +507,7 @@ pub fn tick_rest(prog: &mut Progression, fighter: &mut Fighter, dt: f32) {
     if !fighter.resting {
         return;
     }
+    fighter.tp = (fighter.tp - 40.0 * dt).max(0.0);
     let hp_gain = (prog.vitals.max_hp as f32 * 0.08 * dt).max(1.0 * dt);
     let mp_gain = (prog.vitals.max_mp as f32 * 0.10 * dt).max(0.5 * dt);
     prog.hp = ((prog.hp as f32) + hp_gain)
@@ -512,6 +518,35 @@ pub fn tick_rest(prog: &mut Progression, fighter: &mut Fighter, dt: f32) {
             .min(prog.vitals.max_mp as f32)
             .round() as i32;
     }
+}
+
+/// R toggles Rest. WASD breaks it. Presentation plus local HP/MP tick.
+pub fn apply_rest(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    note: Res<crate::player::NoteComposer>,
+    flow: Res<crate::forge_menu::GameFlow>,
+    mut q: Query<(&mut Progression, &mut Fighter), With<crate::player::Player>>,
+) {
+    if flow.in_menu() || note.active {
+        return;
+    }
+    let Ok((mut prog, mut fighter)) = q.single_mut() else {
+        return;
+    };
+    let moving = keys.pressed(KeyCode::KeyW)
+        || keys.pressed(KeyCode::KeyA)
+        || keys.pressed(KeyCode::KeyS)
+        || keys.pressed(KeyCode::KeyD);
+    if moving {
+        fighter.resting = false;
+    } else if keys.just_pressed(KeyCode::KeyR) {
+        fighter.resting = !fighter.resting;
+        if fighter.resting {
+            fighter.note_cast("Rest", time.elapsed_secs());
+        }
+    }
+    tick_rest(&mut prog, &mut fighter, time.delta_secs());
 }
 
 pub fn mitigate_incoming_physical(raw: i32, fighter: &Fighter) -> i32 {

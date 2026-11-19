@@ -6,7 +6,7 @@ pub const POST: Pose = at(300., 93.);
 pub const GATE: Pose = at(300., -98.);
 pub const REST: Pose = at(600., 4.);
 // Separated from Pell and Cael so one interaction always has one destination.
-pub const GREYMERE_ROAD: Pose = at(28., -1.5);
+pub const GREYMERE_ROAD: Pose = at(17.5, -5.5);
 pub const LANTERN_ROAD: Pose = at(300., 103.);
 pub const SABLE_DOCK: Pose = at(600., 15.);
 pub const TRAVEL_REACH: f32 = 4.5;
@@ -42,9 +42,106 @@ pub fn marsh(x: f32) -> bool {
 pub fn rest(x: f32) -> bool {
     x > 550.
 }
+
+/// Terrain height in metres. Courtyards stay flat; bowls rise at the rim so the
+/// mesh edge is hidden but the sky stays open.
+pub fn ground(x: f32, z: f32) -> f32 {
+    if rest(x) {
+        return sable_ground(x, z);
+    }
+    if x < 80. {
+        return greymere_ground(x, z);
+    }
+    let in_skirt = (145.0..470.0).contains(&x);
+    if !marsh(x) && !in_skirt {
+        return 0.;
+    }
+    let hills = if marsh(x) {
+        7.4 * (x * 0.016).sin() * (z * 0.012).cos()
+            + 5.2 * ((x + 22.) * 0.025).sin()
+            + 6.1 * ((z - 9.) * 0.019).cos()
+            + 2.8 * ((x * 0.7 + z) * 0.037).sin()
+            + 3.2
+    } else {
+        0.
+    };
+    let dx = x - 300.;
+    let dz = z - 5.;
+    let r = dx.hypot(dz);
+    let ang = dz.atan2(dx);
+    let wobble = 1. + 0.18 * (ang * 2.7).sin() + 0.12 * (ang * 5.1 + 1.3).cos();
+    let rise = (r - 82. * wobble).max(0.);
+    let wall = (rise * 0.48 + rise * rise * 0.015).min(38.);
+    let mut h = hills + wall;
+    for (px, pz) in [
+        (POST.x, POST.z),
+        (GATE.x, GATE.z),
+        (SHRINE.x, SHRINE.z),
+        (BLIND.x, BLIND.z),
+        (LANTERN_ROAD.x, LANTERN_ROAD.z),
+    ] {
+        let d = (x - px).hypot(z - pz);
+        if d < 18. {
+            h *= (d / 18.).powi(2);
+        }
+    }
+    h.max(0.)
+}
+
+fn greymere_ground(x: f32, z: f32) -> f32 {
+    let hills = 0.58 * (x * 0.19).sin() * (z * 0.17).cos()
+        + 0.46 * ((x + 5.) * 0.27).sin()
+        + 0.38 * ((z - 2.) * 0.23).cos();
+    let dx = x - 8.;
+    let dz = z - 1.2;
+    let r = dx.hypot(dz);
+    let ang = dz.atan2(dx);
+    // Soft rim past the walkable rectangle so the floor stays flat and the
+    // hills are a backdrop, not a climb.
+    let wobble = 1. + 0.08 * (ang * 2.6).sin() + 0.05 * (ang * 4.9 + 0.7).cos();
+    let rise = (r - 38. * wobble).max(0.);
+    let wall = (rise * 0.45 + rise * rise * 0.028).min(14.);
+    let mut h = hills.max(0.) + wall;
+    for (px, pz, rad) in [
+        (0., -1.45, 8.),
+        (0.2, 6.4, 5.5),
+        (GREYMERE_ROAD.x, GREYMERE_ROAD.z, 7.5),
+        (1.45, 0.15, 4.5),
+    ] {
+        let d = (x - px).hypot(z - pz);
+        if d < rad {
+            h *= (d / rad).powi(2);
+        }
+    }
+    h.max(0.)
+}
+
+fn sable_ground(x: f32, z: f32) -> f32 {
+    let dx = x - 600.;
+    let r = dx.hypot(z);
+    let ang = z.atan2(dx);
+    let wobble = 1. + 0.16 * (ang * 2.4).sin() + 0.1 * (ang * 5.2 + 0.4).cos();
+    let rise = (r - 16. * wobble).max(0.);
+    let mut wall = (rise * 1.05 + rise * rise * 0.055).min(14.);
+    for (px, pz, rad) in [
+        (600., 0., 14.),
+        (REST.x, REST.z, 8.),
+        (SABLE_DOCK.x, SABLE_DOCK.z, 7.),
+    ] {
+        let d = (x - px).hypot(z - pz);
+        if d < rad {
+            wall *= (d / rad).powi(2);
+        }
+    }
+    wall.max(0.)
+}
+
+pub fn stand(x: f32, z: f32) -> f32 {
+    crate::PLAYER_HEIGHT + ground(x, z)
+}
 pub fn bounds(x: f32) -> (f32, f32, f32, f32) {
     if marsh(x) {
-        (215., 385., -105., 105.)
+        (198., 412., -148., 158.)
     } else if rest(x) {
         (580., 620., -20., 20.)
     } else {

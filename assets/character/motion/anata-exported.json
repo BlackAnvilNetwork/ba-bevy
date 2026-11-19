@@ -1,0 +1,32 @@
+{
+  "bones": {
+    "Hips": "hips",
+    "Spine1": "spine",
+    "Spine2": "chest",
+    "Chest": "upperChest",
+    "Neck1": "neck",
+    "Head": "head",
+    "LeftShoulder": "leftShoulder",
+    "LeftArm": "leftUpperArm",
+    "LeftForeArm": "leftLowerArm",
+    "LeftHand": "leftHand",
+    "RightShoulder": "rightShoulder",
+    "RightArm": "rightUpperArm",
+    "RightForeArm": "rightLowerArm",
+    "RightHand": "rightHand",
+    "LeftLeg": "leftUpperLeg",
+    "LeftShin": "leftLowerLeg",
+    "LeftFoot": "leftFoot",
+    "LeftToeBase": "leftToes",
+    "RightLeg": "rightUpperLeg",
+    "RightShin": "rightLowerLeg",
+    "RightFoot": "rightFoot",
+    "RightToeBase": "rightToes",
+    "Jaw": "Jaw",
+    "LeftEye": "leftEye",
+    "RightEye": "rightEye"
+  },
+  "rootScale": "auto",
+  "headingDegrees": 0,
+  "groundOffset": 0
+}

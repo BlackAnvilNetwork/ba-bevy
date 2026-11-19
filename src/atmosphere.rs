@@ -20,6 +20,7 @@ pub const ATMO_DEFAULT: f32 = 0.45;
 pub const DRAW_DEFAULT: f32 = 0.55;
 
 /// Stick `atmosphere::MIX_CAP`.
+#[allow(dead_code)]
 pub const MIX_CAP: f32 = 0.72;
 
 /// Stick `PALE_HOLLOW_LOOK`.
@@ -28,6 +29,7 @@ pub const HAZE_BASE: f32 = 0.012;
 pub const VALLEY_BETA: f32 = 0.018;
 #[allow(dead_code)]
 pub const SCALE_H: f32 = 10.0;
+#[allow(dead_code)]
 pub const HORIZON: u32 = 0x918b87;
 
 /// Stick `PALE_HOLLOW` params.
@@ -142,13 +144,53 @@ pub fn hex_linear(c: u32) -> LinearRgba {
 }
 
 /// Effective aerial β (1/m) after atmosphere slider — stick haze_base * scale.
+#[allow(dead_code)]
 pub fn haze_density(atmo: &StickAtmosphere) -> f32 {
     HAZE_BASE * atmosphere_scale(atmo.atmosphere_amount)
 }
 
 /// Visibility metres for Bevy atmospheric fog (≈ stick far disc).
 pub fn fog_visibility(atmo: &StickAtmosphere) -> f32 {
-    far_m(DRAW_DEFAULT) * (0.85 + 0.3 * (1.0 - atmo.atmosphere_amount))
+    far_m(DRAW_DEFAULT) * (0.95 + 0.25 * (1.0 - atmo.atmosphere_amount))
+}
+
+/// Air color for distance fade — dusk lavender, not grey and not night-black.
+pub fn air_color(atmo: &StickAtmosphere) -> Color {
+    let day = daylight(atmo.day_phase);
+    let night = LinearRgba::new(0.37, 0.39, 0.56, 1.0);
+    let dusk = hex_linear(HAZE);
+    let noon = hex_linear(0xa8c8e8);
+    let mix = |a: LinearRgba, b: LinearRgba, t: f32| {
+        let t = t.clamp(0.0, 1.0);
+        LinearRgba::new(
+            a.red + (b.red - a.red) * t,
+            a.green + (b.green - a.green) * t,
+            a.blue + (b.blue - a.blue) * t,
+            1.0,
+        )
+    };
+    let air = if day < 0.28 {
+        mix(night, dusk, day / 0.28)
+    } else {
+        mix(dusk, noon, (day - 0.28) / 0.72)
+    };
+    Color::from(air)
+}
+
+/// Draw-distance haze. Near ground stays clear; far meshes wash into sky air.
+pub fn distance_fog(atmo: &StickAtmosphere, visibility: f32) -> DistanceFog {
+    let air = air_color(atmo);
+    let day = daylight(atmo.day_phase);
+    let end = visibility.max(36.0);
+    DistanceFog {
+        color: air.with_alpha(1.0),
+        directional_light_color: Color::srgb(1.0, 0.55, 0.28).with_alpha(0.22 + 0.28 * day),
+        directional_light_exponent: 12.0,
+        falloff: FogFalloff::Linear {
+            start: (end * 0.32).max(16.0),
+            end,
+        },
+    }
 }
 
 /// Stick `lighting::noise1` — smooth 1-D value noise.
@@ -180,18 +222,7 @@ pub fn tick_atmosphere(time: Res<Time>, mut atmo: ResMut<StickAtmosphere>) {
 }
 
 pub fn camera_bundle(atmo: &StickAtmosphere) -> impl Bundle {
-    let day = daylight(atmo.day_phase);
-    let dusk = hex_linear(HAZE);
-    let night = hex_linear(0x14242c);
-    let haze = Color::linear_rgba(
-        dusk.red + (night.red - dusk.red) * (1.0 - day),
-        dusk.green + (night.green - dusk.green) * (1.0 - day),
-        dusk.blue + (night.blue - dusk.blue) * (1.0 - day),
-        1.0,
-    );
-    let horizon = hex_rgb(if day < 0.15 { 0x243044 } else { HORIZON });
     let sun = sun_dir(atmo.day_phase);
-    let warm = Color::srgb(1.0, 0.55, 0.28);
 
     (
         Camera3d::default(),
@@ -212,18 +243,7 @@ pub fn camera_bundle(atmo: &StickAtmosphere) -> impl Bundle {
             edge_compensation: 1.0,
             center: Vec2::new(0.5, 0.5),
         },
-        DistanceFog {
-            // Stick MIX_CAP: haze never fully replaces the pixel.
-            color: haze.with_alpha(MIX_CAP),
-            directional_light_color: warm.with_alpha(0.55),
-            directional_light_exponent: 8.0,
-            // Aerial reach from stick far-plane + atmosphere slider.
-            falloff: FogFalloff::from_visibility_colors(
-                fog_visibility(atmo) / (1.0 + haze_density(atmo) * 40.0),
-                haze,
-                horizon,
-            ),
-        },
+        distance_fog(atmo, fog_visibility(atmo)),
         Projection::from(PerspectiveProjection {
             fov: 75.0_f32.to_radians(),
             // Stick FAR ~60 m for cull; sky dome is beyond that so keep far open.

@@ -1,6 +1,12 @@
 //! The drowned abbey and the short plank causeway at Pell's landing.
-use super::Silt;
-use bevy::{prelude::*, render::render_resource::AsBindGroup, shader::ShaderRef};
+use super::{ClipCliffs, ClipLeaves, Silt};
+use ba_protocol::stillwater::ground;
+use bevy::{
+    image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
+    prelude::*,
+    render::render_resource::AsBindGroup,
+    shader::ShaderRef,
+};
 
 // World X, world Z, and scale of the intact arches mirrored by the fen water.
 const INTACT_ARCHES: [(f32, f32, f32); 4] = [
@@ -48,27 +54,69 @@ fn block(
     ));
 }
 
-fn kit(
+fn relic(
     c: &mut Commands,
     assets: &AssetServer,
-    kit: &str,
-    name: &str,
+    path: &str,
     pos: Vec3,
     scale: f32,
     yaw: f32,
 ) {
-    let format = if kit == "nature-kit" {
-        "GLTF format"
-    } else {
-        "GLB format"
-    };
     c.spawn((
         Silt,
-        WorldAssetRoot(assets.load(format!("kits/{kit}/Models/{format}/{name}.glb#Scene0"))),
+        ClipCliffs,
+        WorldAssetRoot(assets.load(format!("{path}#Scene0"))),
         Transform::from_translation(pos)
             .with_scale(Vec3::splat(scale))
             .with_rotation(Quat::from_rotation_y(yaw)),
     ));
+}
+
+fn ruined_keep(ashlar: &mut Ashlar, x: f32, z: f32, size: f32, seed: usize) {
+    let y0 = ground(x, z);
+    let unit = size * 0.32;
+    let stories = 6 + seed % 3;
+    for story in 0..stories {
+        let y = y0 + story as f32 * unit * 1.02;
+        let w = unit * (4.6 - story as f32 * 0.28);
+        for (i, (dx, dz, yaw)) in [
+            (0., 0.5, 0.),
+            (0., -0.5, 0.),
+            (0.5, 0., std::f32::consts::FRAC_PI_2),
+            (-0.5, 0., std::f32::consts::FRAC_PI_2),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if hash(seed + story * 11 + i) < 0.1 + story as f32 * 0.09 {
+                continue;
+            }
+            ashlar.place(
+                Vec3::new(x + dx * w, y + unit * 0.52, z + dz * w),
+                Vec3::new(w + unit * 0.14, unit, unit * 0.46),
+                Quat::from_rotation_y(yaw),
+                seed + story * 17 + i,
+            );
+        }
+    }
+    for k in 0..12 {
+        let a = hash(seed + 80 + k) * std::f32::consts::TAU;
+        let r = unit * (2.1 + hash(seed + 90 + k) * 2.8);
+        ashlar.place(
+            Vec3::new(
+                x + a.cos() * r,
+                y0 + hash(seed + k) * 0.42,
+                z + a.sin() * r,
+            ),
+            Vec3::new(
+                unit * (0.45 + hash(k + 3) * 0.7),
+                unit * (0.22 + hash(k + 5) * 0.4),
+                unit * (0.4 + hash(k + 8) * 0.55),
+            ),
+            Quat::from_rotation_y(a) * Quat::from_rotation_z((hash(k + 11) - 0.5) * 0.9),
+            seed + 110 + k,
+        );
+    }
 }
 
 fn hash(i: usize) -> f32 {
@@ -78,23 +126,89 @@ fn hash(i: usize) -> f32 {
     (n >> 8) as f32 / 16777216.
 }
 
-fn arch(
-    c: &mut Commands,
-    cube: &Handle<Mesh>,
-    stone: &[Handle<StandardMaterial>],
-    x: f32,
-    z: f32,
-    size: f32,
-    broken: bool,
-) {
-    let place = |c: &mut Commands, pos: Vec3, dims: Vec3, angle: f32, index: usize| {
-        block(
-            c,
-            cube,
-            &stone[index % stone.len()],
-            Vec3::new(x, 0., z) + pos * size,
+fn world_uvs(mesh: &mut Mesh, scale: f32) {
+    let Some(uvs) = mesh.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| {
+        a.as_float3().map(|pos| {
+            let (mut min_x, mut max_x) = (f32::MAX, f32::MIN);
+            let (mut min_z, mut max_z) = (f32::MAX, f32::MIN);
+            for p in pos {
+                min_x = min_x.min(p[0]);
+                max_x = max_x.max(p[0]);
+                min_z = min_z.min(p[2]);
+                max_z = max_z.max(p[2]);
+            }
+            let along_x = (max_x - min_x) >= (max_z - min_z);
+            pos.iter()
+                .map(|p| {
+                    if along_x {
+                        [p[0] * scale, p[1] * scale]
+                    } else {
+                        [p[2] * scale, p[1] * scale]
+                    }
+                })
+                .collect::<Vec<[f32; 2]>>()
+        })
+    }) else {
+        return;
+    };
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+}
+
+struct Ashlar {
+    cube: Mesh,
+    batch: Option<Mesh>,
+    mat: Handle<StandardMaterial>,
+}
+
+impl Ashlar {
+    fn place(&mut self, pos: Vec3, size: Vec3, rot: Quat, seed: usize) {
+        let j = hash(seed);
+        let k = hash(seed + 19);
+        let n = hash(seed + 41);
+        let wobble = size.length() * 0.045;
+        let pos = pos
+            + Vec3::new((j - 0.5) * wobble, (k - 0.5) * wobble * 0.7, (n - 0.5) * wobble);
+        let size = size
+            * Vec3::new(0.86 + j * 0.28, 0.88 + k * 0.24, 0.86 + n * 0.28);
+        let rot = rot
+            * Quat::from_rotation_y((j - 0.5) * 0.18)
+            * Quat::from_rotation_x((k - 0.5) * 0.12);
+        let mut mesh = self.cube.clone().transformed_by(
+            Transform::from_translation(pos)
+                .with_scale(size)
+                .with_rotation(rot),
+        );
+        world_uvs(&mut mesh, 0.28);
+        match &mut self.batch {
+            Some(b) => {
+                let _ = b.merge(&mesh);
+            }
+            None => self.batch = Some(mesh),
+        }
+    }
+
+    fn finish(self, c: &mut Commands, meshes: &mut Assets<Mesh>) {
+        let Some(mesh) = self.batch else {
+            return;
+        };
+        c.spawn((
+            Silt,
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(self.mat),
+            Transform::IDENTITY,
+        ));
+    }
+}
+
+fn arch(ashlar: &mut Ashlar, x: f32, z: f32, size: f32, broken: bool) {
+    let origin = Vec3::new(x, ground(x, z), z);
+    let seed = (x * 13. + z * 17.) as usize;
+    let place = |ashlar: &mut Ashlar, pos: Vec3, dims: Vec3, angle: f32, index: usize| {
+        ashlar.place(
+            origin + pos * size,
             dims * size,
             Quat::from_rotation_z(angle),
+            seed + index,
         );
     };
     for (n, side) in [-1., 1.].into_iter().enumerate() {
@@ -103,7 +217,7 @@ fn arch(
             for col in 0..2 {
                 let offset = (col as f32 - 0.5) * 0.52 * w;
                 place(
-                    c,
+                    ashlar,
                     Vec3::new(side * 3. + offset, row as f32 * 0.53 + 0.14, 0.),
                     Vec3::new(w * 0.51, 0.51, 1.3 + 0.04 * (row % 2) as f32),
                     0.,
@@ -118,14 +232,14 @@ fn arch(
             let v = b - a;
             let p = (a + b) * 0.5;
             place(
-                c,
+                ashlar,
                 Vec3::new(p.x, p.y, 0.),
                 Vec3::new(0.88, v.length() * 1.06, 1.26),
                 -v.x.atan2(v.y),
                 j + n * 7,
             );
             place(
-                c,
+                ashlar,
                 Vec3::new(p.x, p.y, -0.66),
                 Vec3::new(0.5, v.length() * 1.03, 0.16),
                 -v.x.atan2(v.y),
@@ -142,7 +256,8 @@ pub fn build(
     mut waters: ResMut<Assets<FenWater>>,
     assets: Res<AssetServer>,
 ) {
-    let cube = meshes.add(Cuboid::from_size(Vec3::ONE));
+    let cube_mesh: Mesh = Cuboid::from_size(Vec3::ONE).into();
+    let cube = meshes.add(cube_mesh.clone());
     let rock = meshes.add(Sphere::new(1.).mesh().ico(1).unwrap());
     let rod = meshes.add(Cylinder::new(0.5, 1.).mesh().resolution(8));
     let tip = meshes.add(Cone::new(0.5, 1.).mesh().resolution(7));
@@ -158,15 +273,16 @@ pub fn build(
             ..default()
         })
     };
-    let stones: Vec<_> = [0.55, 0.70, 0.82, 0.62, 0.94]
-        .map(|s| {
-            surface(
-                "limestone",
-                Color::linear_rgb(s * 0.48, s * 1.04, s * 1.65),
-                0.035 + s * 0.041,
-            )
+    let castle = assets
+        .load_builder()
+        .with_settings(|s: &mut ImageLoaderSettings| {
+            s.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+                address_mode_u: ImageAddressMode::Repeat,
+                address_mode_v: ImageAddressMode::Repeat,
+                ..ImageSamplerDescriptor::linear()
+            });
         })
-        .into();
+        .load("darkmod/stone/castle_blocks.jpg");
     let woods: Vec<_> = [0.42, 0.58, 0.79, 0.97]
         .map(|s| {
             surface(
@@ -177,25 +293,31 @@ pub fn build(
         })
         .into();
     let dirt = surface("earth", Color::srgb(0.84, 0.8, 0.73), 0.036);
+    let stone_mat = mats.add(StandardMaterial {
+        base_color: Color::srgb(0.84, 0.82, 0.78),
+        base_color_texture: Some(castle),
+        perceptual_roughness: 0.93,
+        ..default()
+    });
+    let mut ashlar = Ashlar {
+        cube: cube_mesh.clone(),
+        batch: None,
+        mat: stone_mat.clone(),
+    };
     let iron = super::pigment(&mut mats, [0.16, 0.19, 0.24], 0.18);
     let glass = super::pigment(&mut mats, [0.03, 0.62, 0.79], 1.9);
     let wick = super::pigment(&mut mats, [0.52, 0.98, 1.], 3.8);
     let amber = super::pigment(&mut mats, [1., 0.29, 0.032], 2.5);
     let honey = super::pigment(&mut mats, [1., 0.68, 0.10], 3.2);
-    c.spawn((
-        Silt,
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(170., 210.))),
-        MeshMaterial3d(waters.add(FenWater {
-            eye_time: Vec4::new(300., 2., 96., 0.),
-            arches: INTACT_ARCHES.map(|(x, z, scale)| Vec4::new(x, z, scale, 0.)),
-        })),
-        Transform::from_xyz(300., -0.105, 0.),
-    ));
+    let _ = waters.add(FenWater {
+        eye_time: Vec4::new(300., 2., 96., 0.),
+        arches: INTACT_ARCHES.map(|(x, z, scale)| Vec4::new(x, z, scale, 0.)),
+    });
     block(
         &mut c,
         &rock,
         &dirt,
-        v(300., -0.26, 93.0),
+        v(300., ground(300., 93.) - 0.26, 93.0),
         v(6.2, 0.48, 4.7),
         id,
     );
@@ -208,7 +330,7 @@ pub fn build(
             &woods[j % 4],
             v(
                 300. + (hash(j) - 0.5) * 0.11,
-                0.19 + hash(j + 17) * 0.026,
+                ground(300., z) + 0.19 + hash(j + 17) * 0.026,
                 z,
             ),
             v(2.28 + hash(j + 2) * 0.36, 0.16, 0.319),
@@ -221,7 +343,7 @@ pub fn build(
                     &mut c,
                     &rod,
                     &woods[(j + 2) % 4],
-                    v(300. + side * 1.27, h * 0.5 - 0.22, z),
+                    v(300. + side * 1.27, ground(300., z) + h * 0.5 - 0.22, z),
                     v(0.15, h, 0.16),
                     Quat::from_rotation_z(side * 0.045),
                 );
@@ -238,7 +360,7 @@ pub fn build(
         .into_iter()
         .chain(broken_arches)
     {
-        arch(&mut c, &cube, &stones, x, z, s, broken);
+        arch(&mut ashlar, x, z, s, broken);
         // The outer arcade still carries portions of the original wall above its vaults.
         if x < 290. || x > 310. {
             for column in 0..11 {
@@ -256,45 +378,34 @@ pub fn build(
                         0.
                     };
                 if crown > sill {
-                    block(
-                        &mut c,
-                        &cube,
-                        &stones[column % stones.len()],
+                    ashlar.place(
                         v(x + dx * s, (sill + crown) * 0.5 * s, z - 0.16 * s),
                         v(0.85, crown - sill, 1.04) * s,
                         id,
+                        column + x as usize,
                     );
                 }
             }
         }
     }
-    for (x, z, s) in [(302., 13., 5.1), (268., 29., 3.1), (339., 20., 2.7)] {
-        kit(
+    for (i, (x, z, s)) in [(302., 13., 5.1), (268., 29., 3.1), (339., 20., 2.7)]
+        .into_iter()
+        .enumerate()
+    {
+        let x = x + (hash(i + 3) - 0.5) * 1.6;
+        let z = z + (hash(i + 11) - 0.5) * 1.4;
+        ruined_keep(&mut ashlar, x, z, s, i * 91 + 4);
+        relic(
             &mut c,
             &assets,
-            "castle-kit",
-            "tower-square",
-            v(x, -0.12, z),
-            s,
-            0.,
-        );
-        kit(
-            &mut c,
-            &assets,
-            "castle-kit",
-            "tower-square-mid-open",
-            v(x, s * 1.25, z),
-            s,
-            0.,
-        );
-        kit(
-            &mut c,
-            &assets,
-            "castle-kit",
-            "tower-square-top-roof-high",
-            v(x, s * 2.17, z),
-            s,
-            0.,
+            "darkmod/arches/stone_arch01.glb",
+            v(
+                x + (hash(i + 21) - 0.5) * 2.4,
+                ground(x, z) - 0.2,
+                z + (hash(i + 29) - 0.5) * 2.2,
+            ),
+            0.014 + hash(i + 7) * 0.008,
+            hash(i + 5) * std::f32::consts::TAU,
         );
     }
     // Fallen nave walls step down from the belfry to the flooded transept.
@@ -304,13 +415,11 @@ pub fn build(
         (308.2, 14., 7.2, 4.1, 0.19),
         (313.2, 16., 3.8, 2.5, 0.46),
     ] {
-        block(
-            &mut c,
-            &cube,
-            &stones[0],
+        ashlar.place(
             v(x, height * 0.5, z),
             v(width, height, 3.2),
             Quat::from_rotation_y(yaw),
+            (x + z) as usize,
         );
     }
     // Grazing light picks out the ashlar joints and broken outer buttresses.
@@ -327,10 +436,7 @@ pub fn build(
         ));
         for row in 0..8 {
             for col in 0..if row < 4 { 3 } else { 2 } {
-                block(
-                    &mut c,
-                    &cube,
-                    &stones[(row + col * 3) % stones.len()],
+                ashlar.place(
                     v(
                         x + side * (5.9 + col as f32 * 0.85),
                         row as f32 * 0.76,
@@ -338,6 +444,7 @@ pub fn build(
                     ),
                     v(0.82, 0.72, 1.65),
                     Quat::from_rotation_z((hash(row + col) - 0.5) * 0.07),
+                    row * 3 + col + x as usize,
                 );
             }
         }
@@ -440,49 +547,81 @@ pub fn build(
         1.55 * v(0.055, 0.12, 0.052),
         id,
     );
-    kit(
+    block(
         &mut c,
-        &assets,
-        "castle-kit",
-        "flag-banner-short",
-        post + v(0.65, 2.12, 0.),
-        1.88,
-        1.57,
+        &cube,
+        &woods[1],
+        post + v(0.62, 2.55, 0.),
+        v(0.04, 1.15, 0.62),
+        Quat::from_rotation_y(1.52) * Quat::from_rotation_z(0.18),
     );
-    for (name, x, z, size, yaw) in [
-        ("gravestone-bevel", 302.9, 92.5, 1.8, -0.21),
-        ("gravestone-cross", 303.65, 91.55, 1.45, 0.31),
-        ("rocks", 303.4, 92.9, 1.3, 0.7),
-        ("fire-basket", 301.86, 93.25, 1.56, 0.2),
-        ("bench-damaged", 297.7, 90.9, 1.32, -0.5),
-    ] {
-        kit(
+    for (i, (path, x, z, size, yaw)) in [
+        ("darkmod/graveyard/grave_simple_1.glb", 302.9, 92.5, 0.034, -0.21),
+        ("darkmod/graveyard/grave_simple_3.glb", 303.65, 91.55, 0.03, 0.31),
+        ("darkmod/graveyard/grave_rect_ruined.glb", 303.4, 92.9, 0.032, 0.7),
+        ("darkmod/graveyard/urn.glb", 301.86, 93.25, 0.028, 0.2),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        relic(
             &mut c,
             &assets,
-            "graveyard-kit",
-            name,
-            v(x, 0.08, z),
-            size,
-            yaw,
+            path,
+            v(
+                x + (hash(i + 40) - 0.5) * 0.28,
+                ground(x, z) - 0.08,
+                z + (hash(i + 51) - 0.5) * 0.22,
+            ),
+            size * (0.9 + hash(i + 8) * 0.22),
+            yaw + (hash(i + 17) - 0.5) * 0.4,
         );
     }
-    kit(
+    // Damaged bench from stacked oak, not a Kenney stamp.
+    let bench = v(297.7, ground(297.7, 90.9) + 0.22, 90.9);
+    block(&mut c, &cube, &woods[0], bench, v(1.35, 0.09, 0.38), Quat::from_rotation_y(-0.5));
+    for side in [-0.52, 0.52] {
+        block(
+            &mut c,
+            &cube,
+            &woods[2],
+            bench + v(side, -0.18, 0.12),
+            v(0.08, 0.34, 0.08),
+            Quat::IDENTITY,
+        );
+        block(
+            &mut c,
+            &cube,
+            &woods[2],
+            bench + v(side, -0.18, -0.12),
+            v(0.08, 0.34, 0.08),
+            Quat::IDENTITY,
+        );
+    }
+    let hull = v(296.75, 0.16, 91.4);
+    block(
         &mut c,
-        &assets,
-        "nature-kit",
-        "canoe",
-        v(296.75, 0.13, 91.4),
-        3.4,
-        0.83,
+        &cube,
+        &woods[3],
+        hull,
+        v(2.15, 0.16, 0.62),
+        Quat::from_rotation_y(0.83),
     );
-    kit(
+    block(
         &mut c,
-        &assets,
-        "nature-kit",
-        "canoe_paddle",
-        v(297.5, 0.14, 92.3),
-        2.2,
-        -0.61,
+        &cube,
+        &woods[1],
+        hull + v(0., 0.14, 0.),
+        v(2.05, 0.08, 0.48),
+        Quat::from_rotation_y(0.83),
+    );
+    block(
+        &mut c,
+        &rod,
+        &woods[2],
+        v(297.5, 0.22, 92.3),
+        v(0.04, 1.15, 0.04),
+        Quat::from_rotation_z(-0.61) * Quat::from_rotation_x(1.1),
     );
     let staff = v(298.55, 0.06, 92.05);
     for (dx, y, length, tilt) in [
@@ -500,14 +639,18 @@ pub fn build(
         );
     }
     let marker = v(302.82, 0.76, 93.25);
-    block(
-        &mut c,
-        &cube,
-        &stones[3],
+    ashlar.place(
         marker,
         v(0.56, 1.62, 0.21),
         Quat::from_rotation_z(-0.25) * Quat::from_rotation_y(-0.25),
+        93,
     );
+    ashlar.finish(&mut c, &mut meshes);
+    let mut rubble = Ashlar {
+        cube: cube_mesh,
+        batch: None,
+        mat: stone_mat,
+    };
     for i in 0..8 {
         let a = i as f32 * 2.4;
         let r = 0.12 * hash(i + 1);
@@ -548,55 +691,65 @@ pub fn build(
             Transform::from_translation(pos),
         ));
     }
-    for i in 0..92 {
-        let side = if i % 2 == 0 { -1. } else { 1. };
-        let z = 95. - hash(i + 11) * 22.;
-        let x = 300. + side * (2.35 + hash(i + 700) * 7.);
-        let h = if (x - 300.).abs() < 5. && z > 89. {
-            0.055
-        } else {
-            -0.19
-        };
-        let name = if i % 11 == 0 {
-            "rock_smallFlatA"
-        } else if i % 7 == 0 {
-            "grass_leafsLarge"
-        } else {
-            "grass_large"
-        };
-        kit(
-            &mut c,
-            &assets,
-            "nature-kit",
-            name,
-            v(x, h, z),
-            1.2 + hash(i + 30) * 1.7,
-            hash(i + 3) * 6.,
-        );
-    }
+    const GRAVES: [&str; 7] = [
+        "darkmod/graveyard/grave_simple_1.glb",
+        "darkmod/graveyard/grave_simple_2.glb",
+        "darkmod/graveyard/grave_simple_4.glb",
+        "darkmod/graveyard/grave_simple_5.glb",
+        "darkmod/graveyard/grave_rect_ruined.glb",
+        "darkmod/graveyard/grave_big_1.glb",
+        "darkmod/graveyard/grave_wall_1.glb",
+    ];
     for i in 0..36 {
-        let x = 258. + hash(i + 24) * 83.;
-        let z = 16. + hash(i + 291) * 49.;
+        let x = 258. + hash(i + 24) * 83. + (hash(i + 61) - 0.5) * 2.4;
+        let z = 16. + hash(i + 291) * 49. + (hash(i + 73) - 0.5) * 2.1;
         if (x - 300.).abs() < 5. {
             continue;
         }
-        let name = if i % 3 == 0 {
-            "gravestone-broken"
+        if i % 3 == 0 {
+            relic(
+                &mut c,
+                &assets,
+                GRAVES[i % GRAVES.len()],
+                v(x, ground(x, z) - 0.12, z),
+                0.028 + hash(i + 77) * 0.016,
+                hash(i + 5) * 6.,
+            );
         } else if i % 3 == 1 {
-            "stone-wall-damaged"
+            rubble.place(
+                v(x, ground(x, z) + 0.55, z),
+                v(
+                    1.4 + hash(i + 4) * 1.1,
+                    0.7 + hash(i + 9) * 1.3,
+                    0.42 + hash(i + 13) * 0.3,
+                ),
+                Quat::from_rotation_y(hash(i + 5) * 6.)
+                    * Quat::from_rotation_z((hash(i + 19) - 0.5) * 0.22),
+                i * 13 + 8,
+            );
         } else {
-            "pine-crooked"
-        };
-        kit(
-            &mut c,
-            &assets,
-            "graveyard-kit",
-            name,
-            v(x, -0.28, z),
-            1.8 + hash(i + 77) * 1.7,
-            hash(i + 5) * 6.,
-        );
+            let birch = ["birch_02", "birch_03", "birch_04", "birch_05", "birch_06"][i % 5];
+            c.spawn((
+                Silt,
+                ClipLeaves,
+                WorldAssetRoot(assets.load(format!("darkmod/trees/{birch}.glb#Scene0"))),
+                Transform::from_translation(v(x, ground(x, z) - 0.55, z))
+                    .with_scale(Vec3::new(
+                        if hash(i + 11) > 0.5 { -1. } else { 1. }
+                            * (0.032 + hash(i + 77) * 0.016),
+                        0.032 + hash(i + 77) * 0.016,
+                        0.032 + hash(i + 77) * 0.016,
+                    ))
+                    .with_rotation(Quat::from_euler(
+                        EulerRot::YXZ,
+                        hash(i + 5) * 6.,
+                        (hash(i + 19) - 0.5) * 0.12,
+                        (hash(i + 31) - 0.5) * 0.1,
+                    )),
+            ));
+        }
     }
+    rubble.finish(&mut c, &mut meshes);
 }
 
 pub fn flicker(

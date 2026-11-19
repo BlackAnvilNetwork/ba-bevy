@@ -233,25 +233,6 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let dir = normalize(in.world_normal);
     let px = u32(in.position.x) & 1023u;
     let py = u32(in.position.y) & 1023u;
-    if mat.marsh > 1.5 {
-        let h = max(dir.y, 0.0);
-        let coord = dir.xz / (h + 0.12);
-        let f = fbm(coord.x * 1.25 + mat.time * 0.005, coord.y * 1.8, 5u);
-        let dusk = mix(vec3(0.37,0.226,0.33),vec3(0.106,0.076,0.17),smoothstep(0.0,0.45,h));
-        let bank = smoothstep(0.43,0.48,f);
-        let bands = floor(clamp((f-0.42)*3.7,0.0,0.99)*6.0)/5.0;
-        return vec4(mix(dusk,mix(vec3(0.10,0.085,0.16),vec3(0.27,0.205,0.32),bands),bank),1.0);
-    }
-    if mat.marsh > 0.5 {
-        let h = max(0.0, dir.y);
-        let coord = dir.xz / (h + 0.065);
-        let f = fbm(coord.x * 1.18 + mat.time * 0.006, coord.y * 1.8, 5u);
-        let dusk = mix(vec3(0.56,0.29,0.18), vec3(0.155,0.125,0.225), smoothstep(0.0,0.12,h));
-        let sky = mix(dusk, vec3(0.044,0.046,0.091), smoothstep(0.10,0.65,h));
-        let bank = smoothstep(0.40,0.54,f) * smoothstep(0.0,0.07,h);
-        let light = floor(clamp((f - 0.40) * 3.3,0.0,0.99)*5.0)/4.0;
-        return vec4(mix(sky,mix(vec3(0.033,0.037,0.068),vec3(0.205,0.174,0.262),light),bank),1.0);
-    }
     let rgb = shade(dir, px, py);
     return vec4(rgb, 1.0);
 }
