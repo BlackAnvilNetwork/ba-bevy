@@ -363,6 +363,14 @@ fn fist_angles(digit: u8, chain: u8) -> (f32, f32) {
     }
 }
 
+fn clip_playback_speed(clip: MotionClip) -> f32 {
+    if clip == MotionClip::Rest {
+        0.2
+    } else {
+        1.0
+    }
+}
+
 fn play_motion(
     player: &mut AnimationPlayer,
     transitions: &mut AnimationTransitions,
@@ -371,6 +379,7 @@ fn play_motion(
     blend_ms: u64,
 ) {
     let active = transitions.play(player, graph.node(clip), Duration::from_millis(blend_ms));
+    active.set_speed(clip_playback_speed(clip));
     if is_looping(clip) {
         active.repeat();
     }
@@ -1247,6 +1256,9 @@ mod pose_tests {
             MotionClip::Walk
         );
         assert!(is_looping(MotionClip::Rest));
+        assert!((clip_playback_speed(MotionClip::Rest) - 0.2).abs() < 0.001);
+        assert!((clip_playback_speed(MotionClip::Idle) - 1.0).abs() < 0.001);
+        assert!((clip_playback_speed(MotionClip::IdleToRest) - 1.0).abs() < 0.001);
     }
 
     #[test]
