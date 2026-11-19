@@ -57,7 +57,7 @@ use forge_menu::{
 };
 use forge_vfx::{setup_forge_vfx, tick_forge_vfx};
 use pixel_present::{attach_pixel_camera, fit_pixel_present, point_ui_at_present};
-use player::{grab_cursor, look_player, move_player, spawn_player, NoteComposer};
+use player::{grab_cursor, look_player, move_player, note_ghost_step, spawn_player, GhostStep, NoteComposer};
 use rpg::{
     apply_rest, apply_xp_grants, cycle_job, ensure_fighter, load_combat_kits, sync_hotbar_on_level,
     GrantXp,
@@ -130,6 +130,7 @@ fn main() {
         ))
         .init_resource::<StickAtmosphere>()
         .init_resource::<NoteComposer>()
+        .init_resource::<GhostStep>()
         .init_resource::<CameraView>()
         .init_resource::<character::SwingPose>()
         .init_resource::<WellPour>()
@@ -170,7 +171,8 @@ fn main() {
                 matte_avatar_materials.after(resolve_pending_avatars),
                 maybe_enable_zone_net,
                 connect_zone_on_enter,
-                send_local_move.run_if(in_yard).after(look_player),
+                note_ghost_step.run_if(in_yard),
+                send_local_move.run_if(in_yard).after(look_player).after(note_ghost_step),
                 apply_zone_snapshots.run_if(in_yard).after(send_local_move),
                 interpolate_remote_players.run_if(in_yard).after(apply_zone_snapshots),
                 refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
@@ -206,7 +208,7 @@ fn main() {
                 look_player.run_if(in_yard),
                 // Online movement has exactly one writer: net prediction.
                 // Offline developer mode retains the original Bevy locomotion.
-                move_player.run_if(offline_yard),
+                move_player.run_if(offline_yard).after(note_ghost_step),
                 update_proximity.run_if(in_yard),
                 handle_interact.run_if(offline_yard),
                 on_possess_request.after(handle_interact).run_if(in_yard),

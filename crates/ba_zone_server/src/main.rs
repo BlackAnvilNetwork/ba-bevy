@@ -55,6 +55,7 @@ struct MovementCommand {
     strafe: f32,
     yaw: f32,
     sprint: bool,
+    ghost: bool,
     received_at: Instant,
 }
 
@@ -261,7 +262,7 @@ fn tick_movement(w: &mut World, now: Instant) {
         } else if w.tick>=j.freeze {
             if let Some(cmd) = player.movement {
                 if now.duration_since(cmd.received_at) <= INPUT_TIMEOUT {
-                    player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, if w.tick<j.slow {DT*0.45}else{DT});
+                    player.pose = integrate_movement(player.pose, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint, ghost: cmd.ghost }, if w.tick<j.slow {DT*0.45}else{DT});
                     player.last_input_seq = cmd.seq;
                 }
             }
@@ -536,7 +537,7 @@ async fn handle_connection(
                                 write.send(Message::Text(welcome.to_json()?.into())).await?;
                                 info!("{peer}: admitted {} id={id} (authenticated={})", appearance.name, !mode.dev());
                             }
-                            Ok(ClientMessage::MoveIntent { seq, forward, strafe, yaw, sprint }) => {
+                            Ok(ClientMessage::MoveIntent { seq, forward, strafe, yaw, sprint, ghost }) => {
                                 let Some(id) = player_id else { continue };
                                 if !forward.is_finite() || !strafe.is_finite() || !yaw.is_finite()
                                     || forward.abs() > 1.0 || strafe.abs() > 1.0
@@ -561,7 +562,7 @@ async fn handle_connection(
                                 }
                                 // Keep only the most recent validated input; no movement here.
                                 p.movement = Some(MovementCommand {
-                                    seq, forward, strafe, yaw, sprint, received_at: now,
+                                    seq, forward, strafe, yaw, sprint, ghost, received_at: now,
                                 });
                             }
                             Ok(ClientMessage::Attack { target_id }) => {
@@ -601,7 +602,7 @@ async fn handle_connection(
                                         match action {
                                             ClientMessage::Interact=>stillwater::interact(p,tick,blind_clear),
                                             ClientMessage::Drink=>stillwater::drink(p,tick),
-                                            ClientMessage::Dodge{forward,strafe,yaw}=>stillwater::dodge(p,tick,MoveAxes{forward,strafe,yaw,sprint:true}),
+                                            ClientMessage::Dodge{forward,strafe,yaw}=>stillwater::dodge(p,tick,MoveAxes{forward,strafe,yaw,sprint:true,ghost:false}),
                                             _=>{}
                                         }
                                     }
@@ -878,16 +879,16 @@ mod tests {
     use super::*;
 
     fn test_command(now: Instant, seq: u64) -> MovementCommand {
-        MovementCommand { seq, forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: true, received_at: now }
+        MovementCommand { seq, forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: true, ghost: false, received_at: now }
     }
 
     #[test]
     fn movement_is_bound_to_tick_not_packet_count() {
         let now = Instant::now();
         let cmd = test_command(now, 5000);
-        let a = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        let a = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint, ghost: cmd.ghost }, DT);
         assert!((a.z - DEFAULT_SPAWN.z).abs() <= SPRINT_SPEED * DT + 0.0001);
-        let b = integrate_movement(a, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        let b = integrate_movement(a, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint, ghost: cmd.ghost }, DT);
         assert!((b.z - DEFAULT_SPAWN.z).abs() <= SPRINT_SPEED * DT * 2.0 + 0.0001);
         // 5000 inbound packets still correspond to just one latest input per tick.
     }
@@ -905,7 +906,7 @@ mod tests {
     fn diagonal_input_is_normalized() {
         let mut cmd = test_command(Instant::now(), 1);
         cmd.strafe = 1.0;
-        let next = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint }, DT);
+        let next = integrate_movement(DEFAULT_SPAWN, MoveAxes { forward: cmd.forward, strafe: cmd.strafe, yaw: cmd.yaw, sprint: cmd.sprint, ghost: cmd.ghost }, DT);
         let d = ((next.x - DEFAULT_SPAWN.x).powi(2) + (next.z - DEFAULT_SPAWN.z).powi(2)).sqrt();
         assert!(d <= SPRINT_SPEED * DT + 0.0001);
     }

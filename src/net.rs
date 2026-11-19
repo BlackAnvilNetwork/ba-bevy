@@ -24,7 +24,7 @@ use ba_protocol::{
 
 use crate::character::CharacterProfile;
 use crate::forge_menu::{Appearance, CharacterDraft, GameFlow};
-use crate::player::Player;
+use crate::player::{GhostStep, Player};
 use crate::rpg::JobId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -43,6 +43,8 @@ pub struct ZoneNet {
     pub region_x:f32,
     pub impact:Option<(Instant,bool,bool)>,
     pub last_amount:i32,
+    /// Last foe the local player swung at. Presentation facing only.
+    pub engage: Option<u32>,
     pub ashworks: ba_protocol::ashworks::AshworksView,
     pub enabled: bool,
     pub phase: ZonePhase,
@@ -138,7 +140,7 @@ mod prediction_tests {
         let spawn = Pose::default();
         let mut p = ZonePrediction::default();
         p.reset(Some(spawn));
-        let forward = MoveAxes { forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: false };
+        let forward = MoveAxes { forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: false, ghost: false };
         for _ in 0..4 {
             p.send(forward);
         }
@@ -156,13 +158,28 @@ mod prediction_tests {
     fn reconnect_clears_input_history_and_uses_new_spawn() {
         let mut p = ZonePrediction::default();
         p.reset(Some(Pose::default()));
-        let input = MoveAxes { forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: true };
+        let input = MoveAxes { forward: 1.0, strafe: 0.0, yaw: 0.0, sprint: true, ghost: false };
         p.send(input);
         let new_spawn = Pose { x: 9.0, ..Pose::default() };
         p.reset(Some(new_spawn));
         assert!(p.pending.is_empty());
         assert_eq!(p.next_seq, 0);
         assert_eq!(p.predicted, Some(new_spawn));
+    }
+
+    #[test]
+    fn combat_yaw_faces_negative_z_and_positive_x() {
+        let south = combat_yaw(0.0, 0.0, 0.0, -4.0).unwrap();
+        assert!(south.abs() < 0.001);
+        let east = combat_yaw(0.0, 0.0, 4.0, 0.0).unwrap();
+        assert!((east + std::f32::consts::FRAC_PI_2).abs() < 0.001);
+        assert!(combat_yaw(1.0, 1.0, 1.0, 1.0).is_none());
+        let camera = Quat::from_rotation_y(0.0);
+        let body = Quat::from_rotation_y(east);
+        assert!(
+            camera.angle_between(body) > 1.0,
+            "combat body yaw must not drag camera yaw"
+        );
     }
 }
 
@@ -427,13 +444,14 @@ fn zone_hotbar_press(keys: &ButtonInput<KeyCode>, job: JobId) -> Option<String> 
 
 pub fn send_local_move(
     flow: Res<GameFlow>,
-    net: Res<ZoneNet>,
+    mut net: ResMut<ZoneNet>,
     draft: Res<CharacterDraft>,
     profile: Res<CharacterProfile>,
     keys: Res<ButtonInput<KeyCode>>,
     mouse: Res<ButtonInput<MouseButton>>,
     player: Query<&Transform, With<Player>>,
     time: Res<Time>,
+    ghost: Res<GhostStep>,
     mut elapsed: Local<f32>,
     mut prediction: ResMut<ZonePrediction>,
 ) {
@@ -441,7 +459,7 @@ pub fn send_local_move(
         *elapsed = 0.0;
         return;
     }
-    let Some(tx) = net.tx.as_ref() else { return };
+    let Some(tx) = net.tx.clone() else { return };
     if keys.just_pressed(KeyCode::KeyE) {let _=tx.send(ClientMessage::Interact);}
     if keys.just_pressed(KeyCode::KeyQ) {let _=tx.send(ClientMessage::Drink);}
     if keys.just_pressed(KeyCode::ShiftLeft) {
@@ -454,6 +472,11 @@ pub fn send_local_move(
         let _ = tx.send(ClientMessage::Forge { recipe });
     }
     if mouse.just_pressed(MouseButton::Left) || keys.just_pressed(KeyCode::KeyF) {
+        if let Ok(tf) = player.single() {
+            if let Some((id, _, _)) = nearest_living_foe(&net, tf.translation) {
+                net.engage = Some(id);
+            }
+        }
         let _ = tx.send(ClientMessage::Attack { target_id: 0 });
     }
     if let Some(ability_id) = zone_hotbar_press(&keys, draft_job(&profile, &draft)) {
@@ -468,18 +491,68 @@ pub fn send_local_move(
 
     let Ok(transform) = player.single() else { return };
     let (yaw, _, _) = transform.rotation.to_euler(EulerRot::YXZ);
+    let ghosting = ghost.0.active(time.elapsed_secs());
+    let mut forward = (keys.pressed(KeyCode::KeyW) as i8 - keys.pressed(KeyCode::KeyS) as i8) as f32;
+    let strafe = (keys.pressed(KeyCode::KeyD) as i8 - keys.pressed(KeyCode::KeyA) as i8) as f32;
+    if ghosting && forward.abs() + strafe.abs() < 0.01 {
+        forward = 1.0;
+    }
     let axes = MoveAxes {
-        forward: (keys.pressed(KeyCode::KeyW) as i8 - keys.pressed(KeyCode::KeyS) as i8) as f32,
-        strafe: (keys.pressed(KeyCode::KeyD) as i8 - keys.pressed(KeyCode::KeyA) as i8) as f32,
+        forward,
+        strafe,
         yaw,
         sprint: keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight),
+        ghost: ghosting,
     };
     let seq = prediction.next_seq.saturating_add(1);
     if tx.send(ClientMessage::MoveIntent {
-        seq, forward: axes.forward, strafe: axes.strafe, yaw: axes.yaw, sprint: axes.sprint,
+        seq, forward: axes.forward, strafe: axes.strafe, yaw: axes.yaw, sprint: axes.sprint, ghost: axes.ghost,
     }).is_ok() {
         prediction.send(axes);
     }
+}
+
+pub(crate) fn combat_yaw(from_x: f32, from_z: f32, to_x: f32, to_z: f32) -> Option<f32> {
+    let dx = to_x - from_x;
+    let dz = to_z - from_z;
+    if dx * dx + dz * dz < 0.04 {
+        None
+    } else {
+        Some((-dx).atan2(-dz))
+    }
+}
+
+pub(crate) fn living_foe_xz(net: &ZoneNet, id: u32) -> Option<(f32, f32)> {
+    if let Some(e) = net.marsh.enemies.iter().find(|e| e.id == id && e.hp > 0) {
+        return Some((e.x, e.z));
+    }
+    let alive = net.ashworks.constructs.iter().any(|s| s.id == id && s.hp > 0);
+    if !alive {
+        return None;
+    }
+    ba_protocol::ashworks::CONSTRUCTS
+        .iter()
+        .find(|c| c.id == id)
+        .map(|c| (c.x, c.z))
+}
+
+fn nearest_living_foe(net: &ZoneNet, from: Vec3) -> Option<(u32, f32, f32)> {
+    let mut best: Option<(u32, f32, f32, f32)> = None;
+    for e in net.marsh.enemies.iter().filter(|e| e.hp > 0) {
+        let d = (e.x - from.x).powi(2) + (e.z - from.z).powi(2);
+        if best.is_none_or(|b| d < b.3) {
+            best = Some((e.id, e.x, e.z, d));
+        }
+    }
+    for s in net.ashworks.constructs.iter().filter(|s| s.hp > 0) {
+        if let Some(c) = ba_protocol::ashworks::CONSTRUCTS.iter().find(|c| c.id == s.id) {
+            let d = (c.x - from.x).powi(2) + (c.z - from.z).powi(2);
+            if best.is_none_or(|b| d < b.3) {
+                best = Some((c.id, c.x, c.z, d));
+            }
+        }
+    }
+    best.map(|(id, x, z, _)| (id, x, z))
 }
 
 const MAX_CACHED_AVATAR_SIZE: u64 = 32 * 1024 * 1024;
@@ -681,7 +754,10 @@ pub fn apply_zone_snapshots(
                     net.last_amount=damage;
                     net.impact=Some((Instant::now(),crit || [ba_protocol::stillwater::OX,ba_protocol::stillwater::EDDA,u32::MAX-1].contains(&attacker_id) || [ba_protocol::stillwater::OX,ba_protocol::stillwater::EDDA,u32::MAX-1].contains(&target_id),Some(target_id)==net.local_player_id));
                 }
-                if Some(attacker_id)==net.local_player_id { swing.strike(time.elapsed_secs()); }
+                if Some(attacker_id)==net.local_player_id {
+                    swing.strike(time.elapsed_secs());
+                    net.engage = Some(target_id);
+                }
                 if hit {
                     info!(
                         "Zone hit {attacker_id}->{target_id} dmg={damage}{} hp={target_hp}",
@@ -777,6 +853,12 @@ pub fn apply_zone_snapshots(
                 let alpha = 1.0 - (-20.0 * time.delta_secs()).exp();
                 transform.translation = transform.translation.lerp(goal, alpha);
             }
+        }
+    }
+
+    if let Some(id) = net.engage {
+        if living_foe_xz(&net, id).is_none() {
+            net.engage = None;
         }
     }
 

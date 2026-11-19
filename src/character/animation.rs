@@ -914,6 +914,29 @@ fn walk_arm(lower: bool, u: f32, side: f32, amp: f32, hit: f32, breath: f32) -> 
     pose
 }
 
+fn fight_body_facing(
+    net: Option<&crate::net::ZoneNet>,
+    swing: &SwingPose,
+    now: f32,
+    here: Vec3,
+) -> Option<Quat> {
+    let net = net.filter(|n| n.online())?;
+    if !swing
+        .started_at()
+        .is_some_and(|start| now - start < 1.2)
+    {
+        return None;
+    }
+    let id = net.engage?;
+    let (x, z) = crate::net::living_foe_xz(net, id)?;
+    let dx = x - here.x;
+    let dz = z - here.z;
+    if dx * dx + dz * dz > 144.0 {
+        return None;
+    }
+    crate::net::combat_yaw(here.x, here.z, x, z).map(Quat::from_rotation_y)
+}
+
 pub fn pose_humanoid_bones(
     zone: Option<Res<crate::net::ZoneNet>>,
     time: Res<Time>,
@@ -957,7 +980,15 @@ pub fn pose_humanoid_bones(
         let here = actor.translation;
         let step = (here - state.previous) * Vec3::new(1., 0., 1.);
         let first = local.is_some() && view.mode == CameraMode::FirstPerson;
-        if !state.initialized || first {
+        let fight_face = if local.is_some() && !first {
+            fight_body_facing(zone.as_deref(), &swing, time.elapsed_secs(), here)
+        } else {
+            None
+        };
+        if let Some(want) = fight_face {
+            // Body yaws toward the foe. Player/camera yaw stays on the mouse.
+            state.facing = state.facing.slerp(want, 1. - (-18. * dt).exp());
+        } else if !state.initialized || first {
             state.facing = actor.rotation;
         } else if step.length() > dt * 0.12 {
             let heading = Quat::from_rotation_y((-step.x).atan2(-step.z));
@@ -1217,6 +1248,12 @@ mod pose_tests {
             knee_swing.z > knee_stance.z + 0.4,
             "swing knee comes forward of the planted leg: swing {knee_swing:?} stance {knee_stance:?}"
         );
+    }
+
+    #[test]
+    fn fight_body_facing_is_off_without_a_swing() {
+        let swing = SwingPose::default();
+        assert!(fight_body_facing(None, &swing, 1.0, Vec3::ZERO).is_none());
     }
 
     #[test]

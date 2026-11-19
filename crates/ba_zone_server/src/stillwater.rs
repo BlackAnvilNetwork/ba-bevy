@@ -27,6 +27,7 @@ impl Default for Journey {
                 strafe: 0.,
                 yaw: 0.,
                 sprint: true,
+                ghost: false,
             },
             immune_until: 0,
             revive: 0,

@@ -73,6 +73,12 @@ impl Pose {
  */
 pub const WALK_SPEED: f32 = 3.5;
 pub const SPRINT_SPEED: f32 = 6.5;
+/// Extra planar speed while chaining Space ghost-steps. Still below a second sprint.
+pub const GHOST_STEP_BONUS: f32 = 1.2;
+/// Second Space inside this window starts/refreshes the skip. Seconds.
+pub const GHOST_CHAIN_WINDOW: f32 = 0.9;
+/// How long a chained tap keeps the bonus. Seconds.
+pub const GHOST_BOOST_SECS: f32 = 0.4;
 pub const DEV_ZONE_MIN_X: f32 = -16.0;
 pub const DEV_ZONE_MAX_X: f32 = 32.0;
 pub const DEV_ZONE_MIN_Z: f32 = -14.0;
@@ -81,12 +87,45 @@ pub const PLAYER_HEIGHT: f32 = 1.65;
 pub const TICK_DT: f32 = 1.0 / TICK_HZ as f32;
 
 /// One authoritative movement sample, *not* a client position.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct MoveAxes {
     pub forward: f32,
     pub strafe: f32,
     pub yaw: f32,
     pub sprint: bool,
+    /// Chained Space ghost-step. Presentation jump is unchanged; this only adds planar speed.
+    pub ghost: bool,
+}
+
+/// Client-side chain of Space taps. Server trusts the resulting `MoveAxes.ghost` flag.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct GhostStepChain {
+    last_tap: f32,
+    boost_until: f32,
+}
+
+impl GhostStepChain {
+    pub fn on_jump(&mut self, now: f32) {
+        if now.is_finite() && self.last_tap > 0.0 && now - self.last_tap <= GHOST_CHAIN_WINDOW {
+            self.boost_until = now + GHOST_BOOST_SECS;
+        }
+        if now.is_finite() {
+            self.last_tap = now;
+        }
+    }
+
+    pub fn active(self, now: f32) -> bool {
+        now.is_finite() && now < self.boost_until
+    }
+}
+
+pub fn movement_speed(sprint: bool, ghost: bool) -> f32 {
+    let base = if sprint { SPRINT_SPEED } else { WALK_SPEED };
+    if ghost {
+        base + GHOST_STEP_BONUS
+    } else {
+        base
+    }
 }
 
 impl MoveAxes {
@@ -109,11 +148,14 @@ pub fn integrate_movement(pose: Pose, axes: MoveAxes, dt: f32) -> Pose {
     let mut dx = -s * axes.forward + c * axes.strafe;
     let mut dz = -c * axes.forward - s * axes.strafe;
     let magnitude = (dx * dx + dz * dz).sqrt();
-    if magnitude > 1.0 {
+    if axes.ghost && magnitude <= 1e-5 {
+        dx = -s;
+        dz = -c;
+    } else if magnitude > 1.0 {
         dx /= magnitude;
         dz /= magnitude;
     }
-    let speed = if axes.sprint { SPRINT_SPEED } else { WALK_SPEED };
+    let speed = movement_speed(axes.sprint, axes.ghost);
     let (x0,x1,z0,z1)=stillwater::bounds(pose.x);
     let x = (pose.x + dx * speed * dt).clamp(x0, x1);
     let z = (pose.z + dz * speed * dt).clamp(z0, z1);
@@ -131,7 +173,7 @@ mod movement_tests {
 
     fn origin() -> Pose { Pose::default() }
     fn axes(forward: f32, strafe: f32) -> MoveAxes {
-        MoveAxes { forward, strafe, yaw: 0.0, sprint: true }
+        MoveAxes { forward, strafe, yaw: 0.0, sprint: true, ghost: false }
     }
 
     #[test]
@@ -178,6 +220,36 @@ mod movement_tests {
         assert!((DEV_ZONE_MIN_X..=DEV_ZONE_MAX_X).contains(&a.x));
         assert!((DEV_ZONE_MIN_Z..=DEV_ZONE_MAX_Z).contains(&a.z));
     }
+
+    #[test]
+    fn first_jump_does_not_boost_and_a_chain_does() {
+        let mut chain = GhostStepChain::default();
+        chain.on_jump(1.0);
+        assert!(!chain.active(1.0));
+        chain.on_jump(1.4);
+        assert!(chain.active(1.4));
+        assert!(chain.active(1.7));
+        assert!(!chain.active(1.4 + GHOST_BOOST_SECS + 0.01));
+        chain.on_jump(3.0);
+        assert!(!chain.active(3.0));
+    }
+
+    #[test]
+    fn chained_ghost_step_moves_standing_and_walks_slightly_faster() {
+        let standing = MoveAxes { ghost: true, ..MoveAxes::default() };
+        let hopped = integrate_movement(origin(), standing, TICK_DT);
+        let d = (hopped.x.powi(2) + hopped.z.powi(2)).sqrt();
+        assert!((d - movement_speed(false, true) * TICK_DT).abs() < 0.00001);
+
+        let walk = MoveAxes { forward: 1.0, ..MoveAxes::default() };
+        let ghost_walk = MoveAxes { forward: 1.0, ghost: true, ..MoveAxes::default() };
+        let a = integrate_movement(origin(), walk, TICK_DT);
+        let b = integrate_movement(origin(), ghost_walk, TICK_DT);
+        let da = (a.x.powi(2) + a.z.powi(2)).sqrt();
+        let db = (b.x.powi(2) + b.z.powi(2)).sqrt();
+        assert!(db > da + 0.02);
+        assert!(db < SPRINT_SPEED * TICK_DT);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -219,6 +291,8 @@ pub enum ClientMessage {
         strafe: f32,
         yaw: f32,
         sprint: bool,
+        #[serde(default)]
+        ghost: bool,
     },
     /// Engage sticky target for real-time auto-attacks. `target_id: 0` = nearest.
     Attack {

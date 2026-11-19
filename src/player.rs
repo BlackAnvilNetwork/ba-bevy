@@ -9,13 +9,20 @@ use bevy::{
 use crate::atmosphere::{self, StickAtmosphere};
 use crate::data::GameData;
 use crate::camera_rig::{CameraView,PlayerCamera};
-use ba_protocol::stillwater::{self, GATE, GREYMERE_ROAD, LANTERN_ROAD, POST, REST, SABLE_DOCK, TRAVEL_REACH};
+use ba_protocol::{
+    stillwater::{self, GATE, GREYMERE_ROAD, LANTERN_ROAD, POST, REST, SABLE_DOCK, TRAVEL_REACH},
+    GhostStepChain, GHOST_STEP_BONUS, SPRINT_SPEED, WALK_SPEED,
+};
 use crate::character::CharacterProfile;
 use crate::forge_menu::{Appearance, CharacterAppearance, CharacterName};
 use crate::rpg::Progression;
 
 #[derive(Component)]
 pub struct Player;
+
+/// Chained Space ghost-steps. The first tap is animation-only; repeats skip a little farther.
+#[derive(Resource, Default)]
+pub struct GhostStep(pub GhostStepChain);
 
 /// Open while a note to the session is being typed. Movement and talk pause.
 #[derive(Resource, Default)]
@@ -140,10 +147,25 @@ pub fn look_player(
     transform.rotation = Quat::from_rotation_y(yaw + delta_yaw);
 }
 
+pub fn note_ghost_step(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    note: Res<NoteComposer>,
+    mut ghost: ResMut<GhostStep>,
+) {
+    if note.active {
+        return;
+    }
+    if keys.just_pressed(KeyCode::Space) {
+        ghost.0.on_jump(time.elapsed_secs());
+    }
+}
+
 pub fn move_player(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
     note: Res<NoteComposer>,
+    ghost: Res<GhostStep>,
     mut player: Query<(&mut Transform, Option<&mut crate::rpg::Fighter>), With<Player>>,
 ) {
     if note.active {
@@ -169,17 +191,25 @@ pub fn move_player(
         direction += right;
     }
 
+    let ghosting = ghost.0.active(time.elapsed_secs());
+    if ghosting && direction == Vec3::ZERO {
+        direction = forward;
+    }
+
     if direction != Vec3::ZERO {
         if let Some(mut f) = fighter {
             f.resting = false;
         }
-        let speed = if keys.pressed(KeyCode::KeyC) {
+        let mut speed = if keys.pressed(KeyCode::KeyC) {
             1.6
         } else if keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight) {
-            6.5
+            SPRINT_SPEED
         } else {
-            3.5
+            WALK_SPEED
         };
+        if ghosting {
+            speed += GHOST_STEP_BONUS;
+        }
         transform.translation += direction.normalize() * speed * time.delta_secs();
         let (min_x, max_x, min_z, max_z) = stillwater::bounds(transform.translation.x);
         transform.translation.x = transform.translation.x.clamp(min_x, max_x);

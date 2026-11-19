@@ -310,12 +310,9 @@ pub fn tick(w: &mut World) -> Vec<ServerMessage> {
                     target_hp: p.hp,
                 });
             }
-            if matches!(id, 70002..=70004) {
-                let (sx, cz) = k.yaw.sin_cos();
-                k.x -= sx * 1.6;
-                k.z -= cz * 1.6;
-            }
-            if marsh && k.line && !matches!(id, 70002..=70004) {
+            // Melee beasts plant after a swing. Only long-body lunges (eels, ox)
+            // carry through the line — hounds circling/hopping read as bouncing.
+            if marsh && k.line && lunges_after_strike(id) {
                 let (sx, cz) = k.yaw.sin_cos();
                 k.x += sx * k.radius * 0.7;
                 k.z += cz * k.radius * 0.7;
@@ -358,13 +355,8 @@ pub fn tick(w: &mut World) -> Vec<ServerMessage> {
             k.z += (k.spec.z + r * t.cos() - k.z).clamp(-0.1, 0.1);
             continue;
         }
+        k.yaw = (p.pose.x - k.x).atan2(p.pose.z - k.z);
         let middle = id == sw::OX && k.hp <= k.spec.hp * 6 / 10 && k.hp > k.spec.hp * 3 / 10;
-        if matches!(id, 70000..=70001) && d < 5. && w.tick % 80 < 37 {
-            let angle = w.tick as f32 * 0.095;
-            k.x += (p.pose.x + angle.cos() * 3. - k.x).clamp(-0.13, 0.13);
-            k.z += (p.pose.z + angle.sin() * 3. - k.z).clamp(-0.13, 0.13);
-            continue;
-        }
         let likes_range = matches!(id,70002..=70004|70008..=70009|sw::OX);
         if marsh && !middle && d > if likes_range { 5.5 } else { 2.4 } {
             let speed = if id == sw::OX { 0.09 } else { 0.15 };
@@ -376,7 +368,6 @@ pub fn tick(w: &mut World) -> Vec<ServerMessage> {
             continue;
         }
         k.sequence += 1;
-        k.yaw = (p.pose.x - k.x).atan2(p.pose.z - k.z);
         k.line = marsh
             && (matches!(id,70000..=70004|70008..=70009) || id == sw::OX && k.sequence % 3 != 0);
         k.tell = if id == sw::EDDA && k.sequence % 3 == 0 || id == sw::OX && k.hp < k.spec.hp / 3 {
@@ -439,4 +430,22 @@ pub fn tick(w: &mut World) -> Vec<ServerMessage> {
         }
     }
     events
+}
+
+fn lunges_after_strike(id: u32) -> bool {
+    matches!(id, 70008..=70009 | sw::OX)
+}
+
+#[cfg(test)]
+mod fight_stance_tests {
+    use super::*;
+
+    #[test]
+    fn melee_hounds_plant_instead_of_lunging() {
+        assert!(!lunges_after_strike(70000));
+        assert!(!lunges_after_strike(70001));
+        assert!(!lunges_after_strike(70002));
+        assert!(lunges_after_strike(70008));
+        assert!(lunges_after_strike(sw::OX));
+    }
 }
