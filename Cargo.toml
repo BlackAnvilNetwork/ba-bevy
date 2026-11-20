@@ -16,6 +16,7 @@ exclude = ["launcher/src-tauri"]
 name = "black_anvil"
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 description = "Black Anvil opening slice — Bevy runtime"
 
 [dependencies]

@@ -102,3 +102,21 @@ cargo test -p ba_zone_server
 - Greymere Yard dusk opening, Village Head, forge jobs
 - Anata Character Studio BA mode + BaCharacterV1 drafts (colors/blendshapes captured when available)
 - Loopback zone presence + realtime melee / hotbar casts (prototype)
+
+## License (AGPL-3.0)
+
+**Black Anvil, Copyright (C) 2026 Black Anvil Network.** Licensed under the GNU Affero General Public License, version 3 or (at your option) any later version (`AGPL-3.0-or-later`). See [LICENSE](LICENSE).
+
+Borrowed third-party material is **not** AGPL:
+
+- `character-studio/` stays MIT (Atlas Foundation). See `character-studio/LICENSE`.
+- `assets/kits/` stays Kenney CC0. See each kit's `License.txt`.
+
+*This is a plain-language summary, not legal advice. The LICENSE text governs.*
+
+- **Network use counts.** If you run a modified version of the zone server, gateway, or client for users over a network, you must offer those users the complete corresponding source of your version (AGPL §13).
+- **Distributing the client counts.** Shipping the Bevy client, launcher, or any binary means offering the complete corresponding source, including Rust sources, build scripts and lockfiles (AGPL §6).
+- **Keep the notices.** Don't remove copyright lines, license notices or warranty disclaimers.
+- **Derivatives stay AGPL.** Modified versions and works based on this code must be licensed under AGPL-3.0-or-later.
+- **Mark modified files** with a prominent notice saying what you changed and when (AGPL §5a).
+- **No extra restrictions** beyond the license, and contributors grant the patent license in AGPL §11.

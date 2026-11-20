@@ -2,6 +2,7 @@
 name = "ba_pixel_sim"
 version = "0.1.0"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 description = "Pixel-field simulation — destruction eats an SDF and emits fragments"
 
 [dependencies]
