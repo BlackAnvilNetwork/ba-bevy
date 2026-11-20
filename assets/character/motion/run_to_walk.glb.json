@@ -3,7 +3,7 @@
   "command": "retarget",
   "discardedNonRootTranslations": false,
   "fps": 30.0,
-  "frames": 30,
+  "frames": 18,
   "headingDegrees": -0.07033416628837585,
   "mapping": {
     "bones": {
@@ -39,13 +39,13 @@
   },
   "protectedFrames": [
     0,
-    29
+    17
   ],
   "rootScale": 0.9209480285644531,
   "rootTravel": {
     "displacementMetres": 0.050483159720897675,
-    "pathMetres": 0.2728581428527832,
-    "peakSpeedMetresPerSecond": 0.8652954697608948
+    "pathMetres": 0.17774653434753418,
+    "peakSpeedMetresPerSecond": 0.7457207441329956
   },
   "source": "C:\\Users\\raxac\\OneDrive\\Desktop\\apps\\black-anvil\\.dream-loop\\motion\\run-to-walk-soma.glb",
   "target": "C:\\Users\\raxac\\AppData\\Local\\BlackAnvil\\characters\\1fe031bd-99ca-4674-81ef-a06c42463bf0\\revisions\\r2\\character.glb",

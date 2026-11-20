@@ -84,7 +84,17 @@ pub const DEV_ZONE_MAX_X: f32 = 32.0;
 pub const DEV_ZONE_MIN_Z: f32 = -14.0;
 pub const DEV_ZONE_MAX_Z: f32 = 20.0;
 pub const PLAYER_HEIGHT: f32 = 1.65;
+/// Studio GLBs are foot-origin. Seat them this far above `ground()` so soles
+/// rest on the dirt (bind mesh is ~1cm below the toe bones; the forest-floor
+/// albedo reads as volume). Player eye height stays `PLAYER_HEIGHT`.
+pub const AVATAR_GROUND_CLEARANCE: f32 = 0.05;
 pub const TICK_DT: f32 = 1.0 / TICK_HZ as f32;
+
+/// Local Y of a foot-origin avatar parented to a `stand()` actor.
+#[inline]
+pub fn avatar_local_y() -> f32 {
+    -PLAYER_HEIGHT + AVATAR_GROUND_CLEARANCE
+}
 
 /// One authoritative movement sample, *not* a client position.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -219,6 +229,12 @@ mod movement_tests {
         assert_eq!(a,b);
         assert!((DEV_ZONE_MIN_X..=DEV_ZONE_MAX_X).contains(&a.x));
         assert!((DEV_ZONE_MIN_Z..=DEV_ZONE_MAX_Z).contains(&a.z));
+    }
+
+    #[test]
+    fn avatar_seats_soles_on_the_height_field() {
+        assert!(avatar_local_y() > -PLAYER_HEIGHT);
+        assert!((avatar_local_y() + PLAYER_HEIGHT - AVATAR_GROUND_CLEARANCE).abs() < 1e-6);
     }
 
     #[test]

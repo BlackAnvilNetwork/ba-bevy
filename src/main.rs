@@ -38,7 +38,8 @@ use camera_rig::{CameraView, toggle_camera_mode, apply_camera_mode};
 use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
     bind_avatar_animators, update_avatar_animation,
-    discover_avatar_bones, pose_humanoid_bones, matte_avatar_materials,
+    discover_avatar_bones, pose_humanoid_bones, matte_avatar_materials, attach_held_weapon,
+    hide_held_weapon_hulls, stow_held_swords_while_resting,
 };
 use data::load_game_data;
 use net::{
@@ -178,6 +179,8 @@ fn main() {
                 refresh_remote_avatar_models.run_if(in_yard).after(interpolate_remote_players),
                 bind_avatar_animators.run_if(in_yard).after(refresh_remote_avatar_models),
                 discover_avatar_bones.run_if(in_yard).after(bind_avatar_animators),
+                attach_held_weapon.run_if(in_yard).after(discover_avatar_bones),
+                hide_held_weapon_hulls.run_if(in_yard).after(attach_held_weapon),
                 update_avatar_animation.run_if(in_yard).after(bind_avatar_animators),
                 toggle_camera_mode,
                 apply_camera_mode.after(toggle_camera_mode).after(attach_player_avatar),
@@ -216,6 +219,10 @@ fn main() {
                 tick_warden_acting.run_if(in_yard),
                 ensure_fighter.run_if(in_yard),
                 apply_rest.after(ensure_fighter).run_if(in_yard),
+                stow_held_swords_while_resting
+                    .after(apply_rest)
+                    .after(hide_held_weapon_hulls)
+                    .run_if(in_yard),
                 sync_hotbar_on_level.run_if(in_yard),
             ),
         )
@@ -284,6 +291,7 @@ fn main() {
             pose_humanoid_bones
                 .run_if(in_yard)
                 .after(bevy::app::AnimationSystems)
+                .after(bevy::animation::animate_targets)
                 .before(bevy::transform::TransformSystems::Propagate),
         )
         .run();

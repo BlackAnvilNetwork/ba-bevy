@@ -3,7 +3,7 @@
   "command": "retarget",
   "discardedNonRootTranslations": false,
   "fps": 30.0,
-  "frames": 57,
+  "frames": 15,
   "headingDegrees": -0.07033416628837585,
   "mapping": {
     "bones": {
@@ -38,15 +38,17 @@
     "rootScale": "auto"
   },
   "protectedFrames": [
-    0
+    0,
+    8,
+    14
   ],
   "rootScale": 0.9209480285644531,
   "rootTravel": {
-    "displacementMetres": 1.4901161193847656e-08,
-    "pathMetres": 0.45156583189964294,
-    "peakSpeedMetresPerSecond": 0.7245316505432129
+    "displacementMetres": 0.00020401286019477993,
+    "pathMetres": 0.02808389440178871,
+    "peakSpeedMetresPerSecond": 0.10250574350357056
   },
-  "source": "C:\\Users\\raxac\\OneDrive\\Desktop\\apps\\black-anvil\\.dream-loop\\motion\\walk-slash-1h-soma.glb",
+  "source": "C:\\Users\\raxac\\OneDrive\\Desktop\\apps\\black-anvil\\.dream-loop\\motion\\slash-1h-return-v13-soma.glb",
   "target": "C:\\Users\\raxac\\AppData\\Local\\BlackAnvil\\characters\\1fe031bd-99ca-4674-81ef-a06c42463bf0\\revisions\\r2\\character.glb",
   "toSoma": false,
   "tool": "tide-motion",

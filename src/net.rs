@@ -18,8 +18,8 @@ use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, Message};
 
 use ba_protocol::{
-    integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState, Pose, ServerMessage,
-    TraitRefWire, DEFAULT_WS_URL, PROTOCOL_VERSION, TICK_DT,
+    avatar_local_y, integrate_movement, AppearanceWire, ClientMessage, MoveAxes, PlayerState,
+    Pose, ServerMessage, TraitRefWire, DEFAULT_WS_URL, PROTOCOL_VERSION, TICK_DT,
 };
 
 use crate::character::CharacterProfile;
@@ -634,7 +634,7 @@ fn spawn_remote_player(
         let scene = commands.spawn((
             Name::new(format!("RemoteAvatar:{}",state.appearance.name)),
             WorldAssetRoot(handle),
-            Transform::from_xyz(0.0,-1.65,0.0),
+            Transform::from_xyz(0.0, avatar_local_y(), 0.0),
             Visibility::default(),
         )).id();
         crate::character::prepare_avatar_animation(commands, asset_server, graphs, scene, &uri.expect("verified avatar URI present with handle"));
@@ -677,7 +677,7 @@ pub fn refresh_remote_avatar_models(
             let scene=commands.spawn((
                 Name::new("RemoteVerifiedAvatar"),
                 WorldAssetRoot(handle.clone()),
-                Transform::from_xyz(0.0,-1.65,0.0),
+                Transform::from_xyz(0.0, avatar_local_y(), 0.0),
                 Visibility::default(),
             )).id();
             crate::character::prepare_avatar_animation(

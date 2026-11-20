@@ -1,5 +1,5 @@
 {
-  "method": "tide-motion generate + connect, retarget onto Anata export",
+  "method": "Locomotion: tide-motion generate + connect, retarget onto Anata. 1H slashes locked v13 (ba-author-slash.ps1). Dual wield v7: ba-author-slash-dw.ps1, high chamber then a diagonal chop, one slash per hand.",
   "map": "anata-exported.json",
   "clips": [
     {
@@ -56,7 +56,49 @@
       "file": "character/motion/slash_1h.glb",
       "loop": false,
       "kind": "oneshot",
-      "prompt": "Right-arm diagonal slash, then recover to guard."
+      "prompt": "A standing person chops downward in front of themselves with the right arm, the right elbow opening, in place."
+    },
+    {
+      "id": "slash_1h_return",
+      "file": "character/motion/slash_1h_return.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "A standing person chops upward in front of themselves with the right arm, the right elbow opening, in place."
+    },
+    {
+      "id": "slash_1h_sweep",
+      "file": "character/motion/slash_1h_sweep.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "A standing person swings the right arm across in front of the chest, the right elbow opening, in place."
+    },
+    {
+      "id": "slash_dw",
+      "file": "character/motion/slash_dw.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "A standing person chops down and across the body from high on the right toward the left hip, looking forward, in place."
+    },
+    {
+      "id": "slash_dw_left",
+      "file": "character/motion/slash_dw_left.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "A standing person chops down and across the body from high on the left toward the right hip, looking forward, in place."
+    },
+    {
+      "id": "slash_dw_return",
+      "file": "character/motion/slash_dw_return.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Reverse of slash_dw: the right arm returns from the left hip up to the high chamber."
+    },
+    {
+      "id": "slash_dw_left_return",
+      "file": "character/motion/slash_dw_left_return.glb",
+      "loop": false,
+      "kind": "oneshot",
+      "prompt": "Reverse of slash_dw_left: the left arm returns from the right hip up to the high chamber."
     },
     {
       "id": "slash_2h",
@@ -211,13 +253,6 @@
       "to": "idle"
     },
     {
-      "id": "walk_slash_1h",
-      "file": "character/motion/walk_slash_1h.glb",
-      "loop": false,
-      "kind": "oneshot",
-      "prompt": "Right-arm diagonal slash while walking, then recover to guard."
-    },
-    {
       "id": "crouch_to_crouch_walk",
       "file": "character/motion/crouch_to_crouch_walk.glb",
       "loop": false,
@@ -280,13 +315,6 @@
       "kind": "bridge",
       "from": "strafe_right",
       "to": "idle"
-    },
-    {
-      "id": "walk_slash_2h",
-      "file": "character/motion/walk_slash_2h.glb",
-      "loop": false,
-      "kind": "oneshot",
-      "prompt": "Both-arm overhead chop while walking, then recover."
     }
   ]
 }

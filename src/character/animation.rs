@@ -2,13 +2,12 @@
 //! The rendered character follows the authoritative movement Transform.
 //! Animation is presentation only; it cannot grant speed/combat outcomes.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
 use super::PlayerAvatarMesh;
 use crate::camera_rig::{CameraMode, CameraView};
-use crate::rpg::JobId;
 use bevy::prelude::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,9 +50,15 @@ enum MotionClip {
     IdleToStrafeRight,
     StrafeRightToIdle,
     WalkSlash2H,
+    Slash1HReturn,
+    Slash1HSweep,
+    SlashDw,
+    SlashDwLeft,
+    SlashDwReturn,
+    SlashDwLeftReturn,
 }
 
-const MOTION_CLIP_COUNT: usize = 38;
+const MOTION_CLIP_COUNT: usize = 44;
 
 const MOTION_ASSETS: [&str; MOTION_CLIP_COUNT] = [
     "character/motion/idle.glb",
@@ -84,7 +89,7 @@ const MOTION_ASSETS: [&str; MOTION_CLIP_COUNT] = [
     "character/motion/strafe_right.glb",
     "character/motion/idle_to_crouch.glb",
     "character/motion/crouch_to_idle.glb",
-    "character/motion/walk_slash_1h.glb",
+    "", // WalkSlash1H archived; 1H uses Slash1H / Return / Sweep in place.
     "character/motion/crouch_to_crouch_walk.glb",
     "character/motion/crouch_walk_to_crouch.glb",
     "character/motion/idle_to_walk_back.glb",
@@ -93,7 +98,13 @@ const MOTION_ASSETS: [&str; MOTION_CLIP_COUNT] = [
     "character/motion/strafe_left_to_idle.glb",
     "character/motion/idle_to_strafe_right.glb",
     "character/motion/strafe_right_to_idle.glb",
-    "character/motion/walk_slash_2h.glb",
+    "", // WalkSlash2H archived; moving 2H uses standing Slash2H.
+    "character/motion/slash_1h_return.glb",
+    "character/motion/slash_1h_sweep.glb",
+    "character/motion/slash_dw.glb",
+    "character/motion/slash_dw_left.glb",
+    "character/motion/slash_dw_return.glb",
+    "character/motion/slash_dw_left_return.glb",
 ];
 
 #[derive(Component)]
@@ -130,6 +141,7 @@ impl AvatarAnimationGraph {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum JointKind {
+    Shoulder,
     UpperArm,
     LowerArm,
     Hand,
@@ -142,7 +154,7 @@ enum JointKind {
 
 /// Rest/bind rotation captured *before* Bevy applies the first animation.
 /// The model is never replaced by a primitive viewmodel in first person.
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub(crate) struct AvatarJoint {
     root: Entity,
     rest: Quat,
@@ -173,11 +185,19 @@ pub(crate) struct AvatarMotion {
     authored_walk: bool,
     /// Close the fingers for unarmed punch clips. Presentation only.
     fist: bool,
+    /// Close the right hand around a one-hand grip. Presentation only.
+    grip_right: bool,
+    /// Close the left hand around a dual-wield offhand. Presentation only.
+    grip_left: bool,
     /// Idle/rest/crouch: hold neck and head at bind so the face is level.
     level_head: bool,
     /// One-foot jump clip is playing. Presentation hop only.
     jumping: bool,
     jump_phase: f32,
+    /// Rest clip is playing. Stow steel and plant a support hand.
+    resting: bool,
+    /// 0 = carry, 1 = planted. Eases across the 1.6 s sit / stand clips.
+    rest_support: f32,
 }
 
 #[derive(Component)]
@@ -222,22 +242,48 @@ fn load_motion_clip(
     }
 }
 
-fn attack_clip(job: JobId) -> MotionClip {
-    match job {
-        JobId::Fighter => MotionClip::Slash2H,
-        JobId::Knight | JobId::Rogue | JobId::Cleric | JobId::BattleMage => MotionClip::Slash1H,
-        _ => MotionClip::Punch,
+fn attack_clip(held: super::HeldWeapon) -> MotionClip {
+    match held {
+        super::HeldWeapon::Unarmed => MotionClip::Punch,
+        super::HeldWeapon::OneHand => MotionClip::Slash1H,
+        super::HeldWeapon::TwoHand => MotionClip::Slash2H,
+        super::HeldWeapon::DualWield => MotionClip::SlashDw,
     }
 }
 
-fn attack_clip_for(job: JobId, moving: bool, graph: &AvatarAnimationGraph) -> MotionClip {
-    let standing = attack_clip(job);
+fn attack_clip_for(held: super::HeldWeapon, moving: bool, graph: &AvatarAnimationGraph) -> MotionClip {
+    attack_clip_arc(held, moving, graph, SlashArc::Diagonal, 0)
+}
+
+fn attack_clip_arc(
+    held: super::HeldWeapon,
+    moving: bool,
+    graph: &AvatarAnimationGraph,
+    arc: SlashArc,
+    combo: u8,
+) -> MotionClip {
+    if held == super::HeldWeapon::DualWield {
+        return if combo % 2 == 1 && graph.has(MotionClip::SlashDwLeft) {
+            MotionClip::SlashDwLeft
+        } else {
+            MotionClip::SlashDw
+        };
+    }
+    if held == super::HeldWeapon::OneHand {
+        let standing = match arc {
+            SlashArc::Return if graph.has(MotionClip::Slash1HReturn) => MotionClip::Slash1HReturn,
+            SlashArc::Sweep if graph.has(MotionClip::Slash1HSweep) => MotionClip::Slash1HSweep,
+            _ => MotionClip::Slash1H,
+        };
+        // Standing Tide 1H oneshots play in place; root motion is the controller.
+        return standing;
+    }
+    let standing = attack_clip(held);
     if !moving {
         return standing;
     }
     match standing {
         MotionClip::Punch if graph.has(MotionClip::WalkPunch) => MotionClip::WalkPunch,
-        MotionClip::Slash1H if graph.has(MotionClip::WalkSlash1H) => MotionClip::WalkSlash1H,
         MotionClip::Slash2H if graph.has(MotionClip::WalkSlash2H) => MotionClip::WalkSlash2H,
         _ => standing,
     }
@@ -271,8 +317,11 @@ impl Drop for StrideSync<'_> {
     fn drop(&mut self) {
         self.motion.authored_walk = clip_owns_limbs(self.clip, self.moving);
         self.motion.fist = unarmed_fist(self.clip);
+        self.motion.grip_right = one_hand_grip(self.clip) || dual_right_grip(self.clip);
+        self.motion.grip_left = dual_left_grip(self.clip);
         self.motion.level_head = levels_head(self.clip);
         self.motion.jumping = jump_hop_clip(self.clip);
+        self.motion.resting = rest_pose(self.clip);
     }
 }
 
@@ -284,8 +333,6 @@ fn clip_drives_stride(clip: MotionClip) -> bool {
             | MotionClip::CrouchWalk
             | MotionClip::WalkPunch
             | MotionClip::WalkJump
-            | MotionClip::WalkSlash1H
-            | MotionClip::WalkSlash2H
             | MotionClip::IdleToWalk
             | MotionClip::WalkToIdle
             | MotionClip::WalkToRun
@@ -303,17 +350,66 @@ fn unarmed_fist(clip: MotionClip) -> bool {
     matches!(clip, MotionClip::Punch | MotionClip::WalkPunch)
 }
 
+fn one_hand_grip(clip: MotionClip) -> bool {
+    matches!(
+        clip,
+        MotionClip::Slash1H | MotionClip::Slash1HReturn | MotionClip::Slash1HSweep
+    )
+}
+
+fn dual_right_grip(clip: MotionClip) -> bool {
+    matches!(clip, MotionClip::SlashDw | MotionClip::SlashDwReturn)
+}
+
+fn dual_left_grip(clip: MotionClip) -> bool {
+    matches!(clip, MotionClip::SlashDwLeft | MotionClip::SlashDwLeftReturn)
+}
+
 /// Keep the boxing combo playing; retriggers must not rewind to the first jab.
 fn keeps_unarmed_combo(clip: MotionClip, oneshot: bool) -> bool {
     oneshot && unarmed_fist(clip)
 }
 
 fn levels_head(clip: MotionClip) -> bool {
-    matches!(clip, MotionClip::Idle | MotionClip::Rest | MotionClip::Crouch)
+    matches!(
+        clip,
+        MotionClip::Idle
+            | MotionClip::Rest
+            | MotionClip::Crouch
+            | MotionClip::Slash1H
+            | MotionClip::Slash1HReturn
+            | MotionClip::Slash1HSweep
+            | MotionClip::SlashDw
+            | MotionClip::SlashDwLeft
+            | MotionClip::SlashDwReturn
+            | MotionClip::SlashDwLeftReturn
+    )
 }
 
 fn jump_hop_clip(clip: MotionClip) -> bool {
     matches!(clip, MotionClip::Jump | MotionClip::WalkJump)
+}
+
+fn rest_pose(clip: MotionClip) -> bool {
+    matches!(clip, MotionClip::Rest | MotionClip::IdleToRest)
+}
+
+/// Matches idle_to_rest / rest_to_idle (1.63 s). Arms follow the sit, not the 80 ms graph blend.
+const REST_SUPPORT_SECS: f32 = 1.6;
+
+fn tick_rest_support(current: f32, sitting: bool, dt: f32) -> f32 {
+    let want = if sitting { 1. } else { 0. };
+    let step = (dt / REST_SUPPORT_SECS).max(0.);
+    if want > current {
+        (current + step).min(1.)
+    } else {
+        (current - step).max(0.)
+    }
+}
+
+fn rest_support_blend(support: f32) -> f32 {
+    let t = support.clamp(0., 1.);
+    t * t * (3. - 2. * t)
 }
 
 /// Tide owns the body except dead walk-back/strafe (and idle while sliding).
@@ -334,11 +430,18 @@ fn clip_owns_limbs(clip: MotionClip, moving: bool) -> bool {
     }
 }
 
-fn pose_finger(joint: &AvatarJoint, fist: bool) -> Quat {
-    let (curl_n, oppose_n) = if fist {
-        fist_angles(joint.digit, joint.chain)
-    } else {
-        (joint.curl, joint.oppose)
+#[derive(Clone, Copy)]
+enum FingerPose {
+    Relaxed,
+    Fist,
+    Grip,
+}
+
+fn pose_finger(joint: &AvatarJoint, pose: FingerPose) -> Quat {
+    let (curl_n, oppose_n) = match pose {
+        FingerPose::Relaxed => (joint.curl, joint.oppose),
+        FingerPose::Fist => fist_angles(joint.digit, joint.chain),
+        FingerPose::Grip => grip_angles(joint.digit, joint.chain),
     };
     let hinge = joint.axis.cross(Vec3::NEG_Y).normalize_or_zero();
     let curl = Quat::from_axis_angle(hinge, curl_n);
@@ -363,6 +466,24 @@ fn fist_angles(digit: u8, chain: u8) -> (f32, f32) {
     }
 }
 
+/// Wrap a short-sword hilt (~3cm). Boxing PIP (1.82 rad) folds the finger
+/// through the grip and reads as hyperextension from first person.
+fn grip_angles(digit: u8, chain: u8) -> (f32, f32) {
+    if digit == 0 {
+        return match chain {
+            0 => (0.62, 0.52),
+            1 => (0.70, 0.10),
+            _ => (0.48, 0.0),
+        };
+    }
+    let wrap = (digit as f32 - 1.0) * 0.04;
+    match chain {
+        0 => (0.78 + wrap, 0.0),
+        1 => (0.92 + wrap, 0.0),
+        _ => (0.50 + wrap, 0.0),
+    }
+}
+
 fn clip_playback_speed(clip: MotionClip) -> f32 {
     if clip == MotionClip::Rest {
         0.2
@@ -370,6 +491,15 @@ fn clip_playback_speed(clip: MotionClip) -> f32 {
         1.0
     }
 }
+
+/// Instant starts (idle→walk/strafe, jump takeoff, chop chain). MotionBricks
+/// connect is ≥0.6 s and would lag the 0.48 s combat clock.
+const RESPONSIVE_BLEND_MS: u64 = 120;
+/// Into a settling MotionBricks clip (walk→idle, rest, crouch).
+const SETTLING_BLEND_MS: u64 = 80;
+/// Chop-to-chop and other oneshot queues. 1H Tide cuts start at wind and
+/// end at follow-through; Bevy blends 80 ms between them.
+const ONESHOT_BLEND_MS: u64 = 80;
 
 fn play_motion(
     player: &mut AnimationPlayer,
@@ -496,6 +626,8 @@ fn joint_from_name(name: &str) -> Option<(JointKind, f32)> {
         JointKind::LowerArm
     } else if key.contains("upperarm") || (key.ends_with("leftarm") || key.ends_with("rightarm")) {
         JointKind::UpperArm
+    } else if key.contains("shoulder") {
+        JointKind::Shoulder
     } else if key.contains("thumb")
         || key.contains("index")
         || key.contains("middle")
@@ -524,6 +656,7 @@ fn joint_from_name(name: &str) -> Option<(JointKind, f32)> {
         return None;
     };
     let part_key = match part {
+        JointKind::Shoulder => "shoulder",
         JointKind::UpperArm => "upperarm",
         JointKind::LowerArm => {
             if key.contains("forearm") {
@@ -566,12 +699,14 @@ fn joint_from_name(name: &str) -> Option<(JointKind, f32)> {
         || key.contains(&format!("bipl{part_key}"))
         || key.ends_with(&format!("{part_key}l"))
         || (part == JointKind::UpperLeg && key.contains("biplthigh"))
-        || (part == JointKind::Finger && key.ends_with('l'));
+        // Mixamo `index.proximal.L` → `indexproximall`. Do not treat the
+        // trailing L in VRM `rightIndexProximal` as a left-side marker.
+        || (part == JointKind::Finger && key.ends_with('l') && !key.contains("right"));
     let is_right = key.contains("right")
         || key.contains(&format!("bipr{part_key}"))
         || key.ends_with(&format!("{part_key}r"))
         || (part == JointKind::UpperLeg && key.contains("biprthigh"))
-        || (part == JointKind::Finger && key.ends_with('r'));
+        || (part == JointKind::Finger && key.ends_with('r') && !key.contains("left"));
     if is_left == is_right {
         return None;
     }
@@ -666,6 +801,7 @@ pub fn discover_avatar_bones(
                 continue;
             };
             let next = match kind {
+                JointKind::Shoulder => &["upperarm", "arm"],
                 JointKind::UpperArm => &["lowerarm", "forearm", "elbow"][..],
                 JointKind::LowerArm => &["hand", "wrist"],
                 JointKind::Hand => &["index", "middle", "finger"],
@@ -725,6 +861,443 @@ pub fn discover_avatar_bones(
 }
 
 #[derive(Component)]
+pub(crate) struct HeldWeaponMesh;
+
+#[derive(Component)]
+pub(crate) struct HeldDarkmodSword;
+
+const DARKMOD_SHORTSWORD: &str = "darkmod/weapons/shortsword.glb";
+/// Dark Mod inches → metres. 35-unit blade becomes ~0.88 m, readable in 3P.
+const DARKMOD_SHORTSWORD_SCALE: f32 = 0.025;
+
+fn darkmod_shortsword_on_disk() -> bool {
+    motion_asset_path(DARKMOD_SHORTSWORD).is_file()
+}
+
+/// Chrona / VRM T-pose has identity hand rotation; fingers continue along
+/// ±X (right = -X), not +Y. Place the grip on that child axis so the blade
+/// leaves the fist instead of sitting above the wrist.
+fn held_sword_grip(along: Vec3, blade: Vec3) -> Transform {
+    let along = along.normalize_or(Vec3::NEG_X);
+    let blade = blade.normalize_or(Vec3::Y);
+    let rot = Quat::from_rotation_arc(Vec3::Y, blade);
+    // Grip mesh is centered at local +Y 0.05. Put that point in the palm so
+    // the handle occupies the fist instead of sprouting from the wrist.
+    let fist = along * 0.07 + Vec3::NEG_Y * 0.028;
+    Transform::from_translation(fist - rot * Vec3::new(0.0, 0.05, 0.0)).with_rotation(rot)
+}
+
+/// Dark Mod shortsword is authored along −Z (tip at −30). Local +X is the
+/// wide face (~9 units) and +Y is the thin edge (~1.5). Hilt stays in the
+/// fist (`along`). `blade` is the tip direction: idle passes chest-up so
+/// the rest pose is a hip-held sword, not a cane; authored slashes pass
+/// the finger axis so the cut orients the steel. Dual wield then yaws that
+/// tip slightly toward the foe.
+/// Quality camera is third person: roll the wide face sideways so the blade
+/// reads from behind. First person rolls the thin edge sideways instead.
+
+fn held_weapon_tf(along: Vec3, blade: Vec3, first_person: bool) -> Transform {
+    if !darkmod_shortsword_on_disk() {
+        return held_sword_grip(along, blade);
+    }
+    let along = along.normalize_or(Vec3::NEG_X);
+    let dir = blade.normalize_or(Vec3::Y);
+    let mut rot = Quat::from_rotation_arc(Vec3::NEG_Z, dir);
+    // Third person (behind): wide face on the side plane. First person: edge.
+    let face = if first_person {
+        rot * Vec3::Y
+    } else {
+        rot * Vec3::X
+    };
+    let stand = (Vec3::Y - dir * dir.dot(Vec3::Y)).normalize_or(Vec3::X);
+    rot = Quat::from_rotation_arc(face, stand) * rot;
+    let fist = along * 0.07 + Vec3::NEG_Y * 0.028;
+    Transform::from_translation(fist)
+        .with_rotation(rot)
+        .with_scale(Vec3::splat(DARKMOD_SHORTSWORD_SCALE))
+}
+
+/// Dual-wield: the steel attacks the foe (chest +Z). Keep the clip's cut
+/// angle, but never let the tip come back at the body.
+fn dual_blade_toward_foe(blade: Vec3, from_chest: Quat) -> Vec3 {
+    let blade = blade.normalize_or(Vec3::Y);
+    let mut world = from_chest * blade;
+    if world.z < 0.0 {
+        world.z = -world.z;
+    }
+    world = Vec3::new(world.x, world.y, world.z.max(0.42)).normalize_or(Vec3::Z);
+    from_chest.inverse() * world
+}
+
+/// Slight wrist roll so the palm cups a chest-up hilt. The first pass used
+/// `along × blade` and opened the hand the wrong way; wrap is the reverse.
+fn sword_wrist_roll(along: Vec3, blade: Vec3) -> Quat {
+    let along = along.normalize_or(Vec3::NEG_X);
+    let blade = blade.normalize_or(Vec3::Y);
+    let palm = (Vec3::NEG_Y - along * along.dot(Vec3::NEG_Y)).normalize_or_zero();
+    let wrap = blade.cross(along).normalize_or_zero();
+    if palm.length_squared() < 1e-4 || wrap.length_squared() < 1e-4 {
+        return Quat::IDENTITY;
+    }
+    let (axis, angle) = Quat::from_rotation_arc(palm, wrap).to_axis_angle();
+    Quat::from_axis_angle(axis, angle.min(0.62))
+}
+
+fn aim_bone(joint: &AvatarJoint, to: Vec3) -> Quat {
+    let from = (joint.rest * joint.axis).normalize_or(Vec3::NEG_X);
+    Quat::from_rotation_arc(from, to.normalize_or(Vec3::Z)) * joint.rest
+}
+
+/// Chest-space directions for the right-arm chain. Negative X is out to the
+/// character's right; negative Y is down. Forearm/hand stay forward-down so
+/// a 56cm blade cannot rise through the skull. Idle carry leaves the clavicle
+/// at rest — aiming `Shoulder` like an upper arm hunches the socket.
+/// Left arm reaches behind and down so the palm plants while sitting.
+/// Chest space: +X left, -Y down, -Z back.
+fn rest_support_goal(kind: JointKind) -> Vec3 {
+    match kind {
+        JointKind::Shoulder => Vec3::new(0.88, -0.10, -0.46),
+        JointKind::UpperArm => Vec3::new(0.36, -0.46, -0.81),
+        JointKind::LowerArm => Vec3::new(0.12, -0.74, -0.66),
+        JointKind::Hand => Vec3::new(0.06, -0.90, -0.43),
+        _ => Vec3::NEG_Z,
+    }
+    .normalize()
+}
+
+fn sword_carry_goal(kind: JointKind) -> Vec3 {
+    sword_carry_goal_side(kind, -1.0)
+}
+
+fn sword_carry_goal_side(kind: JointKind, sign: f32) -> Vec3 {
+    let goal = match kind {
+        JointKind::Shoulder => Vec3::NEG_X,
+        JointKind::UpperArm => Vec3::new(-0.38, -0.88, 0.28),
+        JointKind::LowerArm => Vec3::new(-0.08, -0.32, 0.94),
+        JointKind::Hand => Vec3::new(-0.06, -0.28, 0.955),
+        _ => Vec3::Z,
+    }
+    .normalize();
+    if sign > 0.0 {
+        Vec3::new(-goal.x, goal.y, goal.z).normalize()
+    } else {
+        goal
+    }
+}
+
+fn chest_goal_for_side(goal: Vec3, sign: f32) -> Vec3 {
+    if sign > 0.0 {
+        Vec3::new(-goal.x, goal.y, goal.z).normalize_or(goal)
+    } else {
+        goal
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SlashArc {
+    Diagonal = 0,
+    Return = 1,
+    Sweep = 2,
+}
+
+const SLASH_ARC_COUNT: u8 = 3;
+
+fn slash_arc_from(index: u8) -> SlashArc {
+    match index % SLASH_ARC_COUNT {
+        1 => SlashArc::Return,
+        2 => SlashArc::Sweep,
+        _ => SlashArc::Diagonal,
+    }
+}
+
+fn slash_hit(kind: JointKind) -> Vec3 {
+    match kind {
+        JointKind::Shoulder => Vec3::new(-0.10, -0.30, 0.95),
+        JointKind::UpperArm => Vec3::new(0.04, -0.22, 0.97),
+        JointKind::LowerArm => Vec3::new(0.02, -0.18, 0.98),
+        JointKind::Hand => Vec3::new(0.02, -0.22, 0.975),
+        _ => Vec3::Z,
+    }
+}
+
+/// Fallback IK when a Tide 1H oneshot is not playing (`grip_right` is
+/// false). Live 1H attacks use Slash1H / Return / Sweep; those skip this
+/// path and seat the blade on the posed fingers instead. y stays negative
+/// so a missing-clip fallback cannot lift the blade through the skull.
+fn slash_keyframes(kind: JointKind, arc: SlashArc) -> (Vec3, Vec3, Vec3) {
+    let hit = slash_hit(kind);
+    let (wind, follow) = match (kind, arc) {
+        (JointKind::Shoulder, SlashArc::Diagonal) => (
+            Vec3::new(-0.82, -0.42, 0.32),
+            Vec3::new(0.42, -0.48, 0.62),
+        ),
+        (JointKind::Shoulder, SlashArc::Return) => (
+            Vec3::new(0.42, -0.48, 0.62),
+            Vec3::new(-0.78, -0.45, 0.35),
+        ),
+        (JointKind::Shoulder, SlashArc::Sweep) => (
+            Vec3::new(-0.85, -0.32, 0.38),
+            Vec3::new(0.58, -0.36, 0.58),
+        ),
+        (JointKind::UpperArm, SlashArc::Diagonal) => (
+            Vec3::new(-0.78, -0.38, 0.42),
+            Vec3::new(0.55, -0.40, 0.62),
+        ),
+        (JointKind::UpperArm, SlashArc::Return) => (
+            Vec3::new(0.55, -0.40, 0.62),
+            Vec3::new(-0.72, -0.42, 0.42),
+        ),
+        (JointKind::UpperArm, SlashArc::Sweep) => (
+            Vec3::new(-0.80, -0.28, 0.48),
+            Vec3::new(0.62, -0.32, 0.60),
+        ),
+        (JointKind::LowerArm, SlashArc::Diagonal) => (
+            Vec3::new(-0.58, -0.26, 0.76),
+            Vec3::new(0.50, -0.28, 0.80),
+        ),
+        (JointKind::LowerArm, SlashArc::Return) => (
+            Vec3::new(0.50, -0.28, 0.80),
+            Vec3::new(-0.55, -0.28, 0.76),
+        ),
+        (JointKind::LowerArm, SlashArc::Sweep) => (
+            Vec3::new(-0.62, -0.22, 0.74),
+            Vec3::new(0.62, -0.24, 0.74),
+        ),
+        (JointKind::Hand, SlashArc::Diagonal) => (
+            Vec3::new(-0.72, -0.28, 0.62),
+            Vec3::new(0.58, -0.30, 0.74),
+        ),
+        (JointKind::Hand, SlashArc::Return) => (
+            Vec3::new(0.58, -0.30, 0.74),
+            Vec3::new(-0.70, -0.28, 0.64),
+        ),
+        (JointKind::Hand, SlashArc::Sweep) => (
+            Vec3::new(-0.78, -0.24, 0.58),
+            Vec3::new(0.72, -0.26, 0.62),
+        ),
+        _ => (Vec3::Z, Vec3::Z),
+    };
+    (wind, hit, follow)
+}
+
+fn sword_slash_goal(kind: JointKind, t: f32, arc: SlashArc) -> Vec3 {
+    let t = t.clamp(0., 1.);
+    let (wind, hit, follow) = slash_keyframes(kind, arc);
+    let to = if t < 0.45 {
+        wind.lerp(hit, t / 0.45)
+    } else {
+        hit.lerp(follow, (t - 0.45) / 0.55)
+    };
+    to.normalize()
+}
+
+fn sword_carry_rotation(joint: &AvatarJoint) -> Quat {
+    aim_bone(joint, sword_carry_goal(joint.kind))
+}
+
+fn sword_slash_rotation(joint: &AvatarJoint, t: f32) -> Quat {
+    sword_slash_rotation_arc(joint, t, SlashArc::Diagonal)
+}
+
+fn sword_slash_rotation_arc(joint: &AvatarJoint, t: f32, arc: SlashArc) -> Quat {
+    aim_bone(joint, sword_slash_goal(joint.kind, t, arc))
+}
+
+fn sword_chain_rank(kind: JointKind) -> Option<u8> {
+    match kind {
+        JointKind::Shoulder => Some(0),
+        JointKind::UpperArm => Some(1),
+        JointKind::LowerArm => Some(2),
+        JointKind::Hand => Some(3),
+        _ => None,
+    }
+}
+
+fn swing_clock(swing: &SwingPose, now: f32) -> f32 {
+    swing
+        .started_at()
+        .map_or(1., |start| ((now - start) / 0.48).clamp(0., 1.))
+}
+
+fn spawn_held_sword(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    asset_server: &AssetServer,
+    hand: Entity,
+    along: Vec3,
+    name: &str,
+) {
+    let grip = held_weapon_tf(along, Vec3::Y, false);
+    if darkmod_shortsword_on_disk() {
+        let scene: Handle<WorldAsset> = asset_server
+            .load(GltfAssetLabel::Scene(0).from_asset(DARKMOD_SHORTSWORD.to_string()));
+        let root = commands
+            .spawn((
+                HeldWeaponMesh,
+                HeldDarkmodSword,
+                Name::new(name.to_string()),
+                WorldAssetRoot(scene),
+                grip,
+                Visibility::Visible,
+            ))
+            .id();
+        commands.entity(hand).add_child(root);
+        return;
+    }
+    let cube = meshes.add(Cuboid::new(1., 1., 1.));
+    let wood = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.18, 0.12, 0.08),
+        perceptual_roughness: 0.86,
+        metallic: 0.0,
+        reflectance: 0.22,
+        ..default()
+    });
+    let steel = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.62, 0.64, 0.68),
+        perceptual_roughness: 0.45,
+        metallic: 0.32,
+        reflectance: 0.38,
+        ..default()
+    });
+    let root = commands
+        .spawn((
+            HeldWeaponMesh,
+            Name::new(name.to_string()),
+            grip,
+            Visibility::Visible,
+        ))
+        .id();
+    commands.entity(hand).add_child(root);
+    commands.entity(root).with_children(|c| {
+        c.spawn((
+            Mesh3d(cube.clone()),
+            MeshMaterial3d(wood),
+            Transform::from_xyz(0.0, 0.05, 0.0).with_scale(Vec3::new(0.026, 0.11, 0.026)),
+            Visibility::Visible,
+        ));
+        c.spawn((
+            Mesh3d(cube.clone()),
+            MeshMaterial3d(steel.clone()),
+            Transform::from_xyz(0.0, 0.12, 0.0).with_scale(Vec3::new(0.09, 0.016, 0.032)),
+            Visibility::Visible,
+        ));
+        c.spawn((
+            Mesh3d(cube),
+            MeshMaterial3d(steel),
+            Transform::from_xyz(0.0, 0.42, 0.0).with_scale(Vec3::new(0.032, 0.56, 0.012)),
+            Visibility::Visible,
+        ));
+    });
+}
+
+/// Parent a short sword on the local right hand when the draft has a weapon.
+/// Dual wield also parents the same mesh on the left. Unarmed stay empty-handed.
+pub fn attach_held_weapon(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    profile: Res<super::CharacterProfile>,
+    hands: Query<(Entity, &AvatarJoint, Option<&Name>)>,
+    local_roots: Query<(), With<PlayerAvatarMesh>>,
+    existing: Query<(), With<HeldWeaponMesh>>,
+) {
+    if existing.iter().next().is_some() {
+        return;
+    }
+    let held = profile
+        .draft
+        .as_ref()
+        .map(super::BaCharacterV1::held_weapon)
+        .unwrap_or(super::HeldWeapon::Unarmed);
+    if held == super::HeldWeapon::Unarmed {
+        return;
+    }
+    let dual = held == super::HeldWeapon::DualWield;
+    let mut targets: Vec<(Entity, Vec3, bool, String)> = Vec::new();
+    for (hand, joint, hand_name) in &hands {
+        if joint.kind != JointKind::Hand || local_roots.get(joint.root).is_err() {
+            continue;
+        }
+        let right = joint.sign < 0.0;
+        if !right && !dual {
+            continue;
+        }
+        let label = hand_name
+            .map(Name::as_str)
+            .unwrap_or(if right { "right hand" } else { "left hand" })
+            .to_string();
+        targets.push((hand, joint.axis, right, label));
+    }
+    for (hand, along, right, label) in targets {
+        info!("Parented held sword to {label} along {along:?}");
+        spawn_held_sword(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            &asset_server,
+            hand,
+            along,
+            if right {
+                "HeldSword"
+            } else {
+                "HeldSwordOffhand"
+            },
+        );
+    }
+}
+
+fn resting_sword_visibility(resting: bool) -> Visibility {
+    if resting {
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    }
+}
+
+/// Rest puts the steel away. R again or WASD brings it back.
+pub fn stow_held_swords_while_resting(
+    fighters: Query<&crate::rpg::Fighter, With<crate::player::Player>>,
+    mut swords: Query<&mut Visibility, With<HeldWeaponMesh>>,
+) {
+    let Ok(fighter) = fighters.single() else {
+        return;
+    };
+    let want = resting_sword_visibility(fighter.resting);
+    for mut vis in &mut swords {
+        if *vis != want {
+            *vis = want;
+        }
+    }
+}
+
+pub fn hide_held_weapon_hulls(
+    roots: Query<Entity, With<HeldWeaponMesh>>,
+    children: Query<&Children>,
+    names: Query<&Name>,
+    mut vis: Query<&mut Visibility>,
+) {
+    for root in &roots {
+        let mut stack = vec![root];
+        while let Some(entity) = stack.pop() {
+            if let Ok(ch) = children.get(entity) {
+                stack.extend(ch.iter());
+            }
+            let named = names
+                .get(entity)
+                .map(|n| n.as_str().to_lowercase())
+                .unwrap_or_default();
+            if named.contains("collision") || named.contains("clip") {
+                if let Ok(mut v) = vis.get_mut(entity) {
+                    *v = Visibility::Hidden;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Component)]
 pub struct LocalEye;
 
 /// Visual swing clock. Local boss strikes and server-resolved zone swings
@@ -732,10 +1305,20 @@ pub struct LocalEye;
 #[derive(Resource, Default)]
 pub struct SwingPose {
     started: Option<f32>,
+    slash: u8,
 }
 impl SwingPose {
     pub fn strike(&mut self, now: f32) {
+        if self.started.is_some() {
+            self.slash = self.slash.wrapping_add(1);
+        }
         self.started = Some(now);
+    }
+    fn slash_arc(&self) -> SlashArc {
+        slash_arc_from(self.slash)
+    }
+    fn combo(&self) -> u8 {
+        self.slash
     }
     pub fn started_at(&self) -> Option<f32> {
         self.started
@@ -793,7 +1376,7 @@ fn roll_root(progress: f32) -> (Vec3, Quat) {
         0.0
     };
     let spin = Quat::from_rotation_x(-std::f32::consts::TAU * t);
-    (Vec3::Y * (-1.65 + hop), spin)
+    (Vec3::Y * (ba_protocol::avatar_local_y() + hop), spin)
 }
 
 /// Upward one-foot takeoff. Space jump is presentation only.
@@ -942,6 +1525,7 @@ pub fn pose_humanoid_bones(
     time: Res<Time>,
     view: Res<CameraView>,
     swing: Res<SwingPose>,
+    profile: Option<Res<super::CharacterProfile>>,
     mut roots: Query<
         (
             Entity,
@@ -951,13 +1535,24 @@ pub fn pose_humanoid_bones(
             &mut AvatarMotion,
             Option<&PlayerAvatarMesh>,
         ),
-        Without<AvatarJoint>,
+        (Without<AvatarJoint>, Without<HeldWeaponMesh>),
     >,
-    actors: Query<&Transform, (Without<AvatarMotion>, Without<AvatarJoint>)>,
+    actors: Query<
+        &Transform,
+        (
+            Without<AvatarMotion>,
+            Without<AvatarJoint>,
+            Without<HeldWeaponMesh>,
+        ),
+    >,
     world: Query<&GlobalTransform>,
     mut joints: Query<
-        (&AvatarJoint, &ChildOf, &GlobalTransform, &mut Transform),
-        Without<AvatarMotion>,
+        (Entity, &AvatarJoint, &ChildOf, &GlobalTransform, &mut Transform),
+        (Without<AvatarMotion>, Without<HeldWeaponMesh>),
+    >,
+    mut swords: Query<
+        (&ChildOf, &mut Transform, Has<HeldDarkmodSword>),
+        (With<HeldWeaponMesh>, Without<AvatarMotion>, Without<AvatarJoint>),
     >,
 ) {
     let dt = time.delta_secs().max(0.0001);
@@ -968,7 +1563,7 @@ pub fn pose_humanoid_bones(
         };
         if state.model_yaw.is_none() {
             let mut shoulders = [None, None];
-            for (joint, _, tf, _) in joints.iter() {
+            for (_, joint, _, tf, _) in joints.iter() {
                 if joint.root == entity && joint.kind == JointKind::UpperArm {
                     shoulders[usize::from(joint.sign < 0.)] = Some(tf.translation());
                 }
@@ -1022,6 +1617,7 @@ pub fn pose_humanoid_bones(
         } else {
             state.jump_phase = 0.0;
         }
+        state.rest_support = tick_rest_support(state.rest_support, state.resting, dt);
         // GlobalTransforms still describe the previous frame. Express aim in
         // that frame too, cancelling movement of the actor and camera.
         let frame = global.rotation() * correction.inverse();
@@ -1041,13 +1637,33 @@ pub fn pose_humanoid_bones(
                 local.is_some(),
                 state.authored_walk,
                 state.fist,
+                state.grip_right,
+                state.grip_left,
                 state.level_head,
                 state.jumping,
                 state.jump_phase,
+                state.rest_support,
             ),
         );
     }
-    for (joint, parent, _, mut tf) in &mut joints {
+    let sword_parents: HashSet<Entity> = swords.iter().map(|(parent, _, _)| parent.parent()).collect();
+    let armed_roots: HashSet<Entity> = joints
+        .iter()
+        .filter_map(|(entity, joint, _, _, _)| {
+            sword_parents.contains(&entity).then_some(joint.root)
+        })
+        .collect();
+    let dual = swords.iter().count() >= 2
+        || profile
+            .as_deref()
+            .and_then(|p| p.draft.as_ref())
+            .is_some_and(|d| d.held_weapon() == super::HeldWeapon::DualWield);
+    let armed = !armed_roots.is_empty()
+        || profile
+            .as_deref()
+            .and_then(|p| p.draft.as_ref())
+            .is_some_and(|d| d.held_weapon() != super::HeldWeapon::Unarmed);
+    for (_entity, joint, parent, _, mut tf) in &mut joints {
         let Some(&(
             frame,
             phase,
@@ -1056,9 +1672,12 @@ pub fn pose_humanoid_bones(
             local,
             authored_walk,
             fist,
+            grip_right,
+            grip_left,
             level_head,
             jumping,
             jump_phase,
+            rest_support,
         )) = frames.get(&joint.root)
         else {
             continue;
@@ -1070,6 +1689,18 @@ pub fn pose_humanoid_bones(
             continue;
         }
         let head_joint = matches!(joint.kind, JointKind::Head | JointKind::Neck);
+        let armed_here = armed_roots.contains(&joint.root) || (armed && local);
+        // Armed 1H: do not use the unarmed FP reach. Left arm stays on the
+        // idle clip; the right arm is posed by the sword chain below.
+        let first = first
+            && !(armed_here
+                && matches!(
+                    joint.kind,
+                    JointKind::Shoulder
+                        | JointKind::UpperArm
+                        | JointKind::LowerArm
+                        | JointKind::Hand
+                ));
         // Authored boxing owns the limbs. First person still poses idle/walk,
         // but not during punch — that was replacing the clip with a limp swing.
         let clip_limb = authored_walk
@@ -1109,18 +1740,34 @@ pub fn pose_humanoid_bones(
                 let flex = Quat::from_axis_angle(flex_axis, 0.18);
                 let roll = Quat::from_axis_angle(joint.axis, side * 0.22);
                 tf.rotation = joint.rest * roll * flex;
-            } else {
-                tf.rotation = joint.rest;
+                continue;
             }
+            tf.rotation = joint.rest;
             continue;
         }
         if joint.kind == JointKind::Finger {
-            if first || fist {
-                tf.rotation = pose_finger(joint, fist);
+            let pose = if rest_support > 0.45 {
+                if joint.sign > 0.0 {
+                    Some(FingerPose::Relaxed)
+                } else {
+                    None
+                }
+            } else if fist {
+                Some(FingerPose::Fist)
+            } else if (joint.sign < 0.0 && (grip_right || armed))
+                || (joint.sign > 0.0 && (grip_left || dual))
+            {
+                Some(FingerPose::Grip)
+            } else if first {
+                Some(FingerPose::Relaxed)
             } else if authored_walk {
-                continue;
+                None
             } else {
                 tf.rotation = joint.rest;
+                continue;
+            };
+            if let Some(pose) = pose {
+                tf.rotation = pose_finger(joint, pose);
             }
             continue;
         }
@@ -1144,7 +1791,11 @@ pub fn pose_humanoid_bones(
             ),
             JointKind::UpperArm => walk_arm(false, step, side, amp, hit, breath),
             JointKind::LowerArm => walk_arm(true, step, side, amp, hit, breath),
-            JointKind::Hand | JointKind::Finger | JointKind::Head | JointKind::Neck => Vec3::NEG_Z,
+            JointKind::Hand
+            | JointKind::Finger
+            | JointKind::Head
+            | JointKind::Neck
+            | JointKind::Shoulder => Vec3::NEG_Z,
         };
         let goal = parent_world.rotation().inverse() * frame * direction.normalize();
         let mut rot = Quat::from_rotation_arc(joint.rest * joint.axis, goal) * joint.rest;
@@ -1152,6 +1803,155 @@ pub fn pose_humanoid_bones(
             rot *= Quat::from_axis_angle(joint.axis, side * 0.45);
         }
         tf.rotation = rot;
+    }
+    // Pose each armed arm chain in parent order. Dual wield runs both sides
+    // independently so left carry does not eat the right from_chest. Chest
+    // goals convert into each bone's parent frame so a hanging upper arm
+    // does not turn forearm +Z into world up (blade through the skull).
+    let mut links: Vec<(Entity, i8, u8, Entity)> = Vec::new();
+    for (entity, joint, _, _, _) in joints.iter() {
+        let Some(rank) = sword_chain_rank(joint.kind) else {
+            continue;
+        };
+        if joint.sign >= 0.0 && !dual {
+            continue;
+        }
+        let Some(&(_, _, _, _, local, _, _, _, _, _, _, _, _)) = frames.get(&joint.root) else {
+            continue;
+        };
+        if !(armed_roots.contains(&joint.root) || (armed && local)) {
+            continue;
+        }
+        let side = if joint.sign < 0.0 { 0i8 } else { 1 };
+        links.push((joint.root, side, rank, entity));
+    }
+    links.sort_unstable_by_key(|&(root, side, rank, _)| (root, side, rank));
+    let now = time.elapsed_secs();
+    let mut from_chest = Quat::IDENTITY;
+    let mut current_root = Entity::PLACEHOLDER;
+    let mut current_side = i8::MIN;
+    for (root, side, _, entity) in links {
+        if root != current_root || side != current_side {
+            from_chest = Quat::IDENTITY;
+            current_root = root;
+            current_side = side;
+        }
+        let mut sword_seat = None;
+        {
+            let Ok((_, joint, _, _, mut tf)) = joints.get_mut(entity) else {
+                continue;
+            };
+            let authored = frames.get(&root).is_some_and(|f| {
+                if joint.sign < 0.0 {
+                    f.7
+                } else {
+                    f.8
+                }
+            });
+            if authored {
+                // Tide owns the swinging arm. Accumulate so dual-wield can yaw
+                // the tip toward the foe without dropping a high chamber.
+                from_chest *= tf.rotation;
+                if joint.kind == JointKind::Hand {
+                    let blade = if dual {
+                        dual_blade_toward_foe(joint.axis, from_chest)
+                    } else {
+                        joint.axis
+                    };
+                    sword_seat = Some((joint.axis, blade));
+                }
+            } else {
+                let clip = tf.rotation;
+                let k = frames
+                    .get(&root)
+                    .map(|f| rest_support_blend(f.12))
+                    .unwrap_or(0.);
+                let t = swing_clock(&swing, now);
+                let this_attacks = t < 1.0
+                    && if dual {
+                        (swing.combo() % 2 == 1) == (joint.sign > 0.0)
+                    } else {
+                        true
+                    };
+                if !this_attacks && joint.kind == JointKind::Shoulder {
+                    tf.rotation = joint.rest.slerp(clip, k);
+                    from_chest *= tf.rotation;
+                    continue;
+                }
+                let chest_goal = if this_attacks {
+                    chest_goal_for_side(
+                        sword_slash_goal(joint.kind, t, swing.slash_arc()),
+                        joint.sign,
+                    )
+                } else {
+                    sword_carry_goal_side(joint.kind, joint.sign)
+                };
+                let mut rot = aim_bone(joint, from_chest.inverse() * chest_goal);
+                if joint.kind == JointKind::Hand {
+                    let blade = (from_chest * rot).inverse() * Vec3::Y;
+                    let roll = sword_wrist_roll(joint.axis, blade);
+                    rot *= roll;
+                }
+                tf.rotation = rot.slerp(clip, k);
+                from_chest *= tf.rotation;
+                if joint.kind == JointKind::Hand {
+                    let blade = from_chest.inverse() * Vec3::Y;
+                    let blade = if dual {
+                        dual_blade_toward_foe(blade, from_chest)
+                    } else {
+                        blade
+                    };
+                    sword_seat = Some((joint.axis, blade));
+                }
+            }
+        }
+        if let Some((along, blade)) = sword_seat {
+            let first = frames.get(&root).is_some_and(|f| f.3);
+            for (parent, mut st, darkmod) in &mut swords {
+                if parent.parent() == entity {
+                    *st = if darkmod {
+                        held_weapon_tf(along, blade, first)
+                    } else {
+                        held_sword_grip(along, blade)
+                    };
+                }
+            }
+        }
+    }
+    // Sit: Tide keeps the body. Left hand plants behind so the rest has a
+    // support arm instead of a stowed-sword carry.
+    let mut support: Vec<(Entity, u8, Entity)> = Vec::new();
+    for (entity, joint, _, _, _) in joints.iter() {
+        if joint.sign <= 0.0 {
+            continue;
+        }
+        let Some(rank) = sword_chain_rank(joint.kind) else {
+            continue;
+        };
+        if !frames.get(&joint.root).is_some_and(|f| f.12 > 0.001) {
+            continue;
+        }
+        support.push((joint.root, rank, entity));
+    }
+    support.sort_unstable_by_key(|&(root, rank, _)| (root, rank));
+    let mut from_chest = Quat::IDENTITY;
+    let mut current_root = Entity::PLACEHOLDER;
+    for (root, _, entity) in support {
+        if root != current_root {
+            from_chest = Quat::IDENTITY;
+            current_root = root;
+        }
+        let k = frames
+            .get(&root)
+            .map(|f| rest_support_blend(f.12))
+            .unwrap_or(0.);
+        let Ok((_, joint, _, _, mut tf)) = joints.get_mut(entity) else {
+            continue;
+        };
+        let planted = aim_bone(joint, from_chest.inverse() * rest_support_goal(joint.kind));
+        let rot = tf.rotation.slerp(planted, k);
+        tf.rotation = rot;
+        from_chest *= rot;
     }
 }
 
@@ -1190,6 +1990,13 @@ mod pose_tests {
         assert_eq!(joint_from_name("neck"), Some((JointKind::Neck, 0.0)));
         assert!(levels_head(MotionClip::Idle));
         assert!(levels_head(MotionClip::Rest));
+        assert!(levels_head(MotionClip::Slash1H));
+        assert!(levels_head(MotionClip::Slash1HReturn));
+        assert!(levels_head(MotionClip::Slash1HSweep));
+        assert!(levels_head(MotionClip::SlashDw));
+        assert!(levels_head(MotionClip::SlashDwLeft));
+        assert!(levels_head(MotionClip::SlashDwReturn));
+        assert!(levels_head(MotionClip::SlashDwLeftReturn));
         assert!(!levels_head(MotionClip::Walk));
         assert_eq!(
             joint_from_name("LeftForeArm"),
@@ -1227,6 +2034,31 @@ mod pose_tests {
             joint_from_name("LeftHandIndex1"),
             Some((JointKind::Finger, 1.0))
         );
+        assert_eq!(
+            joint_from_name("rightIndexProximal"),
+            Some((JointKind::Finger, -1.0)),
+            "VRM proximal must not be dropped because the word ends in L"
+        );
+        assert_eq!(
+            joint_from_name("rightIndexDistal"),
+            Some((JointKind::Finger, -1.0))
+        );
+        assert_eq!(
+            joint_from_name("leftIndexProximal"),
+            Some((JointKind::Finger, 1.0))
+        );
+        assert_eq!(
+            joint_from_name("rightThumbMetacarpal"),
+            Some((JointKind::Finger, -1.0))
+        );
+        assert_eq!(
+            joint_from_name("rightShoulder"),
+            Some((JointKind::Shoulder, -1.0))
+        );
+        assert_eq!(
+            joint_from_name("leftShoulder"),
+            Some((JointKind::Shoulder, 1.0))
+        );
     }
 
     #[test]
@@ -1257,10 +2089,371 @@ mod pose_tests {
     }
 
     #[test]
+    fn held_sword_follows_the_vrm_finger_axis() {
+        let along = Vec3::new(-0.97, -0.03, 0.23).normalize();
+        let grip = held_sword_grip(along, Vec3::Y);
+        let blade = grip.rotation * Vec3::Y;
+        let handle = grip.translation + grip.rotation * Vec3::new(0.0, 0.05, 0.0);
+        assert!(
+            handle.dot(along) > 0.04,
+            "handle must sit along the fingers, got {handle}"
+        );
+        assert!(
+            handle.y < -0.015,
+            "handle must sit in the VRM palm hollow (-Y), got {handle}"
+        );
+        assert!(
+            blade.dot(Vec3::Y) > 0.95,
+            "blade must stand up from the fist on hand-local +Y, got {blade:?}"
+        );
+    }
+
+    #[test]
+    fn darkmod_shortsword_maps_neg_z_onto_the_blade() {
+        let along = Vec3::new(-0.97, -0.03, 0.23).normalize();
+        if darkmod_shortsword_on_disk() {
+            let slash = held_weapon_tf(along, along, false);
+            let slash_dir = slash.rotation * Vec3::NEG_Z;
+            assert!(
+                slash_dir.dot(along) > 0.95,
+                "slash seating must follow the fingers, got {slash_dir:?} vs {along:?}"
+            );
+            let idle_tp = held_weapon_tf(along, Vec3::Y, false);
+            let idle_fp = held_weapon_tf(along, Vec3::Y, true);
+            let idle_dir = idle_tp.rotation * Vec3::NEG_Z;
+            assert!(
+                idle_dir.dot(Vec3::Y) > 0.95,
+                "idle seating must stand the blade up from the hip, got {idle_dir:?}"
+            );
+            let wide_tp = idle_tp.rotation * Vec3::X;
+            let thin_fp = idle_fp.rotation * Vec3::Y;
+            assert!(
+                wide_tp.dot(Vec3::X).abs() > 0.65,
+                "third person must show the wide face from behind, got {wide_tp:?}"
+            );
+            assert!(
+                thin_fp.dot(Vec3::X).abs() > 0.65,
+                "first person must show the thin edge, got {thin_fp:?}"
+            );
+            assert!(
+                (slash.scale.x - DARKMOD_SHORTSWORD_SCALE).abs() < 0.001,
+                "Dark Mod inches must shrink to metres, got {}",
+                slash.scale.x
+            );
+        } else {
+            let blade = held_weapon_tf(along, Vec3::Y, false).rotation * Vec3::Y;
+            assert!(blade.dot(Vec3::Y) > 0.95);
+        }
+    }
+
+    #[test]
+    fn sword_carry_aims_the_vrm_right_arm_forward_of_the_ribs() {
+        let rest = Quat::IDENTITY;
+        let upper = AvatarJoint {
+            root: Entity::PLACEHOLDER,
+            rest,
+            axis: Vec3::NEG_X,
+            kind: JointKind::UpperArm,
+            sign: -1.0,
+            curl: 0.,
+            oppose: 0.,
+            digit: 0,
+            chain: 0,
+        };
+        let aimed = sword_carry_rotation(&upper) * upper.axis;
+        assert!(
+            rest.angle_between(sword_carry_rotation(&upper)) > 0.8,
+            "carry must leave T-pose, got {}",
+            rest.angle_between(sword_carry_rotation(&upper))
+        );
+        assert!(
+            aimed.z > 0.18,
+            "right upper arm must still reach forward of the hip, got {aimed:?}"
+        );
+        assert!(
+            aimed.y < -0.55,
+            "idle carry must hang below the head, got {aimed:?}"
+        );
+        assert!(
+            aimed.x < -0.20,
+            "idle elbow must sit out beside the hip, not tucked into the ribs, got {aimed:?}"
+        );
+        let hand = AvatarJoint {
+            kind: JointKind::Hand,
+            ..upper
+        };
+        let blade = sword_carry_rotation(&hand) * hand.axis;
+        assert!(
+            blade.y < -0.18 && blade.z > 0.70,
+            "idle wrist must stay in line with the forearm, blade away from the skull, got {blade:?}"
+        );
+    }
+
+    #[test]
+    fn sword_slash_stays_in_front_of_the_ribs() {
+        let rest = Quat::IDENTITY;
+        let hand = AvatarJoint {
+            root: Entity::PLACEHOLDER,
+            rest,
+            axis: Vec3::NEG_X,
+            kind: JointKind::Hand,
+            sign: -1.0,
+            curl: 0.,
+            oppose: 0.,
+            digit: 0,
+            chain: 0,
+        };
+        for t in [0.0, 0.35, 0.7, 1.0] {
+            let aimed = sword_slash_rotation(&hand, t) * hand.axis;
+            let min_z = if t < 0.2 {
+                0.32
+            } else if t > 0.85 {
+                0.50
+            } else {
+                0.70
+            };
+            assert!(
+                aimed.z > min_z,
+                "slash at {t} must stay in front of the hip, got {aimed:?}"
+            );
+            assert!(
+                aimed.y < 0.05,
+                "slash at {t} must not raise the blade through the skull, got {aimed:?}"
+            );
+        }
+        let start = sword_slash_rotation(&hand, 0.0) * hand.axis;
+        let end = sword_slash_rotation(&hand, 1.0) * hand.axis;
+        assert!(
+            end.x > start.x + 0.35,
+            "cut must travel from a right-side wind-up across to the left, start {start:?} end {end:?}"
+        );
+        let upper = AvatarJoint {
+            kind: JointKind::UpperArm,
+            ..hand
+        };
+        let lower = AvatarJoint {
+            kind: JointKind::LowerArm,
+            ..hand
+        };
+        let u = sword_slash_rotation(&upper, 0.45) * upper.axis;
+        let l = sword_slash_rotation(&lower, 0.45) * lower.axis;
+        assert!(
+            u.dot(l) > 0.90,
+            "contact must straighten the elbow so the cut reaches out, upper {u:?} lower {l:?}"
+        );
+        assert!(
+            l.z > 0.90,
+            "extended forearm must reach forward, got {l:?}"
+        );
+        let mut swing = SwingPose::default();
+        swing.strike(1.0);
+        assert_eq!(swing.slash_arc(), SlashArc::Diagonal);
+        swing.strike(1.5);
+        assert_eq!(swing.slash_arc(), SlashArc::Return);
+        swing.strike(2.0);
+        assert_eq!(swing.slash_arc(), SlashArc::Sweep);
+        swing.strike(2.5);
+        assert_eq!(swing.slash_arc(), SlashArc::Diagonal);
+        for arc in [SlashArc::Return, SlashArc::Sweep] {
+            for t in [0.0, 0.35, 0.7, 1.0] {
+                let aimed = sword_slash_rotation_arc(&hand, t, arc) * hand.axis;
+                let min_z = if t < 0.2 {
+                    0.32
+                } else if t > 0.85 {
+                    0.50
+                } else {
+                    0.70
+                };
+                assert!(
+                    aimed.z > min_z,
+                    "{arc:?} slash at {t} must stay in front of the hip, got {aimed:?}"
+                );
+                assert!(
+                    aimed.y < 0.05,
+                    "{arc:?} slash at {t} must not raise the blade through the skull, got {aimed:?}"
+                );
+            }
+        }
+        let ret_start = sword_slash_rotation_arc(&hand, 0.0, SlashArc::Return) * hand.axis;
+        let ret_end = sword_slash_rotation_arc(&hand, 1.0, SlashArc::Return) * hand.axis;
+        assert!(
+            ret_end.x < ret_start.x - 0.35,
+            "return cut must travel left to right, start {ret_start:?} end {ret_end:?}"
+        );
+        let sweep_start = sword_slash_rotation_arc(&hand, 0.0, SlashArc::Sweep) * hand.axis;
+        let sweep_end = sword_slash_rotation_arc(&hand, 1.0, SlashArc::Sweep) * hand.axis;
+        assert!(
+            sweep_end.x > sweep_start.x + 0.40,
+            "sweep must cut a wider horizontal path, start {sweep_start:?} end {sweep_end:?}"
+        );
+    }
+
+    #[test]
+    fn third_person_held_sword_carries_the_right_arm() {
+        let mut app = App::new();
+        app.add_plugins(TransformPlugin)
+            .insert_resource(Time::<()>::default())
+            .init_resource::<CameraView>()
+            .init_resource::<SwingPose>()
+            .add_systems(
+                PostUpdate,
+                pose_humanoid_bones.before(bevy::transform::TransformSystems::Propagate),
+            );
+        app.world_mut().resource_mut::<CameraView>().mode = CameraMode::ThirdPerson;
+        let world = app.world_mut();
+        let actor = world.spawn(Transform::default()).id();
+        let root = world
+            .spawn((
+                Transform::default(),
+                PlayerAvatarMesh,
+                AvatarMotion {
+                    authored_walk: true,
+                    ..default()
+                },
+                AvatarAnimationGraph::dummy(),
+                ChildOf(actor),
+            ))
+            .id();
+        let rest = Quat::IDENTITY;
+        let shoulder = world
+            .spawn((
+                Name::new("rightShoulder"),
+                Transform {
+                    rotation: rest,
+                    ..default()
+                },
+                AvatarJoint {
+                    root,
+                    rest,
+                    axis: Vec3::NEG_X,
+                    kind: JointKind::Shoulder,
+                    sign: -1.0,
+                    curl: 0.,
+                    oppose: 0.,
+                    digit: 0,
+                    chain: 0,
+                },
+                ChildOf(root),
+            ))
+            .id();
+        let arm = world
+            .spawn((
+                Name::new("rightUpperArm"),
+                Transform {
+                    rotation: rest,
+                    ..default()
+                },
+                AvatarJoint {
+                    root,
+                    rest,
+                    axis: Vec3::NEG_X,
+                    kind: JointKind::UpperArm,
+                    sign: -1.0,
+                    curl: 0.,
+                    oppose: 0.,
+                    digit: 0,
+                    chain: 0,
+                },
+                ChildOf(root),
+            ))
+            .id();
+        let hand = world
+            .spawn((
+                Name::new("rightHand"),
+                Transform::default(),
+                AvatarJoint {
+                    root,
+                    rest,
+                    axis: Vec3::NEG_X,
+                    kind: JointKind::Hand,
+                    sign: -1.0,
+                    curl: 0.,
+                    oppose: 0.,
+                    digit: 0,
+                    chain: 0,
+                },
+                ChildOf(arm),
+            ))
+            .id();
+        let sword = world
+            .spawn((HeldWeaponMesh, Transform::default(), ChildOf(hand)))
+            .id();
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_secs_f32(1. / 60.));
+        app.update();
+        let clavicle = app.world().get::<Transform>(shoulder).unwrap().rotation;
+        assert!(
+            rest.angle_between(clavicle) < 0.05,
+            "idle carry must leave the clavicle at rest, got {clavicle:?}"
+        );
+        let posed = app.world().get::<Transform>(arm).unwrap().rotation;
+        let along = posed * Vec3::NEG_X;
+        assert!(
+            rest.angle_between(posed) > 0.8,
+            "held sword must lift the hanging idle arm, got {posed:?}"
+        );
+        assert!(
+            along.y < -0.50 && along.z > 0.18,
+            "idle fist must hang at the hip, not the head, arm along {along:?}"
+        );
+        let hand_rot = app.world().get::<Transform>(hand).unwrap().rotation;
+        let fingers = posed * hand_rot * Vec3::NEG_X;
+        assert!(
+            fingers.y < -0.20 && fingers.z > 0.50,
+            "chained forearm must keep the fist below the skull, got {fingers:?}"
+        );
+        let grip = app.world().get::<Transform>(sword).unwrap();
+        let world_blade = posed * hand_rot * grip.rotation * Vec3::Y;
+        assert!(
+            world_blade.dot(Vec3::Y) > 0.85,
+            "cuboid blade must stand chest-up out of the posed fist, got {world_blade:?}"
+        );
+        let roll = sword_wrist_roll(Vec3::NEG_X, Vec3::Y);
+        let (_, angle) = roll.to_axis_angle();
+        assert!(
+            angle > 0.12 && angle <= 0.62,
+            "wrist roll must cup the hilt without flipping the hand, got {angle}"
+        );
+        assert!(
+            (roll * Vec3::NEG_X).dot(Vec3::NEG_X) > 0.98,
+            "wrist roll must not redirect the fingers"
+        );
+        assert!(
+            (roll * Vec3::NEG_Y).z > 0.12,
+            "palm must cup toward the hilt, not open the other way, got {:?}",
+            roll * Vec3::NEG_Y
+        );
+    }
+
+    #[test]
+    fn dual_blade_leans_toward_the_foe_without_hanging() {
+        let leaned = dual_blade_toward_foe(Vec3::Y, Quat::IDENTITY);
+        assert!(
+            leaned.z > 0.30,
+            "dual-wield tip must attack the foe, got {leaned:?}"
+        );
+        assert!(
+            leaned.y > 0.75,
+            "lean must not hang the chamber tip, got {leaned:?}"
+        );
+        let back = dual_blade_toward_foe(Vec3::NEG_Z, Quat::IDENTITY);
+        assert!(
+            back.z > 0.30,
+            "a backward blade must be turned onto the foe, got {back:?}"
+        );
+        assert!(
+            back.z > 0.0 && Vec3::NEG_Z.dot(back) < 0.0,
+            "tip must not come back at the body, got {back:?}"
+        );
+    }
+
+    #[test]
     fn attack_clip_follows_job_weapon() {
-        assert_eq!(attack_clip(JobId::TimeMage), MotionClip::Punch);
-        assert_eq!(attack_clip(JobId::Knight), MotionClip::Slash1H);
-        assert_eq!(attack_clip(JobId::Fighter), MotionClip::Slash2H);
+        assert_eq!(attack_clip(crate::character::HeldWeapon::Unarmed), MotionClip::Punch);
+        assert_eq!(attack_clip(crate::character::HeldWeapon::OneHand), MotionClip::Slash1H);
+        assert_eq!(attack_clip(crate::character::HeldWeapon::TwoHand), MotionClip::Slash2H);
+        assert_eq!(attack_clip(crate::character::HeldWeapon::DualWield), MotionClip::SlashDw);
         assert_eq!(bridge_between(MotionClip::Walk, MotionClip::Run), None);
         assert_eq!(
             bridge_between(MotionClip::Run, MotionClip::Walk),
@@ -1296,6 +2489,86 @@ mod pose_tests {
         assert!((clip_playback_speed(MotionClip::Rest) - 0.2).abs() < 0.001);
         assert!((clip_playback_speed(MotionClip::Idle) - 1.0).abs() < 0.001);
         assert!((clip_playback_speed(MotionClip::IdleToRest) - 1.0).abs() < 0.001);
+        assert_eq!(resting_sword_visibility(true), Visibility::Hidden);
+        assert_eq!(resting_sword_visibility(false), Visibility::Visible);
+        assert!(rest_pose(MotionClip::Rest));
+        assert!(rest_pose(MotionClip::IdleToRest));
+        assert!(!rest_pose(MotionClip::RestToIdle));
+        assert!((tick_rest_support(0., true, REST_SUPPORT_SECS) - 1.).abs() < 0.001);
+        assert!(tick_rest_support(0., true, 0.35) < 0.25);
+        assert!((tick_rest_support(1., false, REST_SUPPORT_SECS)).abs() < 0.001);
+        let plant = rest_support_goal(JointKind::Hand);
+        assert!(
+            plant.x > 0.0 && plant.y < -0.6 && plant.z < 0.0,
+            "rest support must plant the left hand behind, got {plant:?}"
+        );
+        let upper = rest_support_goal(JointKind::UpperArm);
+        assert!(
+            upper.z < -0.5 && upper.y < 0.0,
+            "support upper arm reaches back, got {upper:?}"
+        );
+    }
+
+    #[test]
+    fn rest_plants_the_left_hand_behind_for_support() {
+        let mut app = App::new();
+        app.add_plugins(TransformPlugin)
+            .insert_resource(Time::<()>::default())
+            .init_resource::<CameraView>()
+            .init_resource::<SwingPose>()
+            .add_systems(
+                PostUpdate,
+                pose_humanoid_bones.before(bevy::transform::TransformSystems::Propagate),
+            );
+        app.world_mut().resource_mut::<CameraView>().mode = CameraMode::ThirdPerson;
+        let world = app.world_mut();
+        let actor = world.spawn(Transform::default()).id();
+        let root = world
+            .spawn((
+                Transform::default(),
+                PlayerAvatarMesh,
+                AvatarMotion {
+                    authored_walk: true,
+                    resting: true,
+                    rest_support: 1.0,
+                    ..default()
+                },
+                AvatarAnimationGraph::dummy(),
+                ChildOf(actor),
+            ))
+            .id();
+        let rest = Quat::IDENTITY;
+        let arm = world
+            .spawn((
+                Name::new("leftUpperArm"),
+                Transform {
+                    rotation: rest,
+                    ..default()
+                },
+                AvatarJoint {
+                    root,
+                    rest,
+                    axis: Vec3::X,
+                    kind: JointKind::UpperArm,
+                    sign: 1.0,
+                    curl: 0.,
+                    oppose: 0.,
+                    digit: 0,
+                    chain: 0,
+                },
+                ChildOf(root),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_secs_f32(1. / 60.));
+        app.update();
+        let posed = app.world().get::<Transform>(arm).unwrap().rotation;
+        let dir = posed * Vec3::X;
+        assert!(
+            dir.z < -0.4 && dir.y < 0.0,
+            "left rest support must reach behind, got {dir:?}"
+        );
     }
 
     #[test]
@@ -1319,6 +2592,8 @@ mod pose_tests {
             MotionClip::Idle
         ));
         assert_eq!(bridge_between(MotionClip::Idle, MotionClip::Walk), None);
+        assert_eq!(bridge_between(MotionClip::Idle, MotionClip::StrafeLeft), None);
+        assert_eq!(bridge_between(MotionClip::Idle, MotionClip::WalkBack), None);
         assert_eq!(
             bridge_between(MotionClip::Walk, MotionClip::Idle),
             Some(MotionClip::WalkToIdle)
@@ -1334,6 +2609,15 @@ mod pose_tests {
         assert_eq!(
             bridge_between(MotionClip::Rest, MotionClip::Idle),
             Some(MotionClip::RestToIdle)
+        );
+        assert_eq!(bridge_between(MotionClip::Idle, MotionClip::StrafeRight), None);
+        assert!(
+            RESPONSIVE_BLEND_MS >= 100 && RESPONSIVE_BLEND_MS <= 200,
+            "idle→walk/strafe should blend in 0.1–0.2 s, got {RESPONSIVE_BLEND_MS}"
+        );
+        assert!(
+            ONESHOT_BLEND_MS >= 50 && ONESHOT_BLEND_MS <= 100,
+            "chop chain should blend in 0.05–0.1 s, got {ONESHOT_BLEND_MS}"
         );
     }
 
@@ -1374,29 +2658,103 @@ mod pose_tests {
         let mut graph = AvatarAnimationGraph::dummy();
         graph.present[MotionClip::WalkPunch as usize] = true;
         assert_eq!(
-            attack_clip_for(JobId::TimeMage, true, &graph),
+            attack_clip_for(crate::character::HeldWeapon::Unarmed, true, &graph),
             MotionClip::WalkPunch
         );
         assert_eq!(
-            attack_clip_for(JobId::TimeMage, false, &graph),
+            attack_clip_for(crate::character::HeldWeapon::Unarmed, false, &graph),
             MotionClip::Punch
         );
         graph.present[MotionClip::WalkSlash1H as usize] = true;
         assert_eq!(
-            attack_clip_for(JobId::Knight, true, &graph),
-            MotionClip::WalkSlash1H
+            attack_clip_for(crate::character::HeldWeapon::OneHand, true, &graph),
+            MotionClip::Slash1H
         );
         assert_eq!(
-            attack_clip_for(JobId::Knight, false, &graph),
+            attack_clip_for(crate::character::HeldWeapon::OneHand, false, &graph),
             MotionClip::Slash1H
+        );
+        graph.present[MotionClip::Slash1HReturn as usize] = true;
+        graph.present[MotionClip::Slash1HSweep as usize] = true;
+        assert_eq!(
+            attack_clip_arc(
+                crate::character::HeldWeapon::OneHand,
+                false,
+                &graph,
+                SlashArc::Return,
+                1
+            ),
+            MotionClip::Slash1HReturn
+        );
+        assert_eq!(
+            attack_clip_arc(
+                crate::character::HeldWeapon::OneHand,
+                false,
+                &graph,
+                SlashArc::Sweep,
+                2
+            ),
+            MotionClip::Slash1HSweep
+        );
+        assert_eq!(
+            attack_clip_arc(
+                crate::character::HeldWeapon::OneHand,
+                true,
+                &graph,
+                SlashArc::Return,
+                1
+            ),
+            MotionClip::Slash1HReturn
+        );
+        assert_eq!(
+            attack_clip_arc(
+                crate::character::HeldWeapon::OneHand,
+                true,
+                &graph,
+                SlashArc::Sweep,
+                2
+            ),
+            MotionClip::Slash1HSweep
+        );
+        graph.present[MotionClip::SlashDw as usize] = true;
+        graph.present[MotionClip::SlashDwLeft as usize] = true;
+        assert_eq!(
+            attack_clip_arc(
+                crate::character::HeldWeapon::DualWield,
+                false,
+                &graph,
+                SlashArc::Diagonal,
+                0
+            ),
+            MotionClip::SlashDw
+        );
+        assert_eq!(
+            attack_clip_arc(
+                crate::character::HeldWeapon::DualWield,
+                false,
+                &graph,
+                SlashArc::Return,
+                1
+            ),
+            MotionClip::SlashDwLeft
+        );
+        assert_eq!(
+            attack_clip_arc(
+                crate::character::HeldWeapon::DualWield,
+                true,
+                &graph,
+                SlashArc::Sweep,
+                2
+            ),
+            MotionClip::SlashDw
         );
         graph.present[MotionClip::WalkSlash2H as usize] = true;
         assert_eq!(
-            attack_clip_for(JobId::Fighter, true, &graph),
+            attack_clip_for(crate::character::HeldWeapon::TwoHand, true, &graph),
             MotionClip::WalkSlash2H
         );
         assert_eq!(
-            attack_clip_for(JobId::Fighter, false, &graph),
+            attack_clip_for(crate::character::HeldWeapon::TwoHand, false, &graph),
             MotionClip::Slash2H
         );
     }
@@ -1451,6 +2809,17 @@ mod pose_tests {
         assert!(unarmed_fist(MotionClip::WalkPunch));
         assert!(!unarmed_fist(MotionClip::Slash1H));
         assert!(!unarmed_fist(MotionClip::Idle));
+        assert!(one_hand_grip(MotionClip::Slash1H));
+        assert!(one_hand_grip(MotionClip::Slash1HReturn));
+        assert!(one_hand_grip(MotionClip::Slash1HSweep));
+        assert!(!one_hand_grip(MotionClip::WalkSlash1H));
+        assert!(!one_hand_grip(MotionClip::Punch));
+        assert!(dual_right_grip(MotionClip::SlashDw));
+        assert!(dual_right_grip(MotionClip::SlashDwReturn));
+        assert!(!dual_right_grip(MotionClip::SlashDwLeft));
+        assert!(dual_left_grip(MotionClip::SlashDwLeft));
+        assert!(dual_left_grip(MotionClip::SlashDwLeftReturn));
+        assert!(!dual_left_grip(MotionClip::SlashDw));
         assert!(keeps_unarmed_combo(MotionClip::Punch, true));
         assert!(keeps_unarmed_combo(MotionClip::WalkPunch, true));
         assert!(!keeps_unarmed_combo(MotionClip::Punch, false));
@@ -1507,8 +2876,13 @@ mod pose_tests {
         let rest_y = roll_root(0.0).0.y;
         let takeoff_y = roll_root(0.18).0.y;
         let mid_y = roll_root(0.5).0.y;
-        assert!((rest_y + 1.65).abs() < 0.001);
-        assert!((roll_root(1.0).0.y + 1.65).abs() < 0.001);
+        let seated = ba_protocol::avatar_local_y();
+        assert!((rest_y - seated).abs() < 0.001);
+        assert!((roll_root(1.0).0.y - seated).abs() < 0.001);
+        assert!(
+            seated > -ba_protocol::PLAYER_HEIGHT,
+            "soles must sit on the height-field, not in it"
+        );
         assert!(
             takeoff_y > rest_y + 0.15 && takeoff_y < rest_y + 0.55,
             "dive roll hops, it does not vault, got {takeoff_y}"
@@ -1534,11 +2908,28 @@ mod pose_tests {
             chain: 1,
         };
         assert!(
-            rest.angle_between(pose_finger(&finger, true))
-                > rest.angle_between(pose_finger(&finger, false)) + 1.0,
+            rest.angle_between(pose_finger(&finger, FingerPose::Fist))
+                > rest.angle_between(pose_finger(&finger, FingerPose::Relaxed)) + 1.0,
             "unarmed fist must curl past the relaxed hand"
         );
         assert!(fist_angles(1, 1).0 > 1.7, "PIP must lock the fist shut");
+        assert!(
+            grip_angles(1, 1).0 > 0.7 && grip_angles(1, 1).0 < 1.15,
+            "sword PIP must wrap a hilt, not fold through it, got {}",
+            grip_angles(1, 1).0
+        );
+        assert!(
+            grip_angles(0, 0).1 < 0.8,
+            "sword thumb must sit on the grip, not flop backward, got {}",
+            grip_angles(0, 0).1
+        );
+        assert!(
+            rest.angle_between(pose_finger(&finger, FingerPose::Grip))
+                > rest.angle_between(pose_finger(&finger, FingerPose::Relaxed)) + 0.25
+                && rest.angle_between(pose_finger(&finger, FingerPose::Fist))
+                    > rest.angle_between(pose_finger(&finger, FingerPose::Grip)) + 0.4,
+            "hilt wrap is tighter than idle and looser than a punch"
+        );
         assert_eq!(finger_layout("leftIndexDistal"), (1, 2));
         assert_eq!(finger_layout("leftThumbMetacarpal"), (0, 0));
         assert_eq!(finger_layout("leftThumbProximal"), (0, 1));
@@ -1550,26 +2941,17 @@ mod pose_tests {
             bridge_between(MotionClip::Crouch, MotionClip::Idle),
             Some(MotionClip::CrouchToIdle)
         );
-        assert_eq!(
-            bridge_between(MotionClip::Idle, MotionClip::WalkBack),
-            Some(MotionClip::IdleToWalkBack)
-        );
+        assert_eq!(bridge_between(MotionClip::Idle, MotionClip::WalkBack), None);
         assert_eq!(
             bridge_between(MotionClip::WalkBack, MotionClip::Idle),
             Some(MotionClip::WalkBackToIdle)
         );
-        assert_eq!(
-            bridge_between(MotionClip::Idle, MotionClip::StrafeLeft),
-            Some(MotionClip::IdleToStrafeLeft)
-        );
+        assert_eq!(bridge_between(MotionClip::Idle, MotionClip::StrafeLeft), None);
         assert_eq!(
             bridge_between(MotionClip::StrafeLeft, MotionClip::Idle),
             Some(MotionClip::StrafeLeftToIdle)
         );
-        assert_eq!(
-            bridge_between(MotionClip::Idle, MotionClip::StrafeRight),
-            Some(MotionClip::IdleToStrafeRight)
-        );
+        assert_eq!(bridge_between(MotionClip::Idle, MotionClip::StrafeRight), None);
         assert_eq!(
             bridge_between(MotionClip::Crouch, MotionClip::CrouchWalk),
             Some(MotionClip::CrouchToCrouchWalk)
@@ -1763,6 +3145,85 @@ mod pose_tests {
         assert!(
             rest.angle_between(posed) > 1.2,
             "hand-to-hand punch must close the fist, got {posed:?} vs rest {rest:?}"
+        );
+    }
+
+    #[test]
+    fn first_person_held_sword_closes_the_right_fingers() {
+        let mut app = App::new();
+        app.add_plugins(TransformPlugin)
+            .insert_resource(Time::<()>::default())
+            .init_resource::<CameraView>()
+            .init_resource::<SwingPose>()
+            .add_systems(
+                PostUpdate,
+                pose_humanoid_bones.before(bevy::transform::TransformSystems::Propagate),
+            );
+        app.world_mut().resource_mut::<CameraView>().mode = CameraMode::FirstPerson;
+        let world = app.world_mut();
+        let actor = world.spawn(Transform::default()).id();
+        let root = world
+            .spawn((
+                Transform::default(),
+                PlayerAvatarMesh,
+                AvatarMotion {
+                    authored_walk: true,
+                    ..default()
+                },
+                AvatarAnimationGraph::dummy(),
+                ChildOf(actor),
+            ))
+            .id();
+        let rest = Quat::IDENTITY;
+        let hand = world
+            .spawn((
+                Name::new("rightHand"),
+                Transform::default(),
+                AvatarJoint {
+                    root,
+                    rest,
+                    axis: Vec3::NEG_X,
+                    kind: JointKind::Hand,
+                    sign: -1.0,
+                    curl: 0.,
+                    oppose: 0.,
+                    digit: 0,
+                    chain: 0,
+                },
+                ChildOf(root),
+            ))
+            .id();
+        let finger = world
+            .spawn((
+                Name::new("rightIndexProximal"),
+                Transform {
+                    rotation: rest,
+                    ..default()
+                },
+                AvatarJoint {
+                    root,
+                    rest,
+                    axis: Vec3::NEG_X,
+                    kind: JointKind::Finger,
+                    sign: -1.0,
+                    curl: 0.30,
+                    oppose: 0.0,
+                    digit: 1,
+                    chain: 0,
+                },
+                ChildOf(hand),
+            ))
+            .id();
+        world.spawn((HeldWeaponMesh, Transform::default(), ChildOf(hand)));
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(Duration::from_secs_f32(1. / 60.));
+        app.update();
+        let posed = app.world().get::<Transform>(finger).unwrap().rotation;
+        let bent = rest.angle_between(posed);
+        assert!(
+            bent > 0.5 && bent < 1.15,
+            "right fingers must wrap the hilt, not crush through it, got {bent} rad"
         );
     }
 
@@ -2209,24 +3670,13 @@ fn run_gait_bridge_matches(bridge: MotionClip, want: MotionClip) -> bool {
 
 fn bridge_between(from: MotionClip, to: MotionClip) -> Option<MotionClip> {
     match (from, to) {
-        // Idle→walk and walk→run connects are ~1s oneshots. Play the looping
-        // gait immediately; do not regenerate or retune those clips.
+        // Responsive: idle→walk/strafe/walk-back and walk→run start the loop
+        // immediately with RESPONSIVE_BLEND_MS. Settling clips (walk→idle,
+        // rest, crouch, run→walk) keep MotionBricks.
         (
             MotionClip::Run | MotionClip::WalkToRun,
             MotionClip::Walk | MotionClip::Idle | MotionClip::CrouchWalk,
         ) => Some(MotionClip::RunToWalk),
-        (
-            MotionClip::Idle | MotionClip::WalkToIdle | MotionClip::WalkBackToIdle,
-            MotionClip::WalkBack,
-        ) => Some(MotionClip::IdleToWalkBack),
-        (
-            MotionClip::Idle | MotionClip::WalkToIdle | MotionClip::StrafeLeftToIdle,
-            MotionClip::StrafeLeft,
-        ) => Some(MotionClip::IdleToStrafeLeft),
-        (
-            MotionClip::Idle | MotionClip::WalkToIdle | MotionClip::StrafeRightToIdle,
-            MotionClip::StrafeRight,
-        ) => Some(MotionClip::IdleToStrafeRight),
         (
             MotionClip::Walk | MotionClip::IdleToWalk | MotionClip::RunToWalk,
             MotionClip::Idle,
@@ -2296,8 +3746,8 @@ pub fn update_avatar_animation(
     keys: Res<ButtonInput<KeyCode>>,
     swing: Res<SwingPose>,
     view: Res<CameraView>,
+    profile: Res<super::CharacterProfile>,
     parents: Query<&ChildOf>,
-    jobs: Query<&crate::rpg::Progression>,
     fighters: Query<&crate::rpg::Fighter>,
     mut roots: Query<(
         &GlobalTransform,
@@ -2381,10 +3831,15 @@ pub fn update_avatar_animation(
             face_velocity,
             graph,
         );
-        let job = parent
-            .and_then(|p| jobs.get(p).ok())
-            .map(|p| p.job)
-            .unwrap_or(JobId::TimeMage);
+        let held = if local.is_some() {
+            profile
+                .draft
+                .as_ref()
+                .map(|d| d.held_weapon())
+                .unwrap_or(super::HeldWeapon::Unarmed)
+        } else {
+            super::HeldWeapon::Unarmed
+        };
 
         if local.is_some() {
             if let Some(at) = swing.started_at() {
@@ -2393,7 +3848,13 @@ pub fn update_avatar_animation(
                     if !keeps_unarmed_combo(state.clip, state.oneshot) {
                         let moving = state.moving;
                         state.queue.clear();
-                        state.queue.push(attack_clip_for(job, moving, graph));
+                        state.queue.push(attack_clip_arc(
+                            held,
+                            moving,
+                            graph,
+                            swing.slash_arc(),
+                            swing.combo(),
+                        ));
                         state.oneshot = false;
                     }
                 }
@@ -2413,7 +3874,7 @@ pub fn update_avatar_animation(
 
         if !state.queue.is_empty() && !state.oneshot {
             let next = state.queue.remove(0);
-            play_motion(&mut player, &mut transitions, graph, next, 90);
+            play_motion(&mut player, &mut transitions, graph, next, ONESHOT_BLEND_MS);
             state.clip = next;
             sync.clip = next;
             state.oneshot = !is_looping(next);
@@ -2433,7 +3894,17 @@ pub fn update_avatar_animation(
                     state.queue.clear();
                 } else {
                     let next = state.queue.remove(0);
-                    play_motion(&mut player, &mut transitions, graph, next, 80);
+                    play_motion(
+                        &mut player,
+                        &mut transitions,
+                        graph,
+                        next,
+                        if is_looping(next) {
+                            RESPONSIVE_BLEND_MS
+                        } else {
+                            ONESHOT_BLEND_MS
+                        },
+                    );
                     state.clip = next;
                     sync.clip = next;
                     state.oneshot = !is_looping(next);
@@ -2448,7 +3919,7 @@ pub fn update_avatar_animation(
         }
         if let Some(bridge) = bridge_between(state.clip, want) {
             if graph.has(bridge) {
-                play_motion(&mut player, &mut transitions, graph, bridge, 80);
+                play_motion(&mut player, &mut transitions, graph, bridge, SETTLING_BLEND_MS);
                 state.clip = bridge;
                 sync.clip = bridge;
                 state.oneshot = true;
@@ -2462,7 +3933,11 @@ pub fn update_avatar_animation(
                 continue;
             }
         }
-        let blend = if is_looping(want) { 80 } else { 170 };
+        let blend = if is_looping(want) {
+            RESPONSIVE_BLEND_MS
+        } else {
+            ONESHOT_BLEND_MS
+        };
         play_motion(&mut player, &mut transitions, graph, want, blend);
         state.clip = want;
         sync.clip = want;

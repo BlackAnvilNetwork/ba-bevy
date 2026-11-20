@@ -1,0 +1,56 @@
+{
+  "clip": "",
+  "command": "retarget",
+  "discardedNonRootTranslations": false,
+  "fps": 30.0,
+  "frames": 15,
+  "headingDegrees": -0.07033416628837585,
+  "mapping": {
+    "bones": {
+      "Chest": "upperChest",
+      "Head": "head",
+      "Hips": "hips",
+      "Jaw": "Jaw",
+      "LeftArm": "leftUpperArm",
+      "LeftEye": "leftEye",
+      "LeftFoot": "leftFoot",
+      "LeftForeArm": "leftLowerArm",
+      "LeftHand": "leftHand",
+      "LeftLeg": "leftUpperLeg",
+      "LeftShin": "leftLowerLeg",
+      "LeftShoulder": "leftShoulder",
+      "LeftToeBase": "leftToes",
+      "Neck1": "neck",
+      "RightArm": "rightUpperArm",
+      "RightEye": "rightEye",
+      "RightFoot": "rightFoot",
+      "RightForeArm": "rightLowerArm",
+      "RightHand": "rightHand",
+      "RightLeg": "rightUpperLeg",
+      "RightShin": "rightLowerLeg",
+      "RightShoulder": "rightShoulder",
+      "RightToeBase": "rightToes",
+      "Spine1": "spine",
+      "Spine2": "chest"
+    },
+    "groundOffset": 0,
+    "headingDegrees": 0,
+    "rootScale": "auto"
+  },
+  "protectedFrames": [
+    0,
+    8,
+    14
+  ],
+  "rootScale": 0.9209480285644531,
+  "rootTravel": {
+    "displacementMetres": 0.00020375530584715307,
+    "pathMetres": 0.05261934548616409,
+    "peakSpeedMetresPerSecond": 0.22757701575756073
+  },
+  "source": "C:\\Users\\raxac\\OneDrive\\Desktop\\apps\\black-anvil\\.dream-loop\\motion\\slash-1h-sweep-v13-soma.glb",
+  "target": "C:\\Users\\raxac\\AppData\\Local\\BlackAnvil\\characters\\1fe031bd-99ca-4674-81ef-a06c42463bf0\\revisions\\r2\\character.glb",
+  "toSoma": false,
+  "tool": "tide-motion",
+  "version": "0.9.0"
+}

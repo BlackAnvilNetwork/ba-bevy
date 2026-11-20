@@ -200,6 +200,8 @@ pub fn move_player(
         if let Some(mut f) = fighter {
             f.resting = false;
         }
+        // Instant target speed (no ramp). Walk↔run MotionBricks must stay short
+        // (~0.6 s, --tokens 6) or the in-place gait slides under this snap.
         let mut speed = if keys.pressed(KeyCode::KeyC) {
             1.6
         } else if keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight) {

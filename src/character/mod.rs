@@ -6,7 +6,7 @@
 mod avatar;
 mod animation;
 mod materials;
-pub use animation::{LocalEye, SwingPose, prepare_avatar_animation, bind_avatar_animators, update_avatar_animation, discover_avatar_bones, pose_humanoid_bones};
+pub use animation::{LocalEye, SwingPose, prepare_avatar_animation, bind_avatar_animators, update_avatar_animation, discover_avatar_bones, pose_humanoid_bones, attach_held_weapon, hide_held_weapon_hulls, stow_held_swords_while_resting};
 pub use materials::matte_avatar_materials;
 
 pub use avatar::{
@@ -29,7 +29,7 @@ pub const ACTIVE_GLB: &str = "character/exports/active.glb";
 
 const BODY_TRAIT_KEYS: &[&str] = &["Body", "Head", "Eyes", "Basic Colors"];
 const EQUIP_TRAIT_KEYS: &[&str] = &[
-    "Chest", "Legs", "Shoes", "Hands", "Waist", "Neck", "Weapon",
+    "Chest", "Legs", "Shoes", "Hands", "Waist", "Neck", "Weapon", "Offhand",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -74,7 +74,44 @@ pub struct BaCharacterV1 {
     pub runtime: RuntimeAsset,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeldWeapon {
+    Unarmed,
+    OneHand,
+    TwoHand,
+    DualWield,
+}
+
 impl BaCharacterV1 {
+    fn equip_id(&self, slot: &str) -> Option<&str> {
+        self.starter_equipment.iter().find_map(|(name, item)| {
+            (name.eq_ignore_ascii_case(slot) && !item.id.is_empty()).then_some(item.id.as_str())
+        })
+    }
+
+    pub fn held_weapon(&self) -> HeldWeapon {
+        let weapon = self.equip_id("weapon");
+        let offhand = self
+            .equip_id("offhand")
+            .or_else(|| self.equip_id("off_hand"));
+        let two_hand = |id: &str| {
+            let id = id.to_ascii_lowercase();
+            id.contains("2h") || id.contains("great") || id.contains("zwei")
+        };
+        let dual = |id: &str| {
+            let id = id.to_ascii_lowercase();
+            id.contains("dual") || id.contains("_dw") || id.ends_with("dw")
+        };
+        match (weapon, offhand) {
+            (None, None) => HeldWeapon::Unarmed,
+            (Some(id), _) if two_hand(id) => HeldWeapon::TwoHand,
+            (Some(id), _) if dual(id) => HeldWeapon::DualWield,
+            (Some(_), Some(_)) => HeldWeapon::DualWield,
+            (Some(_), None) => HeldWeapon::OneHand,
+            (None, Some(_)) => HeldWeapon::DualWield,
+        }
+    }
+
     pub fn job_id(&self) -> JobId {
         match self.starting_job.as_str() {
             "Knight" => JobId::Knight,
@@ -251,5 +288,51 @@ mod character_schema_tests {
         let roundtrip = serde_json::to_string(&parsed).unwrap();
         let restored: BaCharacterV1 = serde_json::from_str(&roundtrip).unwrap();
         assert_eq!(parsed, restored);
+        assert_eq!(parsed.held_weapon(), HeldWeapon::Unarmed);
+    }
+
+    #[test]
+    fn weapon_slot_selects_one_hand_or_two_hand() {
+        let mut armed = BaCharacterV1 {
+            schema_version: 1,
+            revision: 2,
+            character_id: "test-id".into(),
+            name: "Chrona".into(),
+            starting_job: "TimeMage".into(),
+            pack: "anata".into(),
+            manifest_id: "anata/male".into(),
+            catalog_version: "anata-2026-11".into(),
+            body_traits: BTreeMap::new(),
+            starter_equipment: BTreeMap::new(),
+            runtime: RuntimeAsset {
+                format: "glb".into(),
+                relative_path: "character://test-id/revisions/r2/character.glb".into(),
+                content_hash: None,
+            },
+        };
+        assert_eq!(armed.held_weapon(), HeldWeapon::Unarmed);
+        armed.starter_equipment.insert(
+            "weapon".into(),
+            TraitRef {
+                id: "short_sword".into(),
+                name: Some("Short Sword".into()),
+                blendshapes: BTreeMap::new(),
+                colors: BTreeMap::new(),
+            },
+        );
+        assert_eq!(armed.held_weapon(), HeldWeapon::OneHand);
+        armed.starter_equipment.insert(
+            "offhand".into(),
+            TraitRef {
+                id: "short_sword".into(),
+                name: Some("Short Sword".into()),
+                blendshapes: BTreeMap::new(),
+                colors: BTreeMap::new(),
+            },
+        );
+        assert_eq!(armed.held_weapon(), HeldWeapon::DualWield);
+        armed.starter_equipment.remove("offhand");
+        armed.starter_equipment.get_mut("weapon").unwrap().id = "greatsword".into();
+        assert_eq!(armed.held_weapon(), HeldWeapon::TwoHand);
     }
 }

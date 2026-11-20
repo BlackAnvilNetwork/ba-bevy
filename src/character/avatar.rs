@@ -2,6 +2,8 @@
 
 use bevy::prelude::*;
 
+use ba_protocol::avatar_local_y;
+
 use super::{active_glb_path, CharacterProfile, ACTIVE_GLB};
 
 #[derive(Component)]
@@ -59,7 +61,7 @@ pub fn attach_player_avatar(
             PlayerAvatarMesh,
             Name::new(format!("Avatar:{}", draft.name)),
             WorldAssetRoot(handle.clone()),
-            Transform::from_xyz(0.0, -1.65, 0.0),
+            Transform::from_xyz(0.0, avatar_local_y(), 0.0),
             Visibility::default(),
         ))
         .id();

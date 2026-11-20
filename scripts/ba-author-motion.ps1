@@ -135,27 +135,12 @@ Ensure-Generate "strafe-left-cycle-soma.glb" (@(
         "--start-pose", "$strafeLeftSoma@20",
         "--end-pose", "$strafeLeftSoma@20"
     ) + $gpu)
-$walkCycle = Join-Path $work "walk-cycle-soma.glb"
-Ensure-Generate "walk-slash-1h-soma.glb" (@(
-        "generate", "A person slashes diagonally downward with the right arm while walking.",
-        "--duration", "1.9", "--seed", "61", "--guidance", "3",
-        "--start-pose", $walkCycle
-    ) + $gpu)
-Ensure-Generate "walk-slash-2h-soma.glb" (@(
-        "generate", "A person chops both arms down from overhead while walking, then recovers.",
-        "--duration", "1.9", "--seed", "62", "--guidance", "3",
-        "--start-pose", $walkCycle
-    ) + $gpu)
+# 1H cuts live in ba-author-slash.ps1. Do not generate slash-1h / walk-slash here.
 Ensure-Generate "punch-soma.glb" (@(
         "generate", "A person throws a right jab.", "--duration", "0.8",
         "--then", "A person throws a left cross.", "--duration", "0.9",
         "--then", "A person throws a right hook.", "--duration", "1.0",
         "--transition", "6", "--seed", "15", "--guidance", "3"
-    ) + $gpu)
-Ensure-Generate "slash-1h-soma.glb" (@(
-        "generate", "A person slashes diagonally downward with the right arm.", "--duration", "1.1",
-        "--then", "A person returns the right arm to a guard in front.", "--duration", "0.8",
-        "--transition", "6", "--seed", "16", "--guidance", "3"
     ) + $gpu)
 Ensure-Generate "slash-2h-soma.glb" (@(
         "generate", "A person raises both arms overhead.", "--duration", "0.8",
@@ -179,52 +164,72 @@ Ensure-Generate "walk-jump-soma.glb" (@(
         "--start-pose", $walkPose
     ) + $gpu)
 
+function File-Sha {
+    param($Path)
+    if (!(Test-Path $Path)) { return "missing" }
+    (Get-FileHash -Algorithm SHA256 -Path $Path).Hash
+}
+
+function Stamp-Matches {
+    param($Stamp, $Key)
+    (Test-Path $Stamp) -and ((Get-Content -Raw $Stamp).Trim() -eq $Key)
+}
+
+# MotionBricks connect. Stamp on source hashes + token settings so retouching
+# clip A only rebuilds A’s edges. Default 8–14 (~1.1 s) for settling; --tokens 6
+# (~0.57 s) for small gait edges. Do not connect idle→walk/strafe/jump: those
+# start the destination clip with a short Bevy blend.
 function Ensure-Connect {
-    param($From, $To, $Out)
+    param($From, $To, $Out, [string]$Tokens)
+    $fromPath = Join-Path $work $From
+    $toPath = Join-Path $work $To
     $path = Join-Path $work $Out
     $recipe = "$path.json"
-    if ((Test-Path $path) -and (Test-Path $recipe)) {
+    $stamp = "$path.connect-key"
+    $tokenKey = if ($Tokens) { $Tokens } else { "default" }
+    $key = "from=$(File-Sha $fromPath) to=$(File-Sha $toPath) tokens=$tokenKey"
+    if ((Test-Path $path) -and (Test-Path $recipe) -and (Stamp-Matches $stamp $key)) {
         Write-Host "Reusing $path"
         return
     }
-    Remove-Item -Force -ErrorAction SilentlyContinue $path, $recipe
-    Invoke-Tide @("connect", (Join-Path $work $From), (Join-Path $work $To), "-o", $path)
+    Remove-Item -Force -ErrorAction SilentlyContinue $path, $recipe, $stamp
+    $cli = @("connect", $fromPath, $toPath, "-o", $path)
+    if ($Tokens) { $cli += @("--tokens", $Tokens) }
+    Invoke-Tide $cli
+    Set-Content -NoNewline -Path $stamp -Value $key
 }
 
-Ensure-Connect "walk-cycle-v5-soma.glb" "run-cycle-v5-soma.glb" "walk-to-run-soma.glb"
-Ensure-Connect "run-cycle-v5-soma.glb" "walk-cycle-v5-soma.glb" "run-to-walk-soma.glb"
-Ensure-Connect "idle-soma.glb" "walk-cycle-v5-soma.glb" "idle-to-walk-soma.glb"
+# Short gait edges: walk↔run and crouch↔crouch-walk. Controller speed is
+# instant (3.5 walk / 6.5 sprint), so a 1.1 s bridge slides; 6 tokens ~0.57 s.
+Ensure-Connect "walk-cycle-v5-soma.glb" "run-cycle-v5-soma.glb" "walk-to-run-soma.glb" "6"
+Ensure-Connect "run-cycle-v5-soma.glb" "walk-cycle-v5-soma.glb" "run-to-walk-soma.glb" "6"
+Ensure-Connect "crouch-cycle-soma.glb" "crouch-walk-cycle-soma.glb" "crouch-to-crouch-walk-soma.glb" "6"
+Ensure-Connect "crouch-walk-cycle-soma.glb" "crouch-cycle-soma.glb" "crouch-walk-to-crouch-soma.glb" "6"
+
+# Settling: slowing down or sitting/crouching can take a moment (~1.1 s).
 Ensure-Connect "walk-cycle-v5-soma.glb" "idle-soma.glb" "walk-to-idle-soma.glb"
 Ensure-Connect "idle-soma.glb" "rest-sit-cycle-soma.glb" "idle-to-rest-soma.glb"
 Ensure-Connect "rest-sit-cycle-soma.glb" "idle-soma.glb" "rest-to-idle-soma.glb"
 Ensure-Connect "idle-soma.glb" "crouch-cycle-soma.glb" "idle-to-crouch-soma.glb"
 Ensure-Connect "crouch-cycle-soma.glb" "idle-soma.glb" "crouch-to-idle-soma.glb"
-Ensure-Connect "crouch-cycle-soma.glb" "crouch-walk-cycle-soma.glb" "crouch-to-crouch-walk-soma.glb"
-Ensure-Connect "crouch-walk-cycle-soma.glb" "crouch-cycle-soma.glb" "crouch-walk-to-crouch-soma.glb"
-Ensure-Connect "idle-soma.glb" "walk-back-cycle-v2-soma.glb" "idle-to-walk-back-soma.glb"
 Ensure-Connect "walk-back-cycle-v2-soma.glb" "idle-soma.glb" "walk-back-to-idle-soma.glb"
-Ensure-Connect "idle-soma.glb" "strafe-left-cycle-soma.glb" "idle-to-strafe-left-soma.glb"
 Ensure-Connect "strafe-left-cycle-soma.glb" "idle-soma.glb" "strafe-left-to-idle-soma.glb"
-$idleToStrafeRight = Join-Path $work "idle-to-strafe-right-soma.glb"
-if (Test-Path $idleToStrafeRight) {
-    Write-Host "Reusing $idleToStrafeRight"
-} else {
-    Invoke-Tide @("mirror", (Join-Path $work "idle-to-strafe-left-soma.glb"), "-o", $idleToStrafeRight)
-}
-$strafeRightToIdle = Join-Path $work "strafe-right-to-idle-soma.glb"
-if (Test-Path $strafeRightToIdle) {
-    Write-Host "Reusing $strafeRightToIdle"
-} else {
-    Invoke-Tide @("mirror", (Join-Path $work "strafe-left-to-idle-soma.glb"), "-o", $strafeRightToIdle)
-}
 $strafeRight = Join-Path $work "strafe-right-cycle-soma.glb"
 if (Test-Path $strafeRight) {
     Write-Host "Reusing $strafeRight"
 } else {
     Invoke-Tide @("mirror", (Join-Path $work "strafe-left-cycle-soma.glb"), "-o", $strafeRight)
 }
-Ensure-Connect "walk-cycle-v5-soma.glb" "jump-soma.glb" "walk-to-jump-soma.glb"
-Ensure-Connect "run-cycle-v5-soma.glb" "jump-soma.glb" "run-to-jump-soma.glb"
+$strafeRightToIdle = Join-Path $work "strafe-right-to-idle-soma.glb"
+$strafeRightToIdleStamp = "$strafeRightToIdle.connect-key"
+$strafeRightToIdleKey = "mirror-of=$(File-Sha (Join-Path $work 'strafe-left-to-idle-soma.glb'))"
+if ((Test-Path $strafeRightToIdle) -and (Stamp-Matches $strafeRightToIdleStamp $strafeRightToIdleKey)) {
+    Write-Host "Reusing $strafeRightToIdle"
+} else {
+    Remove-Item -Force -ErrorAction SilentlyContinue $strafeRightToIdle, "$strafeRightToIdle.json", $strafeRightToIdleStamp
+    Invoke-Tide @("mirror", (Join-Path $work "strafe-left-to-idle-soma.glb"), "-o", $strafeRightToIdle)
+    Set-Content -NoNewline -Path $strafeRightToIdleStamp -Value $strafeRightToIdleKey
+}
 Ensure-Connect "jump-soma.glb" "walk-cycle-v5-soma.glb" "jump-to-walk-soma.glb"
 Ensure-Connect "jump-soma.glb" "run-cycle-v5-soma.glb" "jump-to-run-soma.glb"
 
@@ -237,7 +242,6 @@ $pairs = @(
     @{ Soma = "crouch-cycle-soma.glb"; Out = "crouch.glb" },
     @{ Soma = "crouch-walk-cycle-soma.glb"; Out = "crouch_walk.glb" },
     @{ Soma = "punch-soma.glb"; Out = "punch.glb" },
-    @{ Soma = "slash-1h-soma.glb"; Out = "slash_1h.glb" },
     @{ Soma = "slash-2h-soma.glb"; Out = "slash_2h.glb" },
     @{ Soma = "roll-soma.glb"; Out = "roll.glb" },
     @{ Soma = "walk-to-run-soma.glb"; Out = "walk_to_run.glb" },
@@ -257,7 +261,6 @@ $pairs = @(
     @{ Soma = "strafe-right-cycle-soma.glb"; Out = "strafe_right.glb" },
     @{ Soma = "idle-to-crouch-soma.glb"; Out = "idle_to_crouch.glb" },
     @{ Soma = "crouch-to-idle-soma.glb"; Out = "crouch_to_idle.glb" },
-    @{ Soma = "walk-slash-1h-soma.glb"; Out = "walk_slash_1h.glb" },
     @{ Soma = "crouch-to-crouch-walk-soma.glb"; Out = "crouch_to_crouch_walk.glb" },
     @{ Soma = "crouch-walk-to-crouch-soma.glb"; Out = "crouch_walk_to_crouch.glb" },
     @{ Soma = "idle-to-walk-back-soma.glb"; Out = "idle_to_walk_back.glb" },
@@ -266,18 +269,24 @@ $pairs = @(
     @{ Soma = "strafe-left-to-idle-soma.glb"; Out = "strafe_left_to_idle.glb" },
     @{ Soma = "idle-to-strafe-right-soma.glb"; Out = "idle_to_strafe_right.glb" },
     @{ Soma = "strafe-right-to-idle-soma.glb"; Out = "strafe_right_to_idle.glb" },
-    @{ Soma = "walk-slash-2h-soma.glb"; Out = "walk_slash_2h.glb" }
 )
 foreach ($pair in $pairs) {
     $soma = Join-Path $work $pair.Soma
     $walk = Join-Path $outDir $pair.Out
     $recipe = "$walk.json"
-    if ((Test-Path $walk) -and (Test-Path $recipe)) {
+    $stamp = Join-Path $work "$($pair.Out).retarget-key"
+    if (!(Test-Path $soma)) {
+        Write-Host "Skip retarget $($pair.Out) — missing $($pair.Soma)"
+        continue
+    }
+    $key = "soma=$(File-Sha $soma) target=$(File-Sha $target) map=$(File-Sha $map)"
+    if ((Test-Path $walk) -and (Test-Path $recipe) -and (Stamp-Matches $stamp $key)) {
         Write-Host "Reusing $walk"
         continue
     }
-    Remove-Item -Force -ErrorAction SilentlyContinue $walk, $recipe
+    Remove-Item -Force -ErrorAction SilentlyContinue $walk, $recipe, $stamp
     Write-Host "Retargeting $($pair.Soma) -> $($pair.Out)"
     Invoke-Tide @("retarget", $soma, "--target", $target, "--map", $map, "-o", $walk)
+    Set-Content -NoNewline -Path $stamp -Value $key
 }
 Write-Host "Authored motion clips in $outDir"
