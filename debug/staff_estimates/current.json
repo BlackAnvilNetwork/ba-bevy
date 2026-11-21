@@ -1,0 +1,37 @@
+{
+  "id": "staff-swing",
+  "show": "off",
+  "note": "Idle is a hip-held staff. Cast is the old high-front hold. Smash still hot-loads. Set show to cast/idle to plant.",
+  "wind": {
+    "handle": [-0.12, 0.32, 0.16],
+    "tip": [-0.16, 1.28, -0.18]
+  },
+  "start": {
+    "handle": [-0.10, 0.10, 0.42],
+    "tip": [-0.10, 0.10, 1.55]
+  },
+  "end": {
+    "handle": [0.08, -0.20, 0.36],
+    "tip": [0.14, -0.78, 0.68]
+  },
+  "idle": {
+    "handle": [-0.22, -0.26, 0.16],
+    "tip": [-0.20, 0.68, 0.08]
+  },
+  "cast": {
+    "handle": [-0.10, -0.04, 0.30],
+    "tip": [-0.08, 1.10, 0.22]
+  },
+  "return_wind": {
+    "handle": [0.12, 0.32, 0.16],
+    "tip": [0.16, 1.28, -0.18]
+  },
+  "return_start": {
+    "handle": [0.10, 0.10, 0.42],
+    "tip": [0.10, 0.10, 1.55]
+  },
+  "return_end": {
+    "handle": [-0.08, -0.20, 0.36],
+    "tip": [-0.14, -0.78, 0.68]
+  }
+}

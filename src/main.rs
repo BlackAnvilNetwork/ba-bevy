@@ -21,6 +21,7 @@ mod sky;
 mod tree;
 mod vfx;
 mod well;
+mod zone_title;
 
 use std::path::PathBuf;
 
@@ -28,7 +29,9 @@ use bevy::prelude::*;
 use bevy::asset::AssetApp;
 use bevy::asset::io::{file::FileAssetReader, AssetSourceBuilder};
 
-use atmosphere::{flicker_well_fire, tick_atmosphere, StickAtmosphere};
+use atmosphere::{
+    flicker_well_fire, load_persisted_moon, sync_moon_fill, tick_atmosphere, StickAtmosphere,
+};
 use boss::{
     boss_fight, on_possess_request, tick_possession, tick_warden_acting, PossessFx,
     WardenPossessRequest,
@@ -39,7 +42,7 @@ use character::{
     attach_player_avatar, load_character_profile, resolve_pending_avatars,
     bind_avatar_animators, update_avatar_animation,
     discover_avatar_bones, pose_humanoid_bones, matte_avatar_materials, attach_held_weapon,
-    hide_held_weapon_hulls, stow_held_swords_while_resting,
+    hide_held_weapon_hulls, stow_held_swords_while_resting, cycle_equip_mode,
 };
 use data::load_game_data;
 use net::{
@@ -47,7 +50,8 @@ use net::{
     refresh_remote_avatar_models, maybe_enable_zone_net, send_local_move, ZoneNet, ZonePrediction,
 };
 use debug_shot::{
-    capture_debug_shot, spawn_debug_hud, toggle_debug_hud, type_note, update_debug_hud,
+    capture_debug_shot, capture_orbit_shots, spawn_debug_hud, spawn_orbit_camera, toggle_debug_hud,
+    type_note, update_debug_hud,
 };
 use dialogue::{
     announce_level_up, handle_interact, spawn_hud, update_proximity, update_sheet_hud,
@@ -130,10 +134,12 @@ fn main() {
             MaterialPlugin::<CelMaterial>::default(),
         ))
         .init_resource::<StickAtmosphere>()
+        .init_resource::<atmosphere::PersistedMoon>()
         .init_resource::<NoteComposer>()
         .init_resource::<GhostStep>()
         .init_resource::<CameraView>()
         .init_resource::<character::SwingPose>()
+        .init_resource::<character::EquipState>()
         .init_resource::<WellPour>()
         .init_resource::<PossessFx>()
         .init_resource::<GameFlow>()
@@ -151,11 +157,14 @@ fn main() {
                 load_game_data,
                 load_combat_kits,
                 load_character_profile,
-                spawn_opening_scene.after(load_game_data),
+                load_persisted_moon,
+                spawn_opening_scene.after(load_game_data).after(load_persisted_moon),
                 spawn_player.after(load_game_data).after(load_character_profile),
                 attach_pixel_camera.after(spawn_player),
-                spawn_sky_dome.after(spawn_player),
+                spawn_orbit_camera.after(spawn_player).after(attach_pixel_camera),
+                spawn_sky_dome.after(spawn_player).after(load_persisted_moon),
                 spawn_hud,
+                zone_title::spawn.after(spawn_hud),
                 spawn_debug_hud,
                 setup_forge_vfx,
                 spawn_forge_menu
@@ -189,10 +198,11 @@ fn main() {
         .add_systems(
             Update,
             (
-                tick_atmosphere,
+                tick_atmosphere.after(apply_zone_snapshots),
+                sync_moon_fill.after(tick_atmosphere),
                 flicker_well_fire,
                 follow_sky_to_player,
-                sync_sky_uniforms,
+                sync_sky_uniforms.after(tick_atmosphere),
                 fit_pixel_present,
                 point_ui_at_present,
                 free_cursor_on_menu,
@@ -230,6 +240,7 @@ fn main() {
             Update,
             (
                 cycle_job.run_if(offline_yard),
+                cycle_equip_mode.run_if(offline_yard),
                 // Local boss/XP sim is offline-only; zone WelcomeVerified owns combat HP.
                 camera_rig::free_swing.run_if(offline_yard),
                 boss_fight
@@ -260,6 +271,7 @@ fn main() {
                 toggle_debug_hud,
                 update_debug_hud,
                 capture_debug_shot,
+                capture_orbit_shots.after(capture_debug_shot),
                 type_note
                     .before(move_player)
                     .before(look_player)
@@ -283,6 +295,13 @@ fn main() {
         .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::edda_animation,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal,stillwater::fix_zero_roughness,stillwater::dress_darkmod).after(apply_zone_snapshots))
         .add_systems(Update,stillwater::camera_feedback.after(apply_camera_mode))
         .add_systems(Update, (ashworks::display, ashworks::gallery_visibility, stillwater::silt_visibility).after(apply_zone_snapshots))
+        .add_systems(
+            Update,
+            zone_title::tick
+                .after(apply_zone_snapshots)
+                .after(maybe_enable_zone_net)
+                .after(move_player),
+        )
         // Bevy evaluates glTF animation in PostUpdate. Apply camera-specific
         // shoulder/leg posing afterwards and before transform propagation so
         // the real skinning rig cannot be reset to bind/T-pose by the loader.

@@ -25,7 +25,8 @@ pub struct StickSkyUniforms {
     pub haze: f32,
     pub veil: f32,
     pub marsh: f32,
-    pub _pad1: f32,
+    /// Synodic age. 0 new, 0.5 full. Matches `StickAtmosphere::lunar_age`.
+    pub lunar: f32,
 }
 
 impl From<&StickAtmosphere> for StickSkyUniforms {
@@ -38,7 +39,7 @@ impl From<&StickAtmosphere> for StickSkyUniforms {
             haze: a.weather_haze,
             veil: a.weather_veil,
             marsh: 0.0,
-            _pad1: 0.0,
+            lunar: a.lunar_age,
         }
     }
 }

@@ -6,6 +6,7 @@
 
 mod auth;
 mod ashworks;
+mod moon;
 mod stillwater;
 use ba_protocol::stillwater as sw;
 use ashworks::Kiln;
@@ -140,6 +141,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
     let (snap_tx, _) = broadcast::channel::<String>(256);
     let next_id = Arc::new(AtomicU32::new(1));
+    let moon_table = Arc::new(RwLock::new(moon::load_or_fetch().await));
+    {
+        let moon_table = moon_table.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(6 * 60 * 60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                moon::refresh_shared(&moon_table).await;
+            }
+        });
+    }
 
     // Flush authoritative state periodically. Writes are revisioned and can be
     // replayed/retried without accepting stale snapshots. Disconnect flushes
@@ -197,8 +211,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let snap_tx = snap_tx.clone();
         let next_id = next_id.clone();
         let mode = mode.clone();
+        let moon_table = moon_table.clone();
         tokio::spawn(async move {
-            if let Err(err) = handle_connection(stream, peer, world, snap_tx, next_id, mode).await {
+            if let Err(err) = handle_connection(stream, peer, world, snap_tx, next_id, mode, moon_table).await {
                 warn!("{peer}: {err}");
             }
         });
@@ -385,6 +400,7 @@ async fn handle_connection(
     snap_tx: broadcast::Sender<String>,
     next_id: Arc<AtomicU32>,
     mode: AdmissionMode,
+    moon_table: moon::SharedMoon,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let ws = tokio_tungstenite::accept_async(stream).await?;
     let (mut write, mut read) = ws.split();
@@ -393,6 +409,11 @@ async fn handle_connection(
     // Per-viewer snapshots: remote actors outside AOI are never replicated.
     let mut snapshot_interval = tokio::time::interval(Duration::from_secs_f32(DT));
     snapshot_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Re-send the lunation a few times an hour so a long session crosses a new moon
+    // on the server clock. This does not call USNO.
+    let mut moon_interval = tokio::time::interval(Duration::from_secs(15 * 60));
+    moon_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    moon_interval.tick().await;
 
     info!("{peer}: connected");
 
@@ -410,6 +431,10 @@ async fn handle_connection(
                     };
                     write.send(Message::Text(snap.to_json()?.into())).await?;
                 }
+            }
+            _ = moon_interval.tick(), if player_id.is_some() => {
+                let msg = moon::server_message(&*moon_table.read().await);
+                write.send(Message::Text(msg.to_json()?.into())).await?;
             }
             incoming = read.next() => {
                 match incoming {
@@ -535,6 +560,9 @@ async fn handle_connection(
                                     reconnect_token: new_reconnect,
                                 };
                                 write.send(Message::Text(welcome.to_json()?.into())).await?;
+                                let moon_msg = moon::server_message(&*moon_table.read().await);
+                                write.send(Message::Text(moon_msg.to_json()?.into())).await?;
+                                moon_interval.reset();
                                 info!("{peer}: admitted {} id={id} (authenticated={})", appearance.name, !mode.dev());
                             }
                             Ok(ClientMessage::MoveIntent { seq, forward, strafe, yaw, sprint, ghost }) => {

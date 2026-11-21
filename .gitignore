@@ -21,6 +21,9 @@ Cargo.lock
 # Smoke runner
 /scripts/node_modules/
 
+# USNO lunar table written by the zone server
+/data/moon_phases.json
+
 # Local Discord gateway (client secret never belongs in git)
 /gateway.local.env
 /ba-gateway.sqlite

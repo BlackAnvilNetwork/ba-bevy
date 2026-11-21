@@ -1,0 +1,18 @@
+{
+  "right_upper": [0, -0.15, 1],
+  "right_lower": [0.12, 0.05, 0.96],
+  "right_hand": [0.0, 0.4, 0.8],
+  "left_hand": [0.0, 0.4, 0.8],
+  "palm_along": 0.01,
+  "palm_in": 0.052,
+  "palm_side": -0.02,
+  "grip_pommel": 0.00,
+  "left_pommel": 0.1,
+  "left_x": -0.015,
+  "left_y": 0.0,
+  "left_wrist_deg": -105.0,
+  "right_wrist_deg": 50.0,
+  "pole": [0.55, -0.18, 0.22],
+  "id": "2h-grip",
+  "note": "baked 2H great-weapon grip"
+}

@@ -142,11 +142,7 @@ Ensure-Generate "punch-soma.glb" (@(
         "--then", "A person throws a right hook.", "--duration", "1.0",
         "--transition", "6", "--seed", "15", "--guidance", "3"
     ) + $gpu)
-Ensure-Generate "slash-2h-soma.glb" (@(
-        "generate", "A person raises both arms overhead.", "--duration", "0.8",
-        "--then", "A person chops both arms down in front.", "--duration", "1.1",
-        "--transition", "6", "--seed", "17", "--guidance", "3"
-    ) + $gpu)
+# 2H cuts live in ba-author-slash-2h.ps1 (locked plant → left follow → idle center).
 Ensure-Generate "roll-soma.glb" (@("generate", "A person rolls forward on the ground then stands up.", "--duration", "1.6", "--seed", "18", "--guidance", "3") + $gpu)
 $walkPose = Join-Path $work "walk-soma.glb"
 Ensure-Generate "walk-punch-soma.glb" (@(
@@ -242,7 +238,6 @@ $pairs = @(
     @{ Soma = "crouch-cycle-soma.glb"; Out = "crouch.glb" },
     @{ Soma = "crouch-walk-cycle-soma.glb"; Out = "crouch_walk.glb" },
     @{ Soma = "punch-soma.glb"; Out = "punch.glb" },
-    @{ Soma = "slash-2h-soma.glb"; Out = "slash_2h.glb" },
     @{ Soma = "roll-soma.glb"; Out = "roll.glb" },
     @{ Soma = "walk-to-run-soma.glb"; Out = "walk_to_run.glb" },
     @{ Soma = "run-to-walk-soma.glb"; Out = "run_to_walk.glb" },

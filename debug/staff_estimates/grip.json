@@ -1,0 +1,18 @@
+{
+  "id": "staff-idle-grip",
+  "note": "Staff idle: hands at the right hip, shaft vertical beside the body.",
+  "right_upper": [0.20, -0.55, 0.70],
+  "right_lower": [0.12, -0.28, 0.88],
+  "right_hand": [0.10, -0.20, 0.90],
+  "left_hand": [0.08, -0.14, 0.88],
+  "palm_along": 0.01,
+  "palm_in": 0.052,
+  "palm_side": -0.02,
+  "grip_pommel": 0.53,
+  "left_pommel": 0.16,
+  "left_x": -0.02,
+  "left_y": 0.0,
+  "left_wrist_deg": -105.0,
+  "right_wrist_deg": 50.0,
+  "pole": [0.50, -0.28, 0.18]
+}

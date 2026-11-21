@@ -1,0 +1,20 @@
+{
+  "id": "2h-swing-diagonal-baked",
+  "note": "Locked first 2H cut: high-right coil → 01_forward plant → low left guard → wrap. Rust Default. Do not overwrite.",
+  "wind": {
+    "handle": [-0.20, 0.18, 0.36],
+    "tip": [-0.34, 0.96, 0.22]
+  },
+  "start": {
+    "handle": [-0.16, 0.12, 0.40],
+    "tip": [-0.16, 0.12, 1.40]
+  },
+  "end": {
+    "handle": [0.22, -0.10, 0.40],
+    "tip": [0.48, -0.26, 0.82]
+  },
+  "idle": {
+    "handle": [-0.08, -0.06, 0.34],
+    "tip": [-0.10, 0.78, 0.26]
+  }
+}

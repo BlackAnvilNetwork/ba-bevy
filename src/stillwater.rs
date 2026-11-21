@@ -1191,7 +1191,7 @@ pub fn loot(
     mut display: ResMut<DisplayState>,
     flow: Res<GameFlow>,
     time: Res<Time>,
-    cam: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    cam: Query<(&Camera, &GlobalTransform), With<crate::camera_rig::PlayerCamera>>,
     windows: Query<&Window>,
     mut parcels: Query<
         (
@@ -1297,6 +1297,32 @@ pub fn loot(
     display.landed = seen;
 }
 
+/// Name of the ground under a player. Coarse regions are Greymere, the marsh,
+/// and Sable Rest; the marsh is split into the places the road actually names.
+pub fn place_name(x: f32, z: f32) -> &'static str {
+    let at = Vec2::new(x, z);
+    let range = |p: ba_protocol::Pose| at.distance(Vec2::new(p.x, p.z));
+    if rest(x) {
+        "THE SABLE REST"
+    } else if !marsh(x) {
+        "GREYMERE"
+    } else if range(GATE) < 13. {
+        "THE DROWNED GATE"
+    } else if range(POST) < 10. {
+        "THE LANTERN POST"
+    } else if range(BLIND) < 10. {
+        "HUNTER'S BLIND"
+    } else if range(SHRINE) < 10. {
+        "FEN SHRINE"
+    } else if z < -36. {
+        "THE BONE ISLANDS"
+    } else if z < 20. {
+        "THE SUNKEN OX"
+    } else {
+        "THE SHALLOWS"
+    }
+}
+
 pub fn journal(
     net: Res<ZoneNet>,
     flow: Res<GameFlow>,
@@ -1344,46 +1370,23 @@ pub fn journal(
     let Ok(tf) = player.single() else { return };
     let at = Vec2::new(tf.translation.x, tf.translation.z);
     let range = |p: ba_protocol::Pose| at.distance(Vec2::new(p.x, p.z));
-    let (name, mut action) = if rest(net.region_x) {
-        (
-            "THE SABLE REST",
-            "Cael’s forge ahead · Return ferry at the blue lanterns to the south",
-        )
-    } else if !marsh(net.region_x) {
-        ("GREYMERE", "E · Collect materials")
-    } else if range(GATE) < 13. {
-        (
-            "THE DROWNED GATE",
-            "Sable Rest ferry · Approach the twin blue lanterns at the ward stone",
-        )
-    } else if range(POST) < 10. {
-        (
-            "THE LANTERN POST",
+    let name = place_name(tf.translation.x, tf.translation.z);
+    let mut action = match name {
+        "THE SABLE REST" => "Cael’s forge ahead · Return ferry at the blue lanterns to the south",
+        "GREYMERE" => "E · Collect materials",
+        "THE DROWNED GATE" => "Sable Rest ferry · Approach the twin blue lanterns at the ward stone",
+        "THE LANTERN POST" => {
             if range(POST) < 4.5 {
                 "E   Speak to Pell"
             } else {
                 "Approach Pell at the blue lantern"
-            },
-        )
-    } else if range(BLIND) < 10. {
-        ("HUNTER'S BLIND", "E · Search under the hide rack")
-    } else if range(SHRINE) < 10. {
-        ("FEN SHRINE", "E · Rest by Pell's fire")
-    } else if tf.translation.z < -36. {
-        (
-            "THE BONE ISLANDS",
-            "Gather from the banks. Follow the lanterns north to Edda",
-        )
-    } else if tf.translation.z < 20. {
-        (
-            "THE SUNKEN OX",
-            "The Ox walks east of the ribs. Bring its yoke north",
-        )
-    } else {
-        (
-            "THE SHALLOWS",
-            "Hunt the reeds, then head north to the great ribs",
-        )
+            }
+        }
+        "HUNTER'S BLIND" => "E · Search under the hide rack",
+        "FEN SHRINE" => "E · Rest by Pell's fire",
+        "THE BONE ISLANDS" => "Gather from the banks. Follow the lanterns north to Edda",
+        "THE SUNKEN OX" => "The Ox walks east of the ribs. Bring its yoke north",
+        _ => "Hunt the reeds, then head north to the great ribs",
     };
     if range(LANTERN_ROAD) < TRAVEL_REACH {
         action = "E · Travel to Greymere";
@@ -1541,7 +1544,7 @@ pub fn edda_animation(
 }
 pub fn mist(
     atmo: Res<crate::atmosphere::StickAtmosphere>,
-    mut cameras: Query<&mut bevy::pbr::DistanceFog, With<Camera3d>>,
+    mut cameras: Query<&mut bevy::pbr::DistanceFog, With<crate::camera_rig::PlayerCamera>>,
 ) {
     let Ok(mut fog) = cameras.single_mut() else {
         return;
@@ -1581,4 +1584,23 @@ pub fn impact_mark(
     } else {
         net.last_amount.to_string()
     };
+}
+
+#[cfg(test)]
+mod place_name_tests {
+    use super::place_name;
+    use ba_protocol::stillwater::{BLIND, GATE, POST, REST, SHRINE};
+
+    #[test]
+    fn names_follow_the_ground_you_stand_on() {
+        assert_eq!(place_name(0.2, 6.4), "GREYMERE");
+        assert_eq!(place_name(POST.x, POST.z), "THE LANTERN POST");
+        assert_eq!(place_name(GATE.x, GATE.z), "THE DROWNED GATE");
+        assert_eq!(place_name(REST.x, REST.z), "THE SABLE REST");
+        assert_eq!(place_name(BLIND.x, BLIND.z), "HUNTER'S BLIND");
+        assert_eq!(place_name(SHRINE.x, SHRINE.z), "FEN SHRINE");
+        assert_eq!(place_name(300., 40.), "THE SHALLOWS");
+        assert_eq!(place_name(300., 0.), "THE SUNKEN OX");
+        assert_eq!(place_name(300., -50.), "THE BONE ISLANDS");
+    }
 }

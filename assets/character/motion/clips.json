@@ -1,5 +1,5 @@
 {
-  "method": "Locomotion: tide-motion generate + connect, retarget onto Anata. 1H slashes locked v13 (ba-author-slash.ps1). Dual wield v7: ba-author-slash-dw.ps1, high chamber then a diagonal chop, one slash per hand.",
+  "method": "Locomotion: tide-motion generate + connect, retarget onto Anata. 1H slashes locked v13 (ba-author-slash.ps1). Dual wield v7: ba-author-slash-dw.ps1. 2H: ba-author-slash-2h.ps1 chamber, through locked straight-out plant, follow left.",
   "map": "anata-exported.json",
   "clips": [
     {
@@ -105,7 +105,7 @@
       "file": "character/motion/slash_2h.glb",
       "loop": false,
       "kind": "oneshot",
-      "prompt": "Both arms overhead, then a wide downward chop."
+      "prompt": "Chamber both hands high-right, pass through a two-hand plant with the steel pointed straight at the foe, then follow through center to the left."
     },
     {
       "id": "roll",

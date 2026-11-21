@@ -1,0 +1,31 @@
+{
+    "right_upper":  [
+                        -0.12,
+                        -0.08,
+                        0.9
+                    ],
+    "right_lower":  [
+                        -0.02,
+                        0.32,
+                        0.9
+                    ],
+    "right_hand":  [
+                       0,
+                       0.48,
+                       0.86
+                   ],
+    "palm_along":  0.01,
+    "palm_in":  0.018,
+    "grip_pommel":  0.05,
+    "left_pommel":  0.09,
+    "left_x":  -0.03,
+    "left_y":  0,
+    "left_wrist_deg":  -50,
+    "pole":  [
+                 0.55,
+                 -0.18,
+                 0.22
+             ],
+    "id":  "12",
+    "note":  "tight wrap mix"
+}

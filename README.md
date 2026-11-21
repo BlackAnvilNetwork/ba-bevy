@@ -96,6 +96,14 @@ cargo test -p ba_zone_server
 | WASD | Move |
 | Shift | Sprint |
 | E | Talk / advance monologue |
+| V / F5 | First / third person |
+| `[` `]` | Cycle job (offline) |
+| `-` `=` | Cycle equip: unarmed, 1H, dual, great weapon, pole arm (offline) |
+| F3 | Debug HUD (place / facing) |
+| T then Enter | Send a note + live screenshot to `debug/inbox/` |
+| write `debug/inbox/orbit.request` | One-shot orbit (fp, behind, front, left, right, high, hands) into `debug/inbox/` while the game is running. No keypress. Optional text in the file is the note. |
+| F7 | Same orbit from the keyboard, into `debug/shots/` (T-note open → inbox) |
+| F8 | Save the live camera to `debug/shots/` |
 
 ## Slice contents
 

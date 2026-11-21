@@ -4,6 +4,7 @@
 //! This crate is a **dev/loopback prototype** until ticket verification lands.
 
 pub mod ashworks;
+pub mod moon;
 pub mod stillwater;
 
 use serde::{Deserialize, Serialize};
@@ -385,6 +386,12 @@ pub enum ServerMessage {
     Pong {
         client_time_ms: u64,
         server_time_ms: u64,
+    },
+    /// Real lunation. Clients coast the phase from these instants.
+    /// The server sends it on welcome and a few times an hour — not per tick.
+    Moon {
+        new_moon_unix: i64,
+        next_new_moon_unix: i64,
     },
     Reject {
         reason: String,

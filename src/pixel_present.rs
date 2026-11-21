@@ -14,8 +14,8 @@ use bevy::{
 
 use ba_pixel_geometry::CpuMesh;
 
-const PIXEL_W: u32 = 768;
-const PIXEL_H: u32 = 432;
+pub(crate) const PIXEL_W: u32 = 768;
+pub(crate) const PIXEL_H: u32 = 432;
 
 #[derive(Component)]
 pub struct PixelPresentCam;
@@ -43,7 +43,7 @@ pub fn cpu_to_mesh(cpu: &CpuMesh) -> Mesh {
 pub fn attach_pixel_camera(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    world_cam: Query<Entity, With<Camera3d>>,
+    world_cam: Query<Entity, With<crate::camera_rig::PlayerCamera>>,
 ) {
     let Ok(cam) = world_cam.single() else {
         return;

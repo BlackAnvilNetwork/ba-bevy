@@ -1,0 +1,6 @@
+{
+  "id": "2h-swing-forward",
+  "note": "Locked plant: handle in front of the ribs, blade along +Z at the foe. Became start of current.json.",
+  "handle": [-0.16, 0.12, 0.40],
+  "tip": [-0.16, 0.12, 1.40]
+}

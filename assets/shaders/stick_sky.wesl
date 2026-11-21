@@ -9,7 +9,7 @@ struct StickSkyUniforms {
     haze: f32,
     veil: f32,
     marsh: f32,
-    _pad1: f32,
+    lunar: f32,
 }
 
 @group(constants::MATERIAL_BIND_GROUP) @binding(0) var<uniform> mat: StickSkyUniforms;
@@ -135,16 +135,40 @@ fn shade(d_in: vec3<f32>, px: u32, py: u32) -> vec3<f32> {
         }
     }
 
-    // Moon opposite sun
-    let moon = -sun;
+    // Real moon. `lunar` is synodic age (0 new, 0.5 full), so the disc sits
+    // on the sun's arc at that elongation and the lit limb faces the sun.
+    let moon = sun_dir(mat.phase - mat.lunar);
+    let illum = (1.0 - dot(sun, moon)) * 0.5;
     let md = dot(d, moon);
-    if moon.y > -0.1 && md > 0.9988 {
-        let a = clear * (1.0 - day);
-        let crater = h2(i32((d.x - moon.x) * 900.0), i32((d.y - moon.y) * 900.0)) > 0.72;
-        let mc = select(vec3(222.0, 226.0, 236.0), vec3(176.0, 182.0, 200.0), crater);
-        c = mix3(c, mc, a);
-    } else if moon.y > -0.1 && md > 0.996 {
-        c = mix3(c, vec3(150.0, 160.0, 200.0), clear * (1.0 - day) * 0.25);
+    let horizon = clamp((moon.y + 0.12) / 0.18, 0.0, 1.0);
+    let moon_vis = clear * (1.0 - day * 0.55) * horizon;
+    if illum > 0.015 && moon.y > -0.12 && md > 0.996 {
+        if md > 0.9988 {
+            var lit = true;
+            let to_sun = sun - moon * dot(sun, moon);
+            let sun_len = length(to_sun);
+            if sun_len > 0.02 {
+                let axis = to_sun / sun_len;
+                let pole = normalize(cross(moon, axis));
+                let offset = d - moon * md;
+                let x = dot(offset, axis) / 0.048974;
+                let y = dot(offset, pole) / 0.048974;
+                let r2 = clamp(x * x + y * y, 0.0, 1.0);
+                let z = sqrt(1.0 - r2);
+                let phi = acos(clamp(-dot(sun, moon), -1.0, 1.0));
+                let ndotl = x * sin(phi) + z * cos(phi);
+                let dither = (BAYER4[(py & 3u) * 4u + (px & 3u)] + 0.5) / 16.0 - 0.5;
+                lit = ndotl + dither * 0.18 > 0.0;
+            }
+            let crater = h2(i32((d.x - moon.x) * 900.0), i32((d.y - moon.y) * 900.0)) > 0.72;
+            let lit_c = select(vec3(222.0, 226.0, 236.0), vec3(176.0, 182.0, 200.0), crater);
+            let dark_c = select(vec3(46.0, 52.0, 74.0), vec3(32.0, 36.0, 54.0), crater);
+            let mc = select(dark_c, lit_c, lit);
+            let a = select(moon_vis * 0.8, moon_vis, lit);
+            c = mix3(c, mc, a);
+        } else {
+            c = mix3(c, vec3(150.0, 160.0, 200.0), moon_vis * illum * 0.25);
+        }
     }
 
     // Two cloud decks

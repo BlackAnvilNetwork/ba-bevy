@@ -696,6 +696,7 @@ pub fn apply_zone_snapshots(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut atmo: ResMut<crate::atmosphere::StickAtmosphere>,
     mut net: ResMut<ZoneNet>,
     mut remotes: Query<(Entity, &mut RemotePlayer, &Transform)>,
     mut local_prog: Query<&mut crate::rpg::Progression, With<Player>>,
@@ -800,6 +801,30 @@ pub fn apply_zone_snapshots(
                 ..
             }) => {
                 warn!("Zone cast rejected {ability_id}: {reason}");
+            }
+            Ok(ServerMessage::Moon {
+                new_moon_unix,
+                next_new_moon_unix,
+            }) => {
+                let moon = ba_protocol::moon::MoonState {
+                    new_moon_unix,
+                    next_new_moon_unix,
+                };
+                if moon.plausible()
+                    && (!atmo.moon_from_server
+                        || atmo.lunation_start != new_moon_unix
+                        || atmo.lunation_end != next_new_moon_unix)
+                {
+                    let age = moon.age_at(ba_protocol::moon::unix_now());
+                    info!(
+                        "Zone moon {} age={age:.3}",
+                        ba_protocol::moon::phase_name(age)
+                    );
+                    atmo.lunation_start = new_moon_unix;
+                    atmo.lunation_end = next_new_moon_unix;
+                    atmo.lunar_age = age;
+                    atmo.moon_from_server = true;
+                }
             }
             Ok(ServerMessage::Reject { reason }) => {
                 warn!("Zone rejected: {reason}");

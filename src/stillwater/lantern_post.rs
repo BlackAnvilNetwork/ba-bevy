@@ -754,7 +754,7 @@ pub fn build(
 
 pub fn flicker(
     time: Res<Time>,
-    camera: Query<&GlobalTransform, With<Camera3d>>,
+    camera: Query<&GlobalTransform, With<crate::camera_rig::PlayerCamera>>,
     mut waters: ResMut<Assets<FenWater>>,
     mut flames: Query<(&Flame, &mut Transform)>,
 ) {

@@ -56,7 +56,7 @@ pub fn spawn_opening_scene(
 
     atmosphere::spawn_sun(&mut commands, &atmo);
     atmosphere::spawn_ambient(&mut commands, &atmo);
-    atmosphere::spawn_moon_fill(&mut commands);
+    atmosphere::spawn_moon_fill(&mut commands, &atmo);
     atmosphere::spawn_well_fire(&mut commands);
     spawn_fireflies(&mut commands, &mut meshes, &mut materials);
 }

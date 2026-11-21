@@ -49,6 +49,12 @@ pub const DAY: (u32, u32) = (0x3a6ec8, 0xa8c8e8);
 /// Opening reads as night. 0 is midnight, 0.25 is sunrise.
 pub const OPENING_DAY_PHASE: f32 = 0.14;
 
+/// USNO new moons read from the zone server's cache. Empty uses the baked year.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct PersistedMoon {
+    pub new_moons_unix: Vec<i64>,
+}
+
 /// Stick `lighting::Kind::Fire` / well fill defaults.
 pub const FIRE_RGB: [f32; 3] = [1.0, 0.6, 0.3];
 pub const FIRE_RANGE_M: f32 = 9.0;
@@ -62,10 +68,18 @@ pub struct StickAtmosphere {
     pub weather_haze: f32,
     pub weather_veil: f32,
     pub time: f32,
+    /// Synodic age. 0 is new, 0.5 is full.
+    pub lunar_age: f32,
+    pub lunation_start: i64,
+    pub lunation_end: i64,
+    /// Zone welcome owns the lunation so every client shares one moon.
+    pub moon_from_server: bool,
 }
 
 impl Default for StickAtmosphere {
     fn default() -> Self {
+        let now = ba_protocol::moon::unix_now();
+        let moon = ba_protocol::moon::lunation_at(now, &[]);
         Self {
             day_phase: OPENING_DAY_PHASE,
             atmosphere_amount: ATMO_DEFAULT,
@@ -75,6 +89,10 @@ impl Default for StickAtmosphere {
             weather_haze: 0.0,
             weather_veil: 0.0,
             time: 0.0,
+            lunar_age: moon.age_at(now),
+            lunation_start: moon.new_moon_unix,
+            lunation_end: moon.next_new_moon_unix,
+            moon_from_server: false,
         }
     }
 }
@@ -103,6 +121,19 @@ pub fn sun_dir(phase: f32) -> Vec3 {
     let a = (phase - 0.25) * std::f32::consts::TAU;
     let (s, c) = a.sin_cos();
     Vec3::new(c, s * 0.92, s * 0.38).normalize_or_zero()
+}
+
+/// Moon on the sun's daily arc, east of the sun by the synodic age.
+/// Age 0 sits on the sun (new). Age 0.5 is opposite the sun (full).
+pub fn moon_dir(day_phase: f32, lunar_age: f32) -> Vec3 {
+    sun_dir(day_phase - lunar_age)
+}
+
+/// Lit fraction of the disc from the game sun and the real elongation.
+pub fn moon_illumination(day_phase: f32, lunar_age: f32) -> f32 {
+    let sun = sun_dir(day_phase);
+    let moon = moon_dir(day_phase, lunar_age);
+    ((1.0 - sun.dot(moon)) * 0.5).clamp(0.0, 1.0)
 }
 
 /// Stick `sky::daylight`.
@@ -217,8 +248,64 @@ pub fn fire_flicker(time: f32, seed: f32) -> f32 {
     0.72 + 0.28 * n
 }
 
-pub fn tick_atmosphere(time: Res<Time>, mut atmo: ResMut<StickAtmosphere>) {
+pub fn load_persisted_moon(mut table: ResMut<PersistedMoon>, mut atmo: ResMut<StickAtmosphere>) {
+    let path = ba_protocol::moon::cache_path();
+    match ba_protocol::moon::read_cache(&path) {
+        Some(cached) => {
+            info!(
+                "Moon table {} ({} new moons)",
+                path.display(),
+                cached.new_moons_unix.len()
+            );
+            table.new_moons_unix = cached.new_moons_unix;
+        }
+        None => {
+            let now = ba_protocol::moon::unix_now();
+            if ba_protocol::moon::covered(now, &[]) {
+                info!(
+                    "No moon cache at {} — using the built-in USNO year",
+                    path.display()
+                );
+            } else {
+                info!(
+                    "No moon cache at {} — mean month until the zone server fetches USNO",
+                    path.display()
+                );
+            }
+        }
+    }
+    apply_local_lunation(&table, &mut atmo);
+    info!(
+        "Moon {} age={:.3}",
+        ba_protocol::moon::phase_name(atmo.lunar_age),
+        atmo.lunar_age
+    );
+}
+
+fn apply_local_lunation(table: &PersistedMoon, atmo: &mut StickAtmosphere) {
+    let now = ba_protocol::moon::unix_now();
+    let moon = ba_protocol::moon::lunation_at(now, &table.new_moons_unix);
+    atmo.lunation_start = moon.new_moon_unix;
+    atmo.lunation_end = moon.next_new_moon_unix;
+    atmo.lunar_age = moon.age_at(now);
+}
+
+pub fn tick_atmosphere(
+    time: Res<Time>,
+    persisted: Res<PersistedMoon>,
+    mut atmo: ResMut<StickAtmosphere>,
+) {
     atmo.time = time.elapsed_secs();
+    if !atmo.moon_from_server {
+        apply_local_lunation(&persisted, &mut atmo);
+    } else {
+        let now = ba_protocol::moon::unix_now();
+        atmo.lunar_age = ba_protocol::moon::MoonState {
+            new_moon_unix: atmo.lunation_start,
+            next_new_moon_unix: atmo.lunation_end,
+        }
+        .age_at(now);
+    }
 }
 
 pub fn camera_bundle(atmo: &StickAtmosphere) -> impl Bundle {
@@ -296,19 +383,48 @@ pub fn spawn_ambient(commands: &mut Commands, atmo: &StickAtmosphere) {
     });
 }
 
-/// Cool overhead fill so the ground keeps color after the sun is down.
-pub fn spawn_moon_fill(commands: &mut Commands) {
-    let dir = Vec3::new(-0.2, 0.9, 0.35).normalize();
+/// Cool fill from the real moon. A floor keeps the yard readable on a new moon.
+pub fn moon_fill_lux(day_phase: f32, lunar_age: f32) -> (Vec3, f32) {
+    let moon = moon_dir(day_phase, lunar_age);
+    let illum = moon_illumination(day_phase, lunar_age);
+    let up = moon.y.clamp(0.0, 1.0);
+    let lux = 180.0 + 280.0 * illum * (0.35 + 0.65 * up);
+    let dir = if moon.y > 0.05 {
+        moon
+    } else {
+        Vec3::new(-0.2, 0.9, 0.35).normalize()
+    };
+    (dir, lux)
+}
+
+#[derive(Component)]
+pub struct MoonFill;
+
+/// Cool fill so the ground keeps color after the sun is down.
+pub fn spawn_moon_fill(commands: &mut Commands, atmo: &StickAtmosphere) {
+    let (dir, lux) = moon_fill_lux(atmo.day_phase, atmo.lunar_age);
     commands.spawn((
+        MoonFill,
         Name::new("MoonFill"),
         DirectionalLight {
             color: Color::linear_rgb(0.42, 0.62, 0.52),
-            illuminance: 420.0,
+            illuminance: lux,
             shadow_maps_enabled: false,
             ..default()
         },
         Transform::from_rotation(Quat::from_rotation_arc(Vec3::NEG_Z, -dir)),
     ));
+}
+
+pub fn sync_moon_fill(
+    atmo: Res<StickAtmosphere>,
+    mut lights: Query<(&mut DirectionalLight, &mut Transform), With<MoonFill>>,
+) {
+    let (dir, lux) = moon_fill_lux(atmo.day_phase, atmo.lunar_age);
+    for (mut light, mut tf) in &mut lights {
+        light.illuminance = lux;
+        tf.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, -dir);
+    }
 }
 
 pub fn spawn_well_fire(commands: &mut Commands) {
@@ -343,5 +459,29 @@ pub fn flicker_well_fire(
             FIRE_RGB[1] * (0.92 + 0.08 * f),
             FIRE_RGB[2] * (0.85 + 0.15 * f),
         );
+    }
+}
+
+#[cfg(test)]
+mod moon_sky_tests {
+    use super::*;
+
+    #[test]
+    fn full_moon_is_opposite_the_sun_and_new_moon_is_on_it() {
+        let sun = sun_dir(OPENING_DAY_PHASE);
+        assert!((moon_dir(OPENING_DAY_PHASE, 0.5) + sun).length() < 1e-4);
+        assert!((moon_dir(OPENING_DAY_PHASE, 0.0) - sun).length() < 1e-4);
+        assert!((moon_illumination(OPENING_DAY_PHASE, 0.5) - 1.0).abs() < 1e-4);
+        assert!(moon_illumination(OPENING_DAY_PHASE, 0.0) < 1e-4);
+    }
+
+    #[test]
+    fn november_2026_gibbous_sits_above_the_opening_horizon() {
+        let now = ba_protocol::moon::unix_from_utc(2026, 11, 21, 21, 8);
+        let moon = ba_protocol::moon::lunation_at(now, &[]);
+        let age = moon.age_at(now);
+        let dir = moon_dir(OPENING_DAY_PHASE, age);
+        assert!(dir.y > 0.05, "altitude {} age {age}", dir.y);
+        assert!(moon_illumination(OPENING_DAY_PHASE, age) > 0.85);
     }
 }

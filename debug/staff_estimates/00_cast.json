@@ -1,0 +1,9 @@
+{
+  "id": "staff-cast",
+  "show": "cast",
+  "note": "Parked first staff hold as spell-cast. Hands high in front of the chest, shaft vertical.",
+  "cast": {
+    "handle": [-0.10, -0.04, 0.30],
+    "tip": [-0.08, 1.10, 0.22]
+  }
+}

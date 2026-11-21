@@ -5,8 +5,12 @@
 
 mod avatar;
 mod animation;
+mod equip;
 mod materials;
-pub use animation::{LocalEye, SwingPose, prepare_avatar_animation, bind_avatar_animators, update_avatar_animation, discover_avatar_bones, pose_humanoid_bones, attach_held_weapon, hide_held_weapon_hulls, stow_held_swords_while_resting};
+pub use animation::{LocalEye, SwingPose, prepare_avatar_animation, bind_avatar_animators, update_avatar_animation, discover_avatar_bones, pose_humanoid_bones, attach_held_weapon, hide_held_weapon_hulls, stow_held_swords_while_resting, swing_overlay_label};
+pub use equip::{cycle_equip_mode, EquipMode, EquipState};
+#[allow(unused_imports)]
+pub use equip::OffhandSlot;
 pub use materials::matte_avatar_materials;
 
 pub use avatar::{
@@ -78,8 +82,15 @@ pub struct BaCharacterV1 {
 pub enum HeldWeapon {
     Unarmed,
     OneHand,
-    TwoHand,
     DualWield,
+    GreatWeapon,
+    PoleArm,
+}
+
+impl HeldWeapon {
+    pub fn is_two_handed(self) -> bool {
+        matches!(self, Self::GreatWeapon | Self::PoleArm)
+    }
 }
 
 impl BaCharacterV1 {
@@ -94,9 +105,25 @@ impl BaCharacterV1 {
         let offhand = self
             .equip_id("offhand")
             .or_else(|| self.equip_id("off_hand"));
-        let two_hand = |id: &str| {
+        let two_hand = |id: &str| -> Option<HeldWeapon> {
             let id = id.to_ascii_lowercase();
-            id.contains("2h") || id.contains("great") || id.contains("zwei")
+            if id.contains("spear")
+                || id.contains("staff")
+                || id.contains("pole")
+                || id.contains("pike")
+                || id.contains("halberd")
+                || id.contains("lance")
+            {
+                Some(HeldWeapon::PoleArm)
+            } else if id.contains("2h")
+                || id.contains("great")
+                || id.contains("zwei")
+                || id.contains("greataxe")
+            {
+                Some(HeldWeapon::GreatWeapon)
+            } else {
+                None
+            }
         };
         let dual = |id: &str| {
             let id = id.to_ascii_lowercase();
@@ -104,10 +131,17 @@ impl BaCharacterV1 {
         };
         match (weapon, offhand) {
             (None, None) => HeldWeapon::Unarmed,
-            (Some(id), _) if two_hand(id) => HeldWeapon::TwoHand,
-            (Some(id), _) if dual(id) => HeldWeapon::DualWield,
-            (Some(_), Some(_)) => HeldWeapon::DualWield,
-            (Some(_), None) => HeldWeapon::OneHand,
+            (Some(id), _) => {
+                if let Some(kind) = two_hand(id) {
+                    kind
+                } else if dual(id) {
+                    HeldWeapon::DualWield
+                } else if offhand.is_some() {
+                    HeldWeapon::DualWield
+                } else {
+                    HeldWeapon::OneHand
+                }
+            }
             (None, Some(_)) => HeldWeapon::DualWield,
         }
     }
@@ -234,6 +268,11 @@ pub fn load_character_profile(mut commands: Commands, mut flow: ResMut<crate::fo
     } else {
         info!("No valid selected BaCharacterV1 (standalone path: {})", active_json_path().display());
     }
+    let held = draft
+        .as_ref()
+        .map(BaCharacterV1::held_weapon)
+        .unwrap_or(HeldWeapon::Unarmed);
+    commands.insert_resource(equip::EquipState::from_loadout(held));
     commands.insert_resource(CharacterProfile { draft });
 }
 
@@ -333,6 +372,10 @@ mod character_schema_tests {
         assert_eq!(armed.held_weapon(), HeldWeapon::DualWield);
         armed.starter_equipment.remove("offhand");
         armed.starter_equipment.get_mut("weapon").unwrap().id = "greatsword".into();
-        assert_eq!(armed.held_weapon(), HeldWeapon::TwoHand);
+        assert_eq!(armed.held_weapon(), HeldWeapon::GreatWeapon);
+        armed.starter_equipment.get_mut("weapon").unwrap().id = "spear".into();
+        assert_eq!(armed.held_weapon(), HeldWeapon::PoleArm);
+        armed.starter_equipment.get_mut("weapon").unwrap().id = "oak_staff".into();
+        assert_eq!(armed.held_weapon(), HeldWeapon::PoleArm);
     }
 }
