@@ -2753,8 +2753,7 @@ pub fn pose_humanoid_bones(
             } else if authored_walk {
                 None
             } else {
-                tf.rotation = joint.rest;
-                continue;
+                Some(FingerPose::Relaxed)
             };
             if let Some(pose) = pose {
                 tf.rotation = pose_finger(joint, pose);
@@ -3350,6 +3349,17 @@ mod pose_tests {
         let along = Vec3::NEG_X;
         let g = TwoHandGrip::default();
         let tf = held_weapon_tf(along, Vec3::Y, HeldMeshKind::LongSword);
+        // CI checkouts omit the gitignored longsword. The fallback cube is
+        // the short-sword grip, not the palm seating of the real mesh.
+        if !darkmod_weapon_on_disk(held_mesh_path(HeldMeshKind::LongSword)) {
+            let fallback = held_sword_grip(along, Vec3::Y);
+            assert!(
+                tf.translation.distance(fallback.translation) < 1e-4,
+                "missing longsword must use the cube grip, got {}",
+                tf.translation
+            );
+            return;
+        }
         let side = along.cross(Vec3::NEG_Y).normalize_or(Vec3::Z);
         let palm = along * g.palm_along + Vec3::NEG_Y * g.palm_in + side * g.palm_side;
         let grip = tf.translation + tf.rotation * Vec3::Z * g.grip_pommel;
@@ -3376,8 +3386,10 @@ mod pose_tests {
     fn two_bone_ik_puts_the_left_palm_on_the_handle() {
         let upper = test_joint(JointKind::UpperArm, 1.0, Vec3::X);
         let lower = test_joint(JointKind::LowerArm, 1.0, Vec3::X);
-        let forearm = Vec3::X * 0.28;
-        let hand = Vec3::X * 0.25;
+        // Long enough to reach the pommel. A shorter stub stops short and
+        // the palm never lands on the handle.
+        let forearm = Vec3::X * 0.40;
+        let hand = Vec3::X * 0.36;
         let origin = Vec3::new(0.18, 0.05, 0.02);
         let along = Vec3::NEG_X;
         let right_hand = Vec3::new(-0.12, -0.18, 0.30);
