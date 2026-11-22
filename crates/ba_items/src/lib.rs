@@ -23,7 +23,7 @@ mod visual;
 mod frozen;
 
 pub use catalog::{Catalog, CatalogError, ItemDef, Recipe};
-pub use equipment::{Equipment, EquipError, EquippedItem};
+pub use equipment::{EquipContext, EquipError, EquipMode, Equipment, EquippedItem};
 pub use inventory::{Inventory, InventoryError};
 pub use stack::{Quality, Stack, StackRule};
 pub use stats::ItemStats;

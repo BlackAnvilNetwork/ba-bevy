@@ -220,25 +220,35 @@ pub enum AmmoClass {
 }
 
 /// Bitmask of jobs that can use an item.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+///
+/// Bits follow `JobId` discriminant order: Time Mage, Knight, Rogue, Cleric,
+/// Sorcerer, Fighter, Battle Mage, Druid. `ALL` is the default so a missing
+/// restriction lets every job equip the item. `NONE` lets nobody.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct JobMask(pub u16);
+
+impl Default for JobMask {
+    fn default() -> Self {
+        Self::ALL
+    }
+}
 
 impl JobMask {
     pub const ALL: JobMask = JobMask(0xFFFF);
     pub const NONE: JobMask = JobMask(0);
 
-    pub const KNIGHT: JobMask = JobMask(1 << 0);
-    pub const ROGUE: JobMask = JobMask(1 << 1);
-    pub const CLERIC: JobMask = JobMask(1 << 2);
-    pub const SORCERER: JobMask = JobMask(1 << 3);
-    pub const FIGHTER: JobMask = JobMask(1 << 4);
-    pub const BATTLE_MAGE: JobMask = JobMask(1 << 5);
-    pub const DRUID: JobMask = JobMask(1 << 6);
-    pub const TIME_MAGE: JobMask = JobMask(1 << 7);
+    pub const TIME_MAGE: JobMask = JobMask(1 << 0);
+    pub const KNIGHT: JobMask = JobMask(1 << 1);
+    pub const ROGUE: JobMask = JobMask(1 << 2);
+    pub const CLERIC: JobMask = JobMask(1 << 3);
+    pub const SORCERER: JobMask = JobMask(1 << 4);
+    pub const FIGHTER: JobMask = JobMask(1 << 5);
+    pub const BATTLE_MAGE: JobMask = JobMask(1 << 6);
+    pub const DRUID: JobMask = JobMask(1 << 7);
 
     pub fn allows(self, job: JobMask) -> bool {
-        self.0 == 0 || (self.0 & job.0) != 0
+        self.0 != 0 && job.0 != 0 && (self.0 & job.0) != 0
     }
 
     pub fn union(self, other: JobMask) -> JobMask {
@@ -276,6 +286,13 @@ mod tests {
     #[test]
     fn job_mask_allows() {
         assert!(JobMask::ALL.allows(JobMask::KNIGHT));
+        assert!(JobMask::ALL.allows(JobMask::TIME_MAGE));
+        assert!(!JobMask::NONE.allows(JobMask::KNIGHT));
+        assert!(!JobMask::NONE.allows(JobMask::ALL));
+        assert_eq!(JobMask::default(), JobMask::ALL);
+        assert_eq!(JobMask::TIME_MAGE.0, 1 << 0);
+        assert_eq!(JobMask::KNIGHT.0, 1 << 1);
+        assert_eq!(JobMask::DRUID.0, 1 << 7);
         assert!(JobMask::KNIGHT.allows(JobMask::KNIGHT));
         assert!(!JobMask::KNIGHT.allows(JobMask::ROGUE));
         let knight_rogue = JobMask::KNIGHT.union(JobMask::ROGUE);

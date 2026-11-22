@@ -111,7 +111,8 @@ pub struct ItemDef {
     /// Attack delay in milliseconds (for weapons).
     #[serde(default)]
     pub delay_ms: Option<u32>,
-    /// Job restrictions (empty = all jobs).
+    /// Job restrictions. A missing field is every job (`JobMask::ALL`).
+    /// `JobMask::NONE` (0) lets nobody equip the item.
     #[serde(default)]
     pub job_restrict: JobMask,
     /// How the item stacks.

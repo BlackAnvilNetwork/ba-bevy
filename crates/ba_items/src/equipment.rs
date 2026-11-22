@@ -192,12 +192,17 @@ impl Equipment {
 
     /// Equip an item in a slot, storing its grip class.
     /// Returns the previously equipped item, if any.
+    /// Refuses the change when `can_equip` fails, so a two-hander cannot
+    /// share the off-hand and a job-locked item cannot be forced on.
     pub fn equip(
         &mut self,
         slot: EquipSlot,
         item: EquippedItem,
-        grip: Option<GripClass>,
-    ) -> Option<EquippedItem> {
+        ctx: &EquipContext,
+        player_job: JobMask,
+    ) -> Result<Option<EquippedItem>, EquipError> {
+        self.can_equip(slot, ctx, player_job)?;
+        let grip = ctx.grip;
         let old = self.unequip(slot);
 
         let slot_ref = match slot {
@@ -225,7 +230,7 @@ impl Equipment {
             _ => {}
         }
 
-        old
+        Ok(old)
     }
 
     /// Unequip an item from a slot. Returns the item if present.
@@ -260,7 +265,9 @@ impl Equipment {
     /// Derive the equip mode from currently equipped items.
     /// This is the key function that replaces string-based guessing.
     pub fn equip_mode(&self) -> EquipMode {
-        if self.ranged.is_some() {
+        // A bow grip draws the ranged pose. Any other item in the ranged
+        // slot leaves the main-hand weapon in charge.
+        if self.ranged_grip == Some(GripClass::Bow) || self.main_grip == Some(GripClass::Bow) {
             return EquipMode::Ranged;
         }
 
@@ -312,6 +319,20 @@ impl Equipment {
 mod tests {
     use super::*;
 
+    fn allow(slot: EquipSlot, grip: Option<GripClass>) -> EquipContext {
+        EquipContext {
+            slot: Some(slot),
+            grip,
+            job_restrict: JobMask::ALL,
+        }
+    }
+
+    fn put(equip: &mut Equipment, slot: EquipSlot, id: u32, grip: Option<GripClass>) {
+        equip
+            .equip(slot, EquippedItem::new(ItemId(id)), &allow(slot, grip), JobMask::ALL)
+            .unwrap();
+    }
+
     #[test]
     fn equip_mode_unarmed() {
         let equip = Equipment::new();
@@ -321,22 +342,22 @@ mod tests {
     #[test]
     fn equip_mode_one_hand() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(1)), Some(GripClass::OneHand));
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::OneHand));
         assert_eq!(equip.equip_mode(), EquipMode::OneHand);
     }
 
     #[test]
     fn equip_mode_dual_wield() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(1)), Some(GripClass::OneHand));
-        equip.equip(EquipSlot::Off, EquippedItem::new(ItemId(2)), Some(GripClass::OneHand));
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::OneHand));
+        put(&mut equip, EquipSlot::Off, 2, Some(GripClass::OneHand));
         assert_eq!(equip.equip_mode(), EquipMode::DualWield);
     }
 
     #[test]
     fn equip_mode_great_weapon() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(1)), Some(GripClass::TwoHandGreat));
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::TwoHandGreat));
         assert_eq!(equip.equip_mode(), EquipMode::GreatWeapon);
         assert!(equip.equip_mode().is_two_handed());
     }
@@ -344,15 +365,15 @@ mod tests {
     #[test]
     fn equip_mode_polearm() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(1)), Some(GripClass::TwoHandPole));
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::TwoHandPole));
         assert_eq!(equip.equip_mode(), EquipMode::PoleArm);
     }
 
     #[test]
     fn equip_mode_shield() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(1)), Some(GripClass::OneHand));
-        equip.equip(EquipSlot::Off, EquippedItem::new(ItemId(2)), Some(GripClass::Shield));
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::OneHand));
+        put(&mut equip, EquipSlot::Off, 2, Some(GripClass::Shield));
         assert_eq!(equip.equip_mode(), EquipMode::OneHandShield);
         assert!(equip.equip_mode().has_shield());
     }
@@ -360,14 +381,39 @@ mod tests {
     #[test]
     fn equip_mode_ranged() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Ranged, EquippedItem::new(ItemId(1)), Some(GripClass::Bow));
+        put(&mut equip, EquipSlot::Ranged, 1, Some(GripClass::Bow));
         assert_eq!(equip.equip_mode(), EquipMode::Ranged);
+    }
+
+    #[test]
+    fn ranged_slot_without_a_bow_keeps_the_main_hand() {
+        let mut equip = Equipment::new();
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::OneHand));
+        put(&mut equip, EquipSlot::Ranged, 2, Some(GripClass::Tool));
+        assert_eq!(equip.equip_mode(), EquipMode::OneHand);
+    }
+
+    #[test]
+    fn equip_refuses_an_off_hand_on_a_two_hander() {
+        let mut equip = Equipment::new();
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::TwoHandGreat));
+        let err = equip
+            .equip(
+                EquipSlot::Off,
+                EquippedItem::new(ItemId(2)),
+                &allow(EquipSlot::Off, Some(GripClass::Shield)),
+                JobMask::KNIGHT,
+            )
+            .unwrap_err();
+        assert!(matches!(err, EquipError::TwoHandConflict));
+        assert!(equip.get(EquipSlot::Off).is_none());
+        assert_eq!(equip.equip_mode(), EquipMode::GreatWeapon);
     }
 
     #[test]
     fn two_hand_conflict() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(1)), Some(GripClass::TwoHandGreat));
+        put(&mut equip, EquipSlot::Main, 1, Some(GripClass::TwoHandGreat));
 
         let ctx = EquipContext {
             slot: Some(EquipSlot::Off),
@@ -388,6 +434,13 @@ mod tests {
         };
         let result = equip.can_equip(EquipSlot::Main, &ctx, JobMask::ROGUE);
         assert!(matches!(result, Err(EquipError::JobRestricted { .. })));
+        let stored = Equipment::new().equip(
+            EquipSlot::Main,
+            EquippedItem::new(ItemId(9)),
+            &ctx,
+            JobMask::ROGUE,
+        );
+        assert!(matches!(stored, Err(EquipError::JobRestricted { .. })));
     }
 
     #[test]
@@ -405,7 +458,7 @@ mod tests {
     #[test]
     fn unequip_returns_item() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(42)), Some(GripClass::OneHand));
+        put(&mut equip, EquipSlot::Main, 42, Some(GripClass::OneHand));
         let old = equip.unequip(EquipSlot::Main);
         assert!(old.is_some());
         assert_eq!(old.unwrap().item, ItemId(42));
@@ -415,8 +468,8 @@ mod tests {
     #[test]
     fn iter_equipped() {
         let mut equip = Equipment::new();
-        equip.equip(EquipSlot::Head, EquippedItem::new(ItemId(1)), None);
-        equip.equip(EquipSlot::Main, EquippedItem::new(ItemId(2)), Some(GripClass::OneHand));
+        put(&mut equip, EquipSlot::Head, 1, None);
+        put(&mut equip, EquipSlot::Main, 2, Some(GripClass::OneHand));
 
         let items: Vec<_> = equip.iter().collect();
         assert_eq!(items.len(), 2);
