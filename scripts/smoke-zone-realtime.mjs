@@ -177,7 +177,16 @@ async function walkTo(x, z) {
     send(a, {type:"move_intent",seq:seq++,forward:-dz/distance,strafe:dx/distance,yaw:0,sprint:true});
     await sleep(90);
   }
-  throw new Error("could not reach waypoint");
+  const stuck = a.peers.find(p => pid(p) === a.id);
+  throw new Error(
+    `could not reach (${x}, ${z}) from (${stuck?.pose?.x?.toFixed?.(2)}, ${stuck?.pose?.z?.toFixed?.(2)}) hp=${stuck?.hp}`
+  );
+}
+// The east-road waystone at (17.5, -5.5) ports anyone within 4.5m to Stillwater.
+// A straight line from the warden clips it, and marsh bounds will not let them back.
+async function returnToForge() {
+  await walkTo(8, 6);
+  await walkTo(-2.05, 0.35);
 }
 await walkTo(-2.05,0.35);
 send(a, { type: "forge", recipe: "kiln_ward" });
@@ -205,7 +214,7 @@ send(a,{type:"interact"});
 await waitUntil(() => a.ashworks.heart, 45000, "kiln heart");
 if (a.rejects.filter(r => r.ability_id === "ws_gs_hard_slash").length !== 1) throw new Error("earned weapon skill rejected");
 if (a.peers.find(p => pid(p) === a.id).level < 2) throw new Error("XP did not advance level");
-await walkTo(-2.05,0.35);
+await returnToForge();
 send(a, { type: "forge", recipe: "kiln_ward" });
 await sleep(250);
 if (a.ashworks.edge || !a.ashworks.heart) throw new Error("replayed ward craft consumed kiln heart");

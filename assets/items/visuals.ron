@@ -1,0 +1,513 @@
+// Black Anvil Item Visual Library
+//
+// Each entry maps a visual key to its model, scale, grip transform, and variants.
+// Multiple items can share one visual (with different tints).
+//
+// Scale 0.0254 converts Doom3 units (~1 inch) to metres.
+// Axis indicates which direction the weapon's long axis is in the source model.
+//
+// Models are from The Dark Mod (CC-BY-NC-SA 3.0). See ATTRIBUTION.md.
+
+{
+    // ═══════════════════════════════════════════════════════════════════
+    // SWORDS
+    // ═══════════════════════════════════════════════════════════════════
+    "shortsword": (
+        model: "darkmod/weapons/shortsword.glb#Scene0",
+        scale: 0.0254,
+        grip: (
+            offset: (0.0, 0.0, 0.0),
+            axis: neg_z,
+            roll_deg: 0.0,
+        ),
+        hide_materials: ["collision", "shadow", "tdm_collision"],
+        stow_socket: hip_left,
+    ),
+    "cutlass": (
+        model: "darkmod/weapons/cutlass.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "scimitar": (
+        model: "darkmod/weapons/scimitar.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "ceremonial-sword": (
+        model: "darkmod/weapons/ceremonial_sword.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "rough-blade": (
+        model: "darkmod/weapons/rough_blade.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DAGGERS
+    // ═══════════════════════════════════════════════════════════════════
+    "dagger-loot": (
+        model: "darkmod/loot/dagger_loot.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // GREATSWORDS
+    // ═══════════════════════════════════════════════════════════════════
+    "longsword01": (
+        model: "darkmod/weapons/longsword01.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        lod: Some("darkmod/weapons/longswordlow.glb#Scene0"),
+        stow_socket: back,
+    ),
+    "longsword02": (
+        model: "darkmod/weapons/longsword02.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // GREAT AXES
+    // ═══════════════════════════════════════════════════════════════════
+    "battleaxe": (
+        model: "darkmod/weapons/battleaxe.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "battleaxe-ornate": (
+        model: "darkmod/weapons/battleaxe_ornate.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ONE-HAND AXES
+    // ═══════════════════════════════════════════════════════════════════
+    "handaxe": (
+        model: "darkmod/weapons/handaxe.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "handaxe-ornate": (
+        model: "darkmod/weapons/handaxe_ornate.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BLUNT WEAPONS
+    // ═══════════════════════════════════════════════════════════════════
+    "mace": (
+        model: "darkmod/weapons/mace.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "mace-ornate": (
+        model: "darkmod/weapons/mace_ornate.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "morningstar-ornate": (
+        model: "darkmod/weapons/morningstar_ornate.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "hammer": (
+        model: "darkmod/weapons/hammer.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "hammer02": (
+        model: "darkmod/weapons/hammer02.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "hammer-ornate": (
+        model: "darkmod/weapons/hammer_ornate.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "warhammer-knight": (
+        model: "darkmod/weapons/warhammer_knight.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "club-spiked": (
+        model: "darkmod/weapons/club_spiked.glb#Scene0",
+        scale: 0.0254,
+        grip: (
+            axis: neg_x,
+            roll_deg: 90.0,
+        ),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "club-spiked02": (
+        model: "darkmod/weapons/club_spiked02.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "blackjack": (
+        model: "darkmod/weapons/blackjack.glb#Scene0",
+        scale: 0.0254,
+        grip: (
+            axis: pos_x,
+            roll_deg: -90.0,
+        ),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STAVES
+    // ═══════════════════════════════════════════════════════════════════
+    "quarterstaff": (
+        model: "darkmod/weapons/quarterstaff.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "mages-hand-staff": (
+        model: "darkmod/weapons/mages_hand_staff.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "deer-skull-staff": (
+        model: "darkmod/decorative/deer_skull_staff.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "staff-decorative": (
+        model: "darkmod/misc/staff_decorative.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // POLEARMS
+    // ═══════════════════════════════════════════════════════════════════
+    "spear": (
+        model: "darkmod/weapons/spear.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "spear2": (
+        model: "darkmod/weapons/spear2.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "volta-spear": (
+        model: "darkmod/weapons/volta_spear.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "halberd": (
+        model: "darkmod/weapons/halberd.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BOWS
+    // ═══════════════════════════════════════════════════════════════════
+    "shortbow": (
+        model: "darkmod/weapons/shortbow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: quiver_slot,
+        variants: {
+            "unstrung": "darkmod/weapons/shortbow_simple_nostring.glb#Scene0",
+        },
+    ),
+    "shortbow-simple": (
+        model: "darkmod/weapons/shortbow_simple.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: quiver_slot,
+        variants: {
+            "unstrung": "darkmod/weapons/shortbow_simple_nostring.glb#Scene0",
+        },
+    ),
+    "longbow": (
+        model: "darkmod/weapons/longbow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: quiver_slot,
+        variants: {
+            "unstrung": "darkmod/weapons/longbow_nostring.glb#Scene0",
+        },
+    ),
+    "longbow-simple": (
+        model: "darkmod/weapons/longbow_simple.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: quiver_slot,
+        variants: {
+            "unstrung": "darkmod/weapons/longbow_simple_nostring.glb#Scene0",
+        },
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // AMMUNITION
+    // ═══════════════════════════════════════════════════════════════════
+    "broadhead": (
+        model: "darkmod/weapons/broadhead.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "firearrow": (
+        model: "darkmod/weapons/firearrow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "gasarrow": (
+        model: "darkmod/weapons/gasarrow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "mossarrow": (
+        model: "darkmod/weapons/mossarrow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "waterarrow": (
+        model: "darkmod/weapons/waterarrow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "vinearrow": (
+        model: "darkmod/weapons/vinearrow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "ropearrow": (
+        model: "darkmod/weapons/ropearrow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "crossbow-bolt": (
+        model: "darkmod/weapons/crossbow_bolt.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "ancient-arrowhead": (
+        model: "darkmod/loot/exotic/ancient_arrowhead.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SHIELDS
+    // ═══════════════════════════════════════════════════════════════════
+    "shield-diamond": (
+        model: "darkmod/wearables/armour/shield_diamond.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "shield-oldfashioned": (
+        model: "darkmod/wearables/armour/shield_oldfashioned.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOLS
+    // ═══════════════════════════════════════════════════════════════════
+    "pickaxe": (
+        model: "darkmod/tools/pickaxe.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "smithyhammer": (
+        model: "darkmod/tools/smithyhammer.glb#Scene0",
+        scale: 0.0254,
+        grip: (
+            axis: pos_x,
+            offset: (0.0, 0.0, 0.0),
+        ),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "smithyhammer2": (
+        model: "darkmod/tools/smithyhammer2.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_x),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_right,
+    ),
+    "axe-rustic": (
+        model: "darkmod/weapons/axe_rustic.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // JUNK AND LOOT
+    // ═══════════════════════════════════════════════════════════════════
+    "sword-broken": (
+        model: "darkmod/junk/sword_broken.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_z),
+        hide_materials: ["collision", "shadow"],
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DECOR AND PROPS
+    // ═══════════════════════════════════════════════════════════════════
+    "norman-shield": (
+        model: "darkmod/decorative/wall/shields/norman_shield.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "plain-shield": (
+        model: "darkmod/decorative/wall/shields/plain_shield.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "shield-trophy": (
+        model: "darkmod/decorative/wall/shields/shield.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "shield-and-swords02": (
+        model: "darkmod/decorative/wall/shields/shield_and_swords02.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "volta-spear-bundle": (
+        model: "darkmod/weapons/volta_spear_bundle.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "volta-spear-broken-shaft": (
+        model: "darkmod/weapons/volta_spear_broken_shaft.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "volta-spear-broken-tip": (
+        model: "darkmod/weapons/volta_spear_broken_tip.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_y),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "quiver-full-bow": (
+        model: "darkmod/weapons/quiver_full_bow.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_x),
+        hide_materials: ["collision", "shadow"],
+    ),
+    "gladius-in-scabbard": (
+        model: "darkmod/weapons/gladius_in_scabbard.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+    "gladius-scabbard": (
+        model: "darkmod/weapons/gladius_scabbard.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: neg_z),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: hip_left,
+    ),
+
+    // ═══════════════════════════════════════════════════════════════════
+    // QUIVERS (Worn cosmetics derived from equipment)
+    // ═══════════════════════════════════════════════════════════════════
+    "quiver-empty": (
+        model: "darkmod/wearables/quiver.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_x),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+    "quiver-full": (
+        model: "darkmod/wearables/quiver_full.glb#Scene0",
+        scale: 0.0254,
+        grip: (axis: pos_x),
+        hide_materials: ["collision", "shadow"],
+        stow_socket: back,
+    ),
+}

@@ -7,6 +7,7 @@ members = [
     "crates/ba_pixel_sim",
     "crates/ba_protocol",
     "crates/ba_combat",
+    "crates/ba_items",
     "crates/ba_zone_server",
     "crates/ba_gateway",
 ]
