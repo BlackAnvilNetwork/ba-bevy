@@ -221,9 +221,10 @@ pub enum AmmoClass {
 
 /// Bitmask of jobs that can use an item.
 ///
-/// Bits follow `JobId` discriminant order: Time Mage, Knight, Rogue, Cleric,
-/// Sorcerer, Fighter, Battle Mage, Druid. `ALL` is the default so a missing
-/// restriction lets every job equip the item. `NONE` lets nobody.
+/// Bits follow the playable `JobId` order: Time Mage, Knight, Rogue, Cleric,
+/// Sorcerer, Fighter, Battle Mage. Druid is not a mask bit. `ALL` is the
+/// default so a missing restriction lets every playable job equip the item.
+/// `NONE` lets nobody.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct JobMask(pub u16);
@@ -235,7 +236,8 @@ impl Default for JobMask {
 }
 
 impl JobMask {
-    pub const ALL: JobMask = JobMask(0xFFFF);
+    /// Bits 0 through 6. Bit 7 is unused because Druid is not playable.
+    pub const ALL: JobMask = JobMask((1 << 7) - 1);
     pub const NONE: JobMask = JobMask(0);
 
     pub const TIME_MAGE: JobMask = JobMask(1 << 0);
@@ -245,7 +247,6 @@ impl JobMask {
     pub const SORCERER: JobMask = JobMask(1 << 4);
     pub const FIGHTER: JobMask = JobMask(1 << 5);
     pub const BATTLE_MAGE: JobMask = JobMask(1 << 6);
-    pub const DRUID: JobMask = JobMask(1 << 7);
 
     pub fn allows(self, job: JobMask) -> bool {
         self.0 != 0 && job.0 != 0 && (self.0 & job.0) != 0
@@ -292,7 +293,9 @@ mod tests {
         assert_eq!(JobMask::default(), JobMask::ALL);
         assert_eq!(JobMask::TIME_MAGE.0, 1 << 0);
         assert_eq!(JobMask::KNIGHT.0, 1 << 1);
-        assert_eq!(JobMask::DRUID.0, 1 << 7);
+        assert_eq!(JobMask::BATTLE_MAGE.0, 1 << 6);
+        assert_eq!(JobMask::ALL.0, (1 << 7) - 1);
+        assert!(!JobMask::ALL.allows(JobMask(1 << 7)));
         assert!(JobMask::KNIGHT.allows(JobMask::KNIGHT));
         assert!(!JobMask::KNIGHT.allows(JobMask::ROGUE));
         let knight_rogue = JobMask::KNIGHT.union(JobMask::ROGUE);
