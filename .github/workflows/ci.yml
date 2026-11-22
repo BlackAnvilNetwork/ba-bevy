@@ -16,11 +16,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Check crates + client
-        run: cargo check -p ba_protocol -p ba_combat -p ba_zone_server -p black_anvil
+        run: cargo check -p ba_protocol -p ba_combat -p ba_items -p ba_zone_server -p black_anvil
       - name: Exercise shipped avatar rigs in both camera modes
         run: cargo test -p black_anvil character::animation
       - name: Shared protocol & zone unit tests
         run: cargo test -p ba_protocol -p ba_zone_server
+      - name: Item system unit tests
+        run: cargo test -p ba_items
 
   gateway:
     runs-on: windows-latest
