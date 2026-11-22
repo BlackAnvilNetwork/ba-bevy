@@ -1,5 +1,14 @@
 //! Stillwater landmarks and presentation of the authoritative marsh snapshot.
-use crate::{forge_menu::GameFlow, net::ZoneNet, player::Player};
+use crate::{
+    forge_menu::GameFlow,
+    loot::{
+        beam::{BeamMeshes, GroundGlowMaterial, LootBeamMaterial, SparkMaterial},
+        grammar::{wire_rarity_to_grammar, LootGrammar},
+        timeline::{beam_state, ground_glow_state, spark_positions},
+    },
+    net::ZoneNet,
+    player::Player,
+};
 use ba_protocol::stillwater::*;
 use bevy::{
     image::{ImageAddressMode, ImageLoaderSettings, ImageSampler, ImageSamplerDescriptor},
@@ -31,6 +40,44 @@ pub struct Cue(u32);
 pub struct Parcel(usize, u8);
 #[derive(Component)]
 pub struct Label(usize);
+
+/// Marker for a spawned loot beam entity (new layered beam system).
+#[derive(Component)]
+pub struct SpawnedLootBeam {
+    /// Position key for tracking (x.to_bits(), z.to_bits()).
+    pub key: (i32, i32),
+    /// Grammar tier for this beam.
+    pub grammar: LootGrammar,
+    /// Time this beam was spawned.
+    pub spawn_time: f32,
+}
+
+/// Marker for beam core cylinder.
+#[derive(Component)]
+pub struct LootBeamCore;
+
+/// Marker for beam halo.
+#[derive(Component)]
+pub struct LootBeamHalo;
+
+/// Marker for beam ground glow.
+#[derive(Component)]
+pub struct LootBeamGlow;
+
+/// Marker for beam ghost pass.
+#[derive(Component)]
+pub struct LootBeamGhost;
+
+/// Marker for beam point light.
+#[derive(Component)]
+pub struct LootBeamLight;
+
+/// Marker for beam sparks.
+#[derive(Component)]
+pub struct LootBeamSpark {
+    pub index: usize,
+}
+
 #[derive(Resource)]
 pub struct Paint {
     common: Handle<StandardMaterial>,
@@ -1215,43 +1262,56 @@ pub fn loot(
 ) {
     let active = net.online() && !flow.in_menu();
     let t = time.elapsed_secs();
+
+    // Helper to check if a drop should be visible at the given index
     let visible = |i: usize| {
         net.marsh
             .drops
             .get(i)
             .filter(|d| active && (!display.filter || d.rare) && d.age >= 0.65)
     };
+
+    // Update pooled parcel entities (item cubes only - beams handled by new system)
     for (parcel, mut tf, mut mat, mut vis) in &mut parcels {
         let Some(d) = visible(parcel.0) else {
             *vis = Visibility::Hidden;
             continue;
         };
-        let reveal = ((d.age - 0.65) / 0.3).clamp(0., 1.);
-        let size = match parcel.1 {
-            0 => Vec3::splat(0.34),
-            1 if d.rare => Vec3::new(0.16, (8. + 2. * d.rarity() as usize as f32) * reveal, 0.16),
-            2 if d.age < 1.1 => Vec3::new(reveal, 0.13, reveal),
-            _ => {
-                *vis = Visibility::Hidden;
-                continue;
-            }
-        };
-        let y = if parcel.1 == 1 {
-            size.y / 2.
-        } else if parcel.1 == 2 {
-            0.12
-        } else {
-            0.45 + (t * 3.).sin() * 0.07
-        };
+
+        // Compute grammar for this drop
+        let grammar = wire_rarity_to_grammar(d.rarity(), &d.items);
+
+        // Only render parcel part 0 (the item cube) - beams are now separate entities
+        if parcel.1 != 0 {
+            *vis = Visibility::Hidden;
+            continue;
+        }
+
+        // Item cube with bobbing animation
+        let size = Vec3::splat(0.34);
+        let y = 0.45 + (t * 3.).sin() * 0.07;
         *tf = Transform::from_xyz(d.x, y, d.z)
             .with_rotation(Quat::from_rotation_y(t * 1.8))
             .with_scale(size);
         *vis = Visibility::Visible;
-        mat.0 = paint.beams[d.rarity() as usize].clone();
+
+        // Use grammar color for the cube
+        mat.0 = match grammar {
+            LootGrammar::None => paint.common.clone(),
+            LootGrammar::Rare => paint.beams[1].clone(),
+            LootGrammar::Epic => paint.beams[3].clone(),
+            LootGrammar::Legendary => paint.beams[2].clone(),
+            LootGrammar::Mythic => paint.beams[4].clone(),
+            LootGrammar::Quest => paint.gold.clone(),
+        };
     }
+
+    // Update labels with grammar-based colors
     for (label, mut node, mut text, mut color, mut vis) in &mut labels {
         *vis = Visibility::Hidden;
-        let Some(d) = visible(label.0) else { continue };
+        let Some(d) = visible(label.0) else {
+            continue;
+        };
         let (Ok((cam, xf)), Ok(w)) = (cam.single(), windows.single()) else {
             continue;
         };
@@ -1272,15 +1332,14 @@ pub fn loot(
             .map(|s| s.trim_start_matches("ashworks:").replace('_', " "))
             .collect::<Vec<_>>()
             .join(" · ");
-        color.0 = match d.rarity() {
-            Rarity::Common => Color::WHITE,
-            Rarity::Rare => Color::srgb(0.42, 0.83, 1.),
-            Rarity::Legendary => Color::srgb(1., 0.65, 0.23),
-            Rarity::Ancient => Color::srgb(0.83, 0.58, 1.),
-            Rarity::Primal => Color::srgb(1., 0.34, 0.47),
-        };
+
+        // Use grammar-based colors from the spec
+        let grammar = wire_rarity_to_grammar(d.rarity(), &d.items);
+        color.0 = grammar.color();
         *vis = Visibility::Visible;
     }
+
+    // Track seen drops for audio
     let mut seen = std::collections::HashSet::new();
     for d in &net.marsh.drops {
         if active && d.age >= 0.65 {
@@ -1295,6 +1354,298 @@ pub fn loot(
         }
     }
     display.landed = seen;
+}
+
+/// Spawn and manage layered loot beams using the new presentation system.
+pub fn loot_beams(
+    mut c: Commands,
+    net: Res<ZoneNet>,
+    flow: Res<GameFlow>,
+    time: Res<Time>,
+    beam_meshes: Option<Res<BeamMeshes>>,
+    mut beam_mats: ResMut<Assets<LootBeamMaterial>>,
+    mut glow_mats: ResMut<Assets<GroundGlowMaterial>>,
+    mut spark_mats: ResMut<Assets<SparkMaterial>>,
+    existing_beams: Query<(Entity, &SpawnedLootBeam)>,
+    mut beam_cores: Query<
+        (&mut Transform, &MeshMaterial3d<LootBeamMaterial>),
+        (With<LootBeamCore>, Without<LootBeamHalo>, Without<LootBeamGlow>),
+    >,
+    mut beam_halos: Query<
+        &mut Transform,
+        (With<LootBeamHalo>, Without<LootBeamCore>, Without<LootBeamGlow>),
+    >,
+    mut beam_glows: Query<
+        (&mut Transform, &MeshMaterial3d<GroundGlowMaterial>),
+        (With<LootBeamGlow>, Without<LootBeamCore>, Without<LootBeamHalo>),
+    >,
+    mut beam_lights: Query<&mut PointLight, With<LootBeamLight>>,
+    mut beam_sparks: Query<
+        (&LootBeamSpark, &mut Transform, &mut Visibility),
+        Without<LootBeamCore>,
+    >,
+    children_query: Query<&Children>,
+) {
+    let Some(beam_meshes) = beam_meshes else {
+        return;
+    };
+
+    let active = net.online() && !flow.in_menu();
+    let now = time.elapsed_secs();
+
+    // Build set of currently active drop keys
+    let mut active_drops: std::collections::HashMap<(i32, i32), (&Drop, LootGrammar, f32)> =
+        std::collections::HashMap::new();
+
+    if active {
+        for d in &net.marsh.drops {
+            let grammar = wire_rarity_to_grammar(d.rarity(), &d.items);
+            if grammar.has_beam() && d.age >= 0.0 {
+                let key = (d.x.to_bits() as i32, d.z.to_bits() as i32);
+                active_drops.insert(key, (d, grammar, d.age));
+            }
+        }
+    }
+
+    // Despawn beams for drops that no longer exist
+    for (entity, beam) in &existing_beams {
+        if !active_drops.contains_key(&beam.key) {
+            // Despawn entity and all children
+            if let Ok(children) = children_query.get(entity) {
+                for child in children.iter() {
+                    c.entity(child).despawn();
+                }
+            }
+            c.entity(entity).despawn();
+        }
+    }
+
+    // Build set of existing beam keys
+    let existing_keys: std::collections::HashSet<(i32, i32)> =
+        existing_beams.iter().map(|(_, b)| b.key).collect();
+
+    // Spawn new beams for drops that don't have one yet
+    for (key, (d, grammar, _age)) in &active_drops {
+        if existing_keys.contains(key) {
+            continue;
+        }
+
+        // Create beam materials for this grammar
+        let color = grammar.linear_color();
+        let core_mat = beam_mats.add(LootBeamMaterial {
+            color,
+            hdr_multiplier: grammar.hdr_multiplier(),
+            opacity: 0.0, // Start invisible, timeline will reveal
+            ghost_pass: 0.0,
+            ..default()
+        });
+
+        let ghost_mat = beam_mats.add(LootBeamMaterial {
+            color,
+            hdr_multiplier: grammar.hdr_multiplier() * 0.6,
+            opacity: 0.0,
+            ghost_pass: 1.0,
+            ..default()
+        });
+
+        let halo_mat = beam_mats.add(LootBeamMaterial {
+            color,
+            hdr_multiplier: grammar.hdr_multiplier() * 0.4,
+            opacity: 0.0,
+            ghost_pass: 0.0,
+            ..default()
+        });
+
+        let glow_mat = glow_mats.add(GroundGlowMaterial {
+            color,
+            intensity: 0.0,
+        });
+
+        let height = grammar.beam_height();
+        let core_width = grammar.core_width();
+        let glow_radius = grammar.ground_glow_radius();
+        let ground_y = ground(d.x, d.z);
+
+        // Spawn the beam entity hierarchy
+        let beam_entity = c
+            .spawn((
+                SpawnedLootBeam {
+                    key: *key,
+                    grammar: *grammar,
+                    spawn_time: now - d.age, // Adjust for server age
+                },
+                Transform::from_xyz(d.x, ground_y, d.z),
+                Visibility::Inherited,
+            ))
+            .with_children(|parent| {
+                // Core beam cylinder
+                parent.spawn((
+                    LootBeamCore,
+                    Mesh3d(beam_meshes.core_cylinder.clone()),
+                    MeshMaterial3d(core_mat.clone()),
+                    Transform::from_scale(Vec3::new(core_width, height, core_width)),
+                    NotShadowCaster,
+                ));
+
+                // Ghost pass (through-wall visibility)
+                parent.spawn((
+                    LootBeamGhost,
+                    Mesh3d(beam_meshes.core_cylinder.clone()),
+                    MeshMaterial3d(ghost_mat),
+                    Transform::from_scale(Vec3::new(core_width * 1.2, height, core_width * 1.2)),
+                    NotShadowCaster,
+                ));
+
+                // Soft halo (wider, more transparent)
+                parent.spawn((
+                    LootBeamHalo,
+                    Mesh3d(beam_meshes.halo_cylinder.clone()),
+                    MeshMaterial3d(halo_mat),
+                    Transform::from_scale(Vec3::new(core_width * 5.0, height, core_width * 5.0)),
+                    NotShadowCaster,
+                ));
+
+                // Ground glow disc
+                parent.spawn((
+                    LootBeamGlow,
+                    Mesh3d(beam_meshes.ground_disc.clone()),
+                    MeshMaterial3d(glow_mat),
+                    Transform::from_xyz(0.0, 0.05, 0.0)
+                        .with_scale(Vec3::new(glow_radius * 2.0, 1.0, glow_radius * 2.0)),
+                    NotShadowCaster,
+                ));
+
+                // Point light for ground illumination
+                parent.spawn((
+                    LootBeamLight,
+                    PointLight {
+                        color: grammar.color(),
+                        intensity: grammar.light_intensity(),
+                        range: glow_radius * 3.0,
+                        shadow_maps_enabled: false,
+                        ..default()
+                    },
+                    Transform::from_xyz(0.0, 0.5, 0.0),
+                ));
+
+                // Sparks for Legendary+
+                if grammar.has_sparks() {
+                    let spark_color = grammar.linear_color();
+                    let spark_mat = spark_mats.add(SparkMaterial {
+                        color: spark_color,
+                        intensity: 4.0,
+                    });
+
+                    for i in 0..grammar.spark_count() {
+                        parent.spawn((
+                            LootBeamSpark { index: i },
+                            Mesh3d(beam_meshes.spark_quad.clone()),
+                            MeshMaterial3d(spark_mat.clone()),
+                            Transform::from_scale(Vec3::splat(0.1)),
+                            NotShadowCaster,
+                            Visibility::Hidden,
+                        ));
+                    }
+                }
+            })
+            .id();
+
+        let _ = beam_entity; // Suppress unused warning
+    }
+
+    // Update existing beam visuals based on timeline
+    for (entity, beam) in &existing_beams {
+        // Get current age from active drops
+        let Some((_drop, grammar, age)) = active_drops.get(&beam.key) else {
+            continue;
+        };
+
+        let state = beam_state(*grammar, *age);
+        let glow_state = ground_glow_state(*grammar, *age);
+        let sparks_data = spark_positions(*grammar, *age, grammar.spark_count());
+
+        // Get children and update their transforms/materials
+        let Ok(children) = children_query.get(entity) else {
+            continue;
+        };
+
+        for child in children.iter() {
+            // Update core transform and material
+            if let Ok((mut tf, mat_handle)) = beam_cores.get_mut(child) {
+                let base_width = grammar.core_width();
+                tf.scale = Vec3::new(
+                    base_width * state.width_mult,
+                    state.height.max(0.01), // Avoid zero scale
+                    base_width * state.width_mult,
+                );
+                tf.rotation = Quat::from_rotation_y(state.rotation);
+
+                // Update material
+                if let Some(mut mat) = beam_mats.get_mut(&mat_handle.0) {
+                    mat.color = state.color;
+                    mat.hdr_multiplier = state.hdr_mult;
+                    mat.opacity = state.opacity;
+                    if let Some(pos) = state.pulse_pos {
+                        mat.pulse_pos = pos;
+                        mat.pulse_active = 1.0;
+                    } else {
+                        mat.pulse_active = 0.0;
+                    }
+                }
+            }
+
+            // Update halo transform
+            if let Ok(mut tf) = beam_halos.get_mut(child) {
+                let base_width = grammar.core_width() * 5.0;
+                tf.scale = Vec3::new(
+                    base_width * state.width_mult,
+                    state.height.max(0.01),
+                    base_width * state.width_mult,
+                );
+                tf.rotation = Quat::from_rotation_y(state.rotation);
+            }
+
+            // Update ground glow
+            if let Ok((mut tf, mat_handle)) = beam_glows.get_mut(child) {
+                let scale = glow_state.radius * 2.0 * glow_state.intensity;
+                tf.scale = Vec3::new(scale.max(0.01), 1.0, scale.max(0.01));
+
+                if let Some(mut mat) = glow_mats.get_mut(&mat_handle.0) {
+                    mat.color = glow_state.color;
+                    mat.intensity = glow_state.intensity;
+                }
+            }
+
+            // Update point light
+            if let Ok(mut light) = beam_lights.get_mut(child) {
+                light.intensity =
+                    grammar.light_intensity() * glow_state.intensity * if state.visible { 1.0 } else { 0.0 };
+            }
+
+            // Update sparks
+            if let Ok((spark, mut tf, mut vis)) = beam_sparks.get_mut(child) {
+                if let Some((height_frac, angle)) = sparks_data.get(spark.index) {
+                    *vis = if state.visible {
+                        Visibility::Inherited
+                    } else {
+                        Visibility::Hidden
+                    };
+                    let beam_height = grammar.beam_height();
+                    let radius = grammar.core_width() * 2.5;
+                    tf.translation = Vec3::new(
+                        angle.cos() * radius,
+                        height_frac * beam_height,
+                        angle.sin() * radius,
+                    );
+                    // Fade out near top
+                    let alpha = 1.0 - height_frac.powi(2);
+                    tf.scale = Vec3::splat(0.1 * (0.5 + 0.5 * alpha));
+                } else {
+                    *vis = Visibility::Hidden;
+                }
+            }
+        }
+    }
 }
 
 /// Name of the ground under a player. Coarse regions are Greymere, the marsh,
