@@ -1,8 +1,8 @@
 //! Black Anvil item system crate.
 //!
 //! This crate provides the foundational types and logic for items, inventory,
-//! and equipment. It is designed to be shared by the server, gateway, and client
-//! without depending on Bevy or any rendering code.
+//! equipment, and crafting. It is designed to be shared by the server, gateway,
+//! and client without depending on Bevy or any rendering code.
 //!
 //! # Design Principles
 //!
@@ -12,6 +12,10 @@
 //! - **Frozen IDs.** Once an item exists, its ID and slug never change.
 
 mod catalog;
+pub mod crafting;
+pub mod drops;
+pub mod element;
+pub mod enchant;
 mod equipment;
 mod inventory;
 mod stack;
@@ -23,6 +27,12 @@ mod visual;
 mod frozen;
 
 pub use catalog::{Catalog, CatalogError, ItemDef, Recipe};
+pub use crafting::{
+    CraftError, CraftRecipe, CraftingRanks, CategoryRank, Durability, RefineRecipe, SalvageResult,
+};
+pub use drops::{DropEntry, DropResult, DropTable, EnemyType};
+pub use element::{CraftTier, Element, MaterialCategory};
+pub use enchant::{EnchantAffix, EnchantPool, EnchantStat, Enchantment, RolledAffix};
 pub use equipment::{EquipContext, EquipError, EquipMode, Equipment, EquippedItem};
 pub use inventory::{Inventory, InventoryError};
 pub use stack::{Quality, Stack, StackRule};

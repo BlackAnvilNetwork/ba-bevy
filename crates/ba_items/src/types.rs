@@ -42,8 +42,8 @@ pub enum ItemKind {
     Equipment,
     /// Raw materials for crafting.
     Material,
-    /// Intermediate crafting products.
-    Intermediate,
+    /// Intermediate crafting products (ingots, lumber, etc.).
+    Component,
     /// Items that are consumed on use (potions, food).
     Consumable,
     /// Ammunition (arrows, bolts).
@@ -58,6 +58,10 @@ pub enum ItemKind {
     Decor,
     /// Fishing bait (future).
     Bait,
+    /// Elemental rune (crafting catalyst).
+    Rune,
+    /// Elemental glyph (enchanting catalyst).
+    Glyph,
 }
 
 /// Equipment slot where an item can be worn or held.

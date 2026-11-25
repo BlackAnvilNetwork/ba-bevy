@@ -6,6 +6,7 @@
 
 mod auth;
 mod ashworks;
+mod crafting;
 mod moon;
 mod stillwater;
 use ba_protocol::stillwater as sw;
@@ -67,6 +68,8 @@ struct Player {
     xp: u64,
     level: u32,
     inventory: Value,
+    crafting_inventory: ba_items::Inventory,
+    crafting_state: crafting::CraftingState,
     journey: stillwater::Journey,
     state_revision: u64,
     appearance: AppearanceWire,
@@ -525,7 +528,10 @@ async fn handle_connection(
                                         w.players.insert(id, Player {
                                             account_id,
                                             character_id,
-                                            xp, level, inventory, state_revision, journey:Default::default(),
+                                            xp, level, inventory,
+                                            crafting_inventory: ba_items::Inventory::default(),
+                                            crafting_state: crafting::CraftingState::default(),
+                                            state_revision, journey:Default::default(),
                                             appearance: appearance.clone(),
                                             pose,
                                             movement: None,
@@ -639,6 +645,129 @@ async fn handle_connection(
                             Ok(ClientMessage::Forge { recipe }) => {
                                 if let Some(id) = player_id {
                                     if let Some(p) = world.write().await.players.get_mut(&id) { ashworks::forge(p, recipe); }
+                                }
+                            }
+                            Ok(ClientMessage::Refine(req)) => {
+                                if let Some(id) = player_id {
+                                    let msg = {
+                                        let mut w = world.write().await;
+                                        let p = match w.players.get_mut(&id) {
+                                            Some(p) => p,
+                                            None => continue,
+                                        };
+                                        let mut rng = rand::rng();
+                                        let pose = p.pose;
+                                        match crafting::handle_refine(
+                                            &mut p.crafting_state,
+                                            &mut p.crafting_inventory,
+                                            &pose,
+                                            &req,
+                                            &mut rng,
+                                        ) {
+                                            Ok(result) => ServerMessage::RefineResult(result),
+                                            Err(e) => ServerMessage::CraftingError(e),
+                                        }
+                                    };
+                                    if let Ok(json) = msg.to_json() {
+                                        let _ = write.send(Message::Text(json.into())).await;
+                                    }
+                                }
+                            }
+                            Ok(ClientMessage::Craft(req)) => {
+                                if let Some(id) = player_id {
+                                    let msg = {
+                                        let mut w = world.write().await;
+                                        let p = match w.players.get_mut(&id) {
+                                            Some(p) => p,
+                                            None => continue,
+                                        };
+                                        let mut rng = rand::rng();
+                                        let pose = p.pose;
+                                        match crafting::handle_craft(
+                                            &mut p.crafting_state,
+                                            &mut p.crafting_inventory,
+                                            &pose,
+                                            &req,
+                                            &mut rng,
+                                        ) {
+                                            Ok(result) => ServerMessage::CraftResult(result),
+                                            Err(e) => ServerMessage::CraftingError(e),
+                                        }
+                                    };
+                                    if let Ok(json) = msg.to_json() {
+                                        let _ = write.send(Message::Text(json.into())).await;
+                                    }
+                                }
+                            }
+                            Ok(ClientMessage::Enchant(req)) => {
+                                if let Some(id) = player_id {
+                                    let msg = {
+                                        let mut w = world.write().await;
+                                        let p = match w.players.get_mut(&id) {
+                                            Some(p) => p,
+                                            None => continue,
+                                        };
+                                        let mut rng = rand::rng();
+                                        match crafting::handle_enchant(
+                                            &mut p.crafting_state,
+                                            &mut p.crafting_inventory,
+                                            &req,
+                                            &mut rng,
+                                        ) {
+                                            Ok(result) => ServerMessage::EnchantResult(result),
+                                            Err(e) => ServerMessage::CraftingError(e),
+                                        }
+                                    };
+                                    if let Ok(json) = msg.to_json() {
+                                        let _ = write.send(Message::Text(json.into())).await;
+                                    }
+                                }
+                            }
+                            Ok(ClientMessage::Salvage(req)) => {
+                                if let Some(id) = player_id {
+                                    let msg = {
+                                        let mut w = world.write().await;
+                                        let p = match w.players.get_mut(&id) {
+                                            Some(p) => p,
+                                            None => continue,
+                                        };
+                                        let mut rng = rand::rng();
+                                        match crafting::handle_salvage(
+                                            &mut p.crafting_state,
+                                            &mut p.crafting_inventory,
+                                            &req,
+                                            &mut rng,
+                                        ) {
+                                            Ok(result) => ServerMessage::SalvageResult(result),
+                                            Err(e) => ServerMessage::CraftingError(e),
+                                        }
+                                    };
+                                    if let Ok(json) = msg.to_json() {
+                                        let _ = write.send(Message::Text(json.into())).await;
+                                    }
+                                }
+                            }
+                            Ok(ClientMessage::Repair(req)) => {
+                                if let Some(id) = player_id {
+                                    let msg = {
+                                        let mut w = world.write().await;
+                                        let p = match w.players.get_mut(&id) {
+                                            Some(p) => p,
+                                            None => continue,
+                                        };
+                                        let mut durability = ba_items::crafting::Durability { current: 50, max: 100 };
+                                        match crafting::handle_repair(
+                                            &mut p.crafting_state,
+                                            &mut durability,
+                                            &req,
+                                        ) {
+                                            Ok(result) => ServerMessage::RepairResult(result),
+                                            Err(e) => ServerMessage::CraftingError(e),
+                                        }
+                                    };
+                                    if let Ok(json) = msg.to_json() {
+                                        let _ = write.send(Message::Text(json.into())).await;
+                                    }
                                 }
                             }
                             Ok(ClientMessage::Ping { client_time_ms }) => {

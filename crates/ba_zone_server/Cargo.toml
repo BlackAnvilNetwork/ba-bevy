@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 ba_protocol = { path = "../ba_protocol" }
 ba_combat = { path = "../ba_combat" }
+ba_items = { path = "../ba_items" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }

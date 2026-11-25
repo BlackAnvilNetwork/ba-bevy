@@ -8,6 +8,7 @@ mod cel;
 mod camera_rig;
 mod character;
 mod data;
+mod loot;
 mod net;
 mod debug_shot;
 mod dialogue;
@@ -280,6 +281,7 @@ fn main() {
             ),
         )
         .add_plugins(MaterialPlugin::<stillwater::lantern_post::FenWater>::default())
+        .add_plugins(loot::LootBeamPlugin)
         .add_systems(Startup, (stillwater::lantern_post::build, stillwater::sable_rest::build))
         .add_systems(Update, stillwater::sable_rest::drift)
         .add_systems(
@@ -292,7 +294,7 @@ fn main() {
         .add_systems(Update, stillwater::lantern_post::flicker)
         .init_resource::<stillwater::DisplayState>()
         .add_systems(Startup,(stillwater::setup,ashworks::spawn))
-        .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::edda_animation,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::journal,stillwater::fix_zero_roughness,stillwater::dress_darkmod).after(apply_zone_snapshots))
+        .add_systems(Update,(stillwater::impact_mark,stillwater::mist,stillwater::edda_animation,stillwater::impact_time,stillwater::animate,stillwater::loot,stillwater::loot_beams.after(stillwater::loot),stillwater::journal,stillwater::fix_zero_roughness,stillwater::dress_darkmod).after(apply_zone_snapshots))
         .add_systems(Update,stillwater::camera_feedback.after(apply_camera_mode))
         .add_systems(Update, (ashworks::display, ashworks::gallery_visibility, stillwater::silt_visibility).after(apply_zone_snapshots))
         .add_systems(
