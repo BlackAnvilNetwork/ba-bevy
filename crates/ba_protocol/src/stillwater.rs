@@ -10,6 +10,44 @@ pub const GREYMERE_ROAD: Pose = at(17.5, -5.5);
 pub const LANTERN_ROAD: Pose = at(300., 103.);
 pub const SABLE_DOCK: Pose = at(600., 15.);
 pub const TRAVEL_REACH: f32 = 4.5;
+
+/// Cael's field forge at Sable Rest - anvil and fire for smithing.
+pub const SABLE_FORGE: Pose = at(598., 1.5);
+/// Reach for interacting with crafting stations.
+pub const CRAFT_REACH: f32 = 5.0;
+
+/// Crafting station types available in the world.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CraftingStation {
+    /// Forge with anvil - metal, precious metal, stone work
+    Forge,
+    /// Workbench - wood, bone work
+    Workbench,
+    /// Loom - cloth, leather work
+    Loom,
+    /// Alchemy table - essence work
+    Alchemy,
+}
+
+impl CraftingStation {
+    pub fn name(&self) -> &'static str {
+        match self {
+            CraftingStation::Forge => "Forge",
+            CraftingStation::Workbench => "Workbench",
+            CraftingStation::Loom => "Loom",
+            CraftingStation::Alchemy => "Alchemy Table",
+        }
+    }
+}
+
+/// Check which crafting station (if any) is within reach of the given position.
+pub fn nearby_station(x: f32, z: f32) -> Option<CraftingStation> {
+    let dist_to_forge = ((x - SABLE_FORGE.x).powi(2) + (z - SABLE_FORGE.z).powi(2)).sqrt();
+    if dist_to_forge <= CRAFT_REACH {
+        return Some(CraftingStation::Forge);
+    }
+    None
+}
 pub const SHRINE: Pose = at(246., -29.);
 pub const BLIND: Pose = at(350., 33.);
 pub const OX: u32 = 70010;

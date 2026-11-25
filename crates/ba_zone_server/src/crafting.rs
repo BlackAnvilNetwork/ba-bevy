@@ -9,6 +9,8 @@ use ba_items::element::{CraftTier, Element, MaterialCategory};
 use ba_items::enchant::Enchantment;
 use ba_items::{Inventory, ItemId};
 use ba_protocol::crafting as proto;
+use ba_protocol::stillwater::{nearby_station, CraftingStation};
+use ba_protocol::Pose;
 use rand::Rng;
 
 #[derive(Clone)]
@@ -26,13 +28,55 @@ impl Default for CraftingState {
     }
 }
 
+/// Get the required crafting station for a material category.
+pub fn required_station(category: MaterialCategory) -> CraftingStation {
+    match category {
+        MaterialCategory::Metal | MaterialCategory::PreciousMetal | MaterialCategory::Stone => {
+            CraftingStation::Forge
+        }
+        MaterialCategory::Wood | MaterialCategory::Bone => CraftingStation::Workbench,
+        MaterialCategory::Cloth | MaterialCategory::Leather => CraftingStation::Loom,
+        MaterialCategory::Essence => CraftingStation::Alchemy,
+    }
+}
+
+/// Check if the player is at a valid crafting station for the given category.
+pub fn check_station(pose: &Pose, category: MaterialCategory) -> Result<(), proto::CraftingError> {
+    let required = required_station(category);
+    match nearby_station(pose.x, pose.z) {
+        Some(station) if station == required => Ok(()),
+        Some(station) => Err(proto::CraftingError {
+            action: "craft".into(),
+            reason: format!(
+                "wrong_station_need_{}_have_{}",
+                required.name(),
+                station.name()
+            ),
+        }),
+        None => Err(proto::CraftingError {
+            action: "craft".into(),
+            reason: format!("no_station_need_{}", required.name()),
+        }),
+    }
+}
+
+/// Get the nearby station name for the crafting view, if any.
+pub fn nearby_station_name(pose: &Pose) -> Option<String> {
+    nearby_station(pose.x, pose.z).map(|s| s.name().to_string())
+}
+
 pub fn handle_refine<R: Rng>(
     state: &mut CraftingState,
     inventory: &mut Inventory,
+    pose: &Pose,
     req: &proto::RefineRequest,
     _rng: &mut R,
 ) -> Result<proto::RefineResult, proto::CraftingError> {
     let category = material_category(req.material_id);
+    
+    // Check if player is at the correct crafting station
+    check_station(pose, category)?;
+    
     let tier = CraftTier(material_tier(req.material_id));
     
     let recipe = RefineRecipe {
@@ -74,10 +118,14 @@ pub fn handle_refine<R: Rng>(
 pub fn handle_craft<R: Rng>(
     state: &mut CraftingState,
     inventory: &mut Inventory,
+    pose: &Pose,
     req: &proto::CraftRequest,
     _rng: &mut R,
 ) -> Result<proto::CraftResult, proto::CraftingError> {
     let (output_id, components, category, tier) = recipe_lookup(req.recipe_id);
+    
+    // Check if player is at the correct crafting station
+    check_station(pose, category)?;
     
     let recipe = CraftRecipe {
         output: ItemId(output_id),

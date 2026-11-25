@@ -656,9 +656,11 @@ async fn handle_connection(
                                             None => continue,
                                         };
                                         let mut rng = rand::rng();
+                                        let pose = p.pose;
                                         match crafting::handle_refine(
                                             &mut p.crafting_state,
                                             &mut p.crafting_inventory,
+                                            &pose,
                                             &req,
                                             &mut rng,
                                         ) {
@@ -680,9 +682,11 @@ async fn handle_connection(
                                             None => continue,
                                         };
                                         let mut rng = rand::rng();
+                                        let pose = p.pose;
                                         match crafting::handle_craft(
                                             &mut p.crafting_state,
                                             &mut p.crafting_inventory,
+                                            &pose,
                                             &req,
                                             &mut rng,
                                         ) {
