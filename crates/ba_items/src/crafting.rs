@@ -455,6 +455,38 @@ impl Durability {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
+
+    const FIRE_RUNE: ItemId = ItemId(5000);
+    const COPPER_ORE: ItemId = ItemId(5200);
+    const COPPER_INGOT: ItemId = ItemId(5210);
+    const IRON_ORE: ItemId = ItemId(5202);
+    const IRON_INGOT: ItemId = ItemId(5213);
+    const ARROWWOOD_LUMBER: ItemId = ItemId(5230);
+    const COPPER_SWORD: ItemId = ItemId(5400);
+
+    fn sample_refine_recipe() -> RefineRecipe {
+        RefineRecipe {
+            output: COPPER_INGOT,
+            output_name: "Copper Ingot".to_string(),
+            category: MaterialCategory::Metal,
+            tier: CraftTier::T1,
+            material: COPPER_ORE,
+            material_qty: 3,
+            gold: 10,
+        }
+    }
+
+    fn sample_craft_recipe() -> CraftRecipe {
+        CraftRecipe {
+            output: COPPER_SWORD,
+            output_name: "Copper Sword".to_string(),
+            primary_category: MaterialCategory::Metal,
+            tier: CraftTier::T1,
+            components: vec![(COPPER_INGOT, 2), (ARROWWOOD_LUMBER, 1)],
+            gold: 25,
+        }
+    }
 
     #[test]
     fn category_rank_xp_progression() {
@@ -526,5 +558,288 @@ mod tests {
         assert_eq!(ranks.metal.rank, 1);
         assert_eq!(ranks.cloth.rank, 1);
         assert_eq!(ranks.essence.rank, 1);
+    }
+
+    #[test]
+    fn refine_success() {
+        let mut inv = Inventory::new();
+        let mut gold = 1000u32;
+        let mut ranks = CraftingRanks::default();
+        let recipe = sample_refine_recipe();
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_ORE, 3, StackRule::Stack(99));
+
+        let result = refine(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+
+        assert_eq!(inv.count(FIRE_RUNE), 0);
+        assert_eq!(inv.count(COPPER_ORE), 0);
+        assert_eq!(inv.count(COPPER_INGOT), 1);
+        assert_eq!(gold, 990);
+        assert!(ranks.metal.xp > 0);
+    }
+
+    #[test]
+    fn refine_not_enough_gold() {
+        let mut inv = Inventory::new();
+        let mut gold = 5u32;
+        let mut ranks = CraftingRanks::default();
+        let recipe = sample_refine_recipe();
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_ORE, 3, StackRule::Stack(99));
+
+        let result = refine(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(matches!(result, Err(CraftError::NotEnoughGold { .. })));
+        assert_eq!(inv.count(FIRE_RUNE), 1);
+        assert_eq!(inv.count(COPPER_ORE), 3);
+    }
+
+    #[test]
+    fn refine_missing_rune() {
+        let mut inv = Inventory::new();
+        let mut gold = 1000u32;
+        let mut ranks = CraftingRanks::default();
+        let recipe = sample_refine_recipe();
+
+        inv.add(COPPER_ORE, 3, StackRule::Stack(99));
+
+        let result = refine(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(matches!(result, Err(CraftError::MissingRune(Element::Fire))));
+    }
+
+    #[test]
+    fn refine_missing_materials() {
+        let mut inv = Inventory::new();
+        let mut gold = 1000u32;
+        let mut ranks = CraftingRanks::default();
+        let recipe = sample_refine_recipe();
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_ORE, 2, StackRule::Stack(99));
+
+        let result = refine(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(matches!(result, Err(CraftError::MissingMaterial { .. })));
+    }
+
+    #[test]
+    fn refine_rank_too_low() {
+        let mut inv = Inventory::new();
+        let mut gold = 10000u32;
+        let mut ranks = CraftingRanks::default();
+
+        let recipe = RefineRecipe {
+            output: IRON_INGOT,
+            output_name: "Iron Ingot".to_string(),
+            category: MaterialCategory::Metal,
+            tier: CraftTier::T3,
+            material: IRON_ORE,
+            material_qty: 3,
+            gold: 100,
+        };
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(IRON_ORE, 3, StackRule::Stack(99));
+
+        let result = refine(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(matches!(result, Err(CraftError::RankTooLow { need: 3, have: 1 })));
+    }
+
+    #[test]
+    fn craft_success() {
+        let mut inv = Inventory::new();
+        let mut gold = 1000u32;
+        let mut ranks = CraftingRanks::default();
+        let recipe = sample_craft_recipe();
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_INGOT, 2, StackRule::Stack(99));
+        inv.add(ARROWWOOD_LUMBER, 1, StackRule::Stack(99));
+
+        let result = craft(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(result.is_ok());
+
+        assert_eq!(inv.count(FIRE_RUNE), 0);
+        assert_eq!(inv.count(COPPER_INGOT), 0);
+        assert_eq!(inv.count(ARROWWOOD_LUMBER), 0);
+        assert_eq!(inv.count(COPPER_SWORD), 1);
+        assert_eq!(gold, 975);
+        assert!(ranks.metal.xp > 0);
+    }
+
+    #[test]
+    fn craft_not_enough_gold() {
+        let mut inv = Inventory::new();
+        let mut gold = 10u32;
+        let mut ranks = CraftingRanks::default();
+        let recipe = sample_craft_recipe();
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_INGOT, 2, StackRule::Stack(99));
+        inv.add(ARROWWOOD_LUMBER, 1, StackRule::Stack(99));
+
+        let result = craft(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(matches!(result, Err(CraftError::NotEnoughGold { .. })));
+    }
+
+    #[test]
+    fn craft_missing_component() {
+        let mut inv = Inventory::new();
+        let mut gold = 1000u32;
+        let mut ranks = CraftingRanks::default();
+        let recipe = sample_craft_recipe();
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_INGOT, 1, StackRule::Stack(99));
+        inv.add(ARROWWOOD_LUMBER, 1, StackRule::Stack(99));
+
+        let result = craft(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+        assert!(matches!(result, Err(CraftError::MissingMaterial { .. })));
+    }
+
+    #[test]
+    fn enchant_success() {
+        let mut gold = 1000u32;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        let result = enchant(&mut gold, Element::Fire, CraftTier::T1, &mut rng);
+        assert!(result.is_ok());
+
+        let ench = result.unwrap();
+        assert_eq!(ench.element, Element::Fire);
+        assert!(!ench.prefix.name.is_empty());
+        assert!(!ench.suffix.name.is_empty());
+        assert_eq!(gold, 400);
+    }
+
+    #[test]
+    fn enchant_not_enough_gold() {
+        let mut gold = 100u32;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        let result = enchant(&mut gold, Element::Fire, CraftTier::T1, &mut rng);
+        assert!(matches!(result, Err(CraftError::NotEnoughGold { .. })));
+        assert_eq!(gold, 100);
+    }
+
+    #[test]
+    fn salvage_returns_components() {
+        let mut inv = Inventory::new();
+        let mut gold = 1000u32;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        let result = salvage(&mut inv, &mut gold, COPPER_INGOT, false, &mut rng);
+        assert!(result.is_ok());
+
+        let salvage_result = result.unwrap();
+        assert!(!salvage_result.components.is_empty());
+        assert_eq!(gold, 950);
+    }
+
+    #[test]
+    fn salvage_not_enough_gold() {
+        let mut inv = Inventory::new();
+        let mut gold = 10u32;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        let result = salvage(&mut inv, &mut gold, COPPER_INGOT, false, &mut rng);
+        assert!(matches!(result, Err(CraftError::NotEnoughGold { .. })));
+    }
+
+    #[test]
+    fn full_crafting_flow() {
+        let mut inv = Inventory::new();
+        let mut gold = 10000u32;
+        let mut ranks = CraftingRanks::default();
+        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+        inv.add(FIRE_RUNE, 10, StackRule::Stack(99));
+        inv.add(ItemId(5002), 5, StackRule::Stack(99));
+        inv.add(COPPER_ORE, 9, StackRule::Stack(99));
+        inv.add(ItemId(5220), 3, StackRule::Stack(99));
+        inv.add(ItemId(5100), 1, StackRule::Stack(99));
+
+        let refine_copper = RefineRecipe {
+            output: COPPER_INGOT,
+            output_name: "Copper Ingot".to_string(),
+            category: MaterialCategory::Metal,
+            tier: CraftTier::T1,
+            material: COPPER_ORE,
+            material_qty: 3,
+            gold: 10,
+        };
+        for _ in 0..2 {
+            refine(&mut inv, &mut gold, &mut ranks, &refine_copper, FIRE_RUNE).unwrap();
+        }
+        assert_eq!(inv.count(COPPER_INGOT), 2);
+
+        let refine_wood = RefineRecipe {
+            output: ARROWWOOD_LUMBER,
+            output_name: "Arrowwood Lumber".to_string(),
+            category: MaterialCategory::Wood,
+            tier: CraftTier::T1,
+            material: ItemId(5220),
+            material_qty: 3,
+            gold: 10,
+        };
+        refine(&mut inv, &mut gold, &mut ranks, &refine_wood, ItemId(5002)).unwrap();
+        assert_eq!(inv.count(ARROWWOOD_LUMBER), 1);
+
+        let craft_sword = CraftRecipe {
+            output: COPPER_SWORD,
+            output_name: "Copper Sword".to_string(),
+            primary_category: MaterialCategory::Metal,
+            tier: CraftTier::T1,
+            components: vec![(COPPER_INGOT, 2), (ARROWWOOD_LUMBER, 1)],
+            gold: 25,
+        };
+        craft(&mut inv, &mut gold, &mut ranks, &craft_sword, FIRE_RUNE).unwrap();
+        assert_eq!(inv.count(COPPER_SWORD), 1);
+
+        let ench = enchant(&mut gold, Element::Fire, CraftTier::T1, &mut rng).unwrap();
+        assert_eq!(ench.element, Element::Fire);
+
+        let display = ench.display_name("Copper Sword");
+        assert!(display.contains("Copper Sword"));
+
+        // Check that XP was gained (may have leveled up, so check rank or remaining XP)
+        assert!(ranks.metal.rank > 1 || ranks.metal.xp > 0);
+        assert!(ranks.wood.rank > 1 || ranks.wood.xp > 0);
+    }
+
+    #[test]
+    fn yield_bonus_at_high_rank() {
+        let mut inv = Inventory::new();
+        let mut gold = 10000u32;
+        let mut ranks = CraftingRanks::default();
+        ranks.metal.rank = 7;
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_ORE, 3, StackRule::Stack(99));
+
+        let recipe = sample_refine_recipe();
+        let result = refine(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE);
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 2);
+        assert_eq!(inv.count(COPPER_INGOT), 2);
+    }
+
+    #[test]
+    fn gold_discount_at_high_rank() {
+        let mut inv = Inventory::new();
+        let mut gold = 1000u32;
+        let mut ranks = CraftingRanks::default();
+        ranks.metal.rank = 10;
+
+        inv.add(FIRE_RUNE, 1, StackRule::Stack(99));
+        inv.add(COPPER_ORE, 3, StackRule::Stack(99));
+
+        let recipe = sample_refine_recipe();
+        refine(&mut inv, &mut gold, &mut ranks, &recipe, FIRE_RUNE).unwrap();
+
+        assert_eq!(gold, 992);
     }
 }
