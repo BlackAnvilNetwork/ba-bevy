@@ -390,16 +390,16 @@ pub fn salvage(
 
     *gold -= SALVAGE_COST;
 
-    let component_qty = rng.gen_range(1..=2);
+    let component_qty = rng.random_range(1..=2);
     inventory.add(primary_component, component_qty, StackRule::Stack(99));
 
-    let recovered_rune = if rng.gen_bool(0.25) {
+    let recovered_rune = if rng.random_bool(0.25) {
         Some(Element::Fire)
     } else {
         None
     };
 
-    let recovered_glyph = if was_enchanted && rng.gen_bool(0.10) {
+    let recovered_glyph = if was_enchanted && rng.random_bool(0.10) {
         Some(Element::Fire)
     } else {
         None

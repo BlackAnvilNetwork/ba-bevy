@@ -107,7 +107,7 @@ impl DropEntry {
         if self.min_qty == self.max_qty {
             self.min_qty
         } else {
-            rng.gen_range(self.min_qty..=self.max_qty)
+            rng.random_range(self.min_qty..=self.max_qty)
         }
     }
 
@@ -115,7 +115,7 @@ impl DropEntry {
         if self.chance >= 1.0 {
             true
         } else {
-            rng.gen_bool(self.chance as f64)
+            rng.random_bool(self.chance as f64)
         }
     }
 }
@@ -190,7 +190,7 @@ pub fn roll_drops(table: &DropTable, rng: &mut impl rand::Rng) -> DropResult {
     result.gold = if table.gold_min == table.gold_max {
         table.gold_min
     } else {
-        rng.gen_range(table.gold_min..=table.gold_max)
+        rng.random_range(table.gold_min..=table.gold_max)
     };
 
     for entry in &table.common {
@@ -216,31 +216,31 @@ pub fn roll_drops(table: &DropTable, rng: &mut impl rand::Rng) -> DropResult {
 
     if let Some(enemy_type) = table.enemy_type {
         let rune_rate = enemy_type.rune_drop_rate();
-        if rng.gen_bool(rune_rate as f64) {
+        if rng.random_bool(rune_rate as f64) {
             let element = enemy_type.fixed_rune_element().unwrap_or_else(|| {
-                Element::ALL[rng.gen_range(0..8)]
+                Element::ALL[rng.random_range(0..8)]
             });
             result.runes.push(element);
         }
 
         if matches!(enemy_type, EnemyType::Boss) {
-            let extra_runes = rng.gen_range(1..=3);
+            let extra_runes = rng.random_range(1..=3);
             for _ in 0..extra_runes {
-                let element = Element::ALL[rng.gen_range(0..8)];
+                let element = Element::ALL[rng.random_range(0..8)];
                 result.runes.push(element);
             }
         }
 
         let glyph_rate = enemy_type.glyph_drop_rate();
-        if glyph_rate > 0.0 && rng.gen_bool(glyph_rate as f64) {
+        if glyph_rate > 0.0 && rng.random_bool(glyph_rate as f64) {
             let element = enemy_type.fixed_glyph_element().unwrap_or_else(|| {
-                Element::ALL[rng.gen_range(0..8)]
+                Element::ALL[rng.random_range(0..8)]
             });
             result.glyphs.push(element);
         }
 
-        if matches!(enemy_type, EnemyType::Boss) && rng.gen_bool(0.25) {
-            let element = Element::ALL[rng.gen_range(0..8)];
+        if matches!(enemy_type, EnemyType::Boss) && rng.random_bool(0.25) {
+            let element = Element::ALL[rng.random_range(0..8)];
             result.glyphs.push(element);
         }
     }

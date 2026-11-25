@@ -151,7 +151,7 @@ impl EnchantAffix {
     }
 
     pub fn roll(&self, rng: &mut impl rand::Rng) -> RolledAffix {
-        let value = rng.gen_range(self.min_percent..=self.max_percent);
+        let value = rng.random_range(self.min_percent..=self.max_percent);
         RolledAffix {
             name: self.name.to_string(),
             stat: self.stat,
@@ -201,8 +201,8 @@ pub struct EnchantPool {
 
 impl EnchantPool {
     pub fn roll(&self, rng: &mut impl rand::Rng) -> Enchantment {
-        let prefix_idx = rng.gen_range(0..self.prefixes.len());
-        let suffix_idx = rng.gen_range(0..self.suffixes.len());
+        let prefix_idx = rng.random_range(0..self.prefixes.len());
+        let suffix_idx = rng.random_range(0..self.suffixes.len());
         Enchantment {
             element: self.element,
             prefix: self.prefixes[prefix_idx].roll(rng),
