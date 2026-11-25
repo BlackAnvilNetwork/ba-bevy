@@ -1382,7 +1382,7 @@ pub fn loot_beams(
     mut beam_lights: Query<&mut PointLight, With<LootBeamLight>>,
     mut beam_sparks: Query<
         (&LootBeamSpark, &mut Transform, &mut Visibility),
-        Without<LootBeamCore>,
+        (Without<LootBeamCore>, Without<LootBeamHalo>, Without<LootBeamGlow>),
     >,
     children_query: Query<&Children>,
 ) {

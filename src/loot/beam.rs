@@ -433,7 +433,10 @@ pub fn update_beam_visuals(
         ),
     >,
     mut lights: Query<&mut PointLight, With<BeamLight>>,
-    mut sparks: Query<(&BeamSpark, &mut Transform, &mut Visibility), Without<BeamCore>>,
+    mut sparks: Query<
+        (&BeamSpark, &mut Transform, &mut Visibility),
+        (Without<BeamCore>, Without<BeamHalo>, Without<BeamGroundGlow>),
+    >,
     mut beam_mats: ResMut<Assets<LootBeamMaterial>>,
     mut glow_mats: ResMut<Assets<GroundGlowMaterial>>,
     core_handles: Query<&MeshMaterial3d<LootBeamMaterial>, With<BeamCore>>,
