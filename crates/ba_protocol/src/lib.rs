@@ -4,6 +4,7 @@
 //! This crate is a **dev/loopback prototype** until ticket verification lands.
 
 pub mod ashworks;
+pub mod crafting;
 pub mod moon;
 pub mod stillwater;
 
@@ -323,6 +324,11 @@ pub enum ClientMessage {
     Drink,
     Dodge { forward:f32, strafe:f32, yaw:f32 },
     Forge { recipe: ashworks::Recipe },
+    Refine(crafting::RefineRequest),
+    Craft(crafting::CraftRequest),
+    Enchant(crafting::EnchantRequest),
+    Salvage(crafting::SalvageRequest),
+    Repair(crafting::RepairRequest),
     Ping {
         client_time_ms: u64,
     },
@@ -393,6 +399,12 @@ pub enum ServerMessage {
         new_moon_unix: i64,
         next_new_moon_unix: i64,
     },
+    RefineResult(crafting::RefineResult),
+    CraftResult(crafting::CraftResult),
+    EnchantResult(crafting::EnchantResult),
+    SalvageResult(crafting::SalvageResult),
+    RepairResult(crafting::RepairResult),
+    CraftingError(crafting::CraftingError),
     Reject {
         reason: String,
     },
